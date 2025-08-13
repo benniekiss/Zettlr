@@ -502,3 +502,43 @@ export function applyTaskList (target: EditorView): boolean {
   applyList(target, 'task')
   return true
 }
+
+/**
+ * Insert a bracketed span
+ *
+ * @param   {EditorView}  target  The target view
+ * @param   {string}      attributes  Attributes to assign to the span
+ *
+ * @return  {boolean}             Whether the command was applicable
+*/
+export function insertBracketedSpan (target: EditorView, attributes: string): boolean {
+  if (!viewContainsMarkdown(target)) {
+    return false
+  }
+
+  let opening: string = '['
+  let closing: string = `]{${attributes}}`
+
+  applyInlineMarkup(target, opening, closing)
+  return true
+}
+
+/**
+ * Insert a fenced div
+ *
+ * @param   {EditorView}  target  The target view
+ * @param   {string}      attributes  Attributes to assign to the div
+ *
+ * @return  {boolean}             Whether the command was applicable
+*/
+export function insertFencedDiv (target: EditorView, attributes: string): boolean {
+  if (!viewContainsMarkdown(target)) {
+    return false
+  }
+
+  let opening: string = `\n::: {${attributes}}\n`
+  let closing: string = '\n:::\n'
+
+  applyInlineMarkup(target, opening, closing)
+  return true
+}

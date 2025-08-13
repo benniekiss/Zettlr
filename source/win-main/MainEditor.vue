@@ -391,6 +391,23 @@ watch(toRef(props.editorCommands, 'replaceSelection'), () => {
   currentEditor?.replaceSelection(textToInsert)
 })
 
+watch(toRef(props.editorCommands, 'insertFence'), () => {
+  if (props.activeFile?.path !== props.file.path || currentEditor === null) {
+    return
+  }
+
+  if (documentTreeStore.lastLeafId !== props.leafId) {
+    // This editor, even though it may be focused, was not the last focused
+    // See https://github.com/Zettlr/Zettlr/issues/4361
+    return
+  }
+
+  const { divtype, identifiers, classes, attributes } = props.editorCommands.data
+  if (typeof divtype === 'string' && typeof identifiers === 'string' && typeof classes === 'string' && typeof attributes === 'string') {
+    currentEditor?.insertDiv(divtype, identifiers, classes, attributes)
+  }
+})
+
 const fsalFiles = computed<MDFileDescriptor[]>(() => {
   const tree = workspacesStore.rootDescriptors
   const files = []

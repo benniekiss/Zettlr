@@ -72,7 +72,9 @@ import {
   applyComment,
   applyTaskList,
   insertImage,
-  insertLink
+  insertLink,
+  insertBracketedSpan,
+  insertFencedDiv
 } from './commands/markdown'
 import { addNewFootnote } from './commands/footnotes'
 
@@ -620,6 +622,37 @@ export default class MarkdownEditor extends EventEmitter {
   replaceSelection (text: string): void {
     const transaction = this._instance.state.replaceSelection(text)
     this._instance.dispatch(transaction)
+  }
+
+  /**
+   * Insert a fenced div, `::: {#id}`,
+   * or bracketed span, `[my text]{#id}`
+   * around the main selection.
+   *
+   * @param   {string}  divtype  The type of div to insert
+   * @param   {string}  identifiers  Identifier attribute. Spaces are replaced with a hyphen `-`
+   * @param   {string}  classes  Class attributes. Words are prepended with `.`
+   * @param   {string}  attributes  Key=Value attributes.
+   */
+  insertDiv (divtype: string, identifiers: string, classes: string, attributes: string): void {
+    const formatAttributes = (input: string, prefix: string, join: string = ' '): string =>
+      input
+        .trim()
+        .split(/\s+/)
+        .filter(word => word.trim() !== '')
+        .map(word => prefix + word)
+        .join(join)
+
+    const divattributes: string = formatAttributes(`${formatAttributes(formatAttributes(identifiers, '', '-'), '#')} ${formatAttributes(classes, '.')} ${attributes}`, '')
+
+    switch(divtype) {
+      case 'fence':
+        insertFencedDiv(this._instance, divattributes)
+        return
+      case 'bracket':
+        insertBracketedSpan(this._instance, divattributes)
+        return
+    }
   }
 
   /**

@@ -524,9 +524,11 @@ export function applyFenceOrBracket (target: EditorView, type: string, attribute
     case 'fence':
       opening = `\n::: {${attributes}}\n`
       closing = '\n:::\n'
+      break
     case 'bracket':
       opening = '['
       closing = `]{${attributes}}`
+      break
   }
 
   applyInlineMarkup(target, opening, closing)

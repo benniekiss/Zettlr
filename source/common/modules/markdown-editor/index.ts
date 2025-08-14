@@ -73,7 +73,7 @@ import {
   applyTaskList,
   insertImage,
   insertLink,
-  insertFenceOrBracket
+  applyFenceOrBracket
 } from './commands/markdown'
 import { addNewFootnote } from './commands/footnotes'
 
@@ -633,7 +633,7 @@ export default class MarkdownEditor extends EventEmitter {
    * @param   {string}  classes  Class attributes. Words are prepended with `.`
    * @param   {string}  attributes  Key=Value attributes.
    */
-  insertDiv (type: string, identifiers: string, classes: string, attributes: string): void {
+  insertFence (type: string, identifiers: string, classes: string, attributes: string): void {
     const formatAttributes = (input: string, prefix: string, join: string = ' '): string =>
       input
         .trim()
@@ -644,7 +644,7 @@ export default class MarkdownEditor extends EventEmitter {
 
     const divattributes: string = formatAttributes(`${formatAttributes(formatAttributes(identifiers, '', '-'), '#')} ${formatAttributes(classes, '.')} ${attributes}`, '')
 
-    insertFenceOrBracket(this._instance, type, divattributes)
+    applyFenceOrBracket(this._instance, type, divattributes)
   }
 
   /**

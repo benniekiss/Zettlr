@@ -512,7 +512,7 @@ export function applyTaskList (target: EditorView): boolean {
  *
  * @return  {boolean}                 Whether the command was applicable
 */
-export function insertFenceOrBracket (target: EditorView, type: string, attributes: string): boolean {
+export function applyFenceOrBracket (target: EditorView, type: string, attributes: string): boolean {
   if (!viewContainsMarkdown(target)) {
     return false
   }

@@ -404,7 +404,7 @@ watch(toRef(props.editorCommands, 'insertFence'), () => {
 
   const { type, identifiers, classes, attributes } = props.editorCommands.data
   if (typeof type === 'string' && typeof identifiers === 'string' && typeof classes === 'string' && typeof attributes === 'string') {
-    currentEditor?.insertDiv(type, identifiers, classes, attributes)
+    currentEditor?.insertFence(type, identifiers, classes, attributes)
   }
 })
 

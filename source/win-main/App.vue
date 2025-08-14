@@ -726,7 +726,7 @@ function insertTable (spec: { rows: number, cols: number }): void {
   editorCommands.value.replaceSelection = !editorCommands.value.replaceSelection
 }
 
-function insertFence (spec: { divtype: string, identifiers: string, classes: string, attributes: string }): void {
+function insertFence (spec: { type: string, identifiers: string, classes: string, attributes: string }): void {
   editorCommands.value.data = spec
   editorCommands.value.insertFence = !editorCommands.value.insertFence
 }

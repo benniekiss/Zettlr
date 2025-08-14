@@ -59,7 +59,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'close'): void
-  (e: 'insert-fence', value: { divtype: string, identifiers: string, classes: string, attributes: string }): void
+  (e: 'insert-fence', value: { type: string, identifiers: string, classes: string, attributes: string }): void
 }>()
 
 const divType = ref<'fence'|'bracket'>('fence')
@@ -81,7 +81,7 @@ const tabs: TabbarControl[] = [
 ]
 
 function handleClick (): void {
-  emit('insert-fence', { divtype: divType.value, identifiers: identifierQuery.value, classes: classesQuery.value, attributes: attributesQuery.value })
+  emit('insert-fence', { type: divType.value, identifiers: identifierQuery.value, classes: classesQuery.value, attributes: attributesQuery.value })
   emit('close')
 }
 </script>

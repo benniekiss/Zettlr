@@ -402,9 +402,9 @@ watch(toRef(props.editorCommands, 'insertFence'), () => {
     return
   }
 
-  const { divtype, identifiers, classes, attributes } = props.editorCommands.data
-  if (typeof divtype === 'string' && typeof identifiers === 'string' && typeof classes === 'string' && typeof attributes === 'string') {
-    currentEditor?.insertDiv(divtype, identifiers, classes, attributes)
+  const { type, identifiers, classes, attributes } = props.editorCommands.data
+  if (typeof type === 'string' && typeof identifiers === 'string' && typeof classes === 'string' && typeof attributes === 'string') {
+    currentEditor?.insertDiv(type, identifiers, classes, attributes)
   }
 })
 

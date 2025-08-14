@@ -504,41 +504,32 @@ export function applyTaskList (target: EditorView): boolean {
 }
 
 /**
- * Insert a bracketed span
+ * Insert a fenced div or bracketed span
  *
- * @param   {EditorView}  target  The target view
- * @param   {string}      attributes  Attributes to assign to the span
- *
- * @return  {boolean}             Whether the command was applicable
-*/
-export function insertBracketedSpan (target: EditorView, attributes: string): boolean {
-  if (!viewContainsMarkdown(target)) {
-    return false
-  }
-
-  let opening: string = '['
-  let closing: string = `]{${attributes}}`
-
-  applyInlineMarkup(target, opening, closing)
-  return true
-}
-
-/**
- * Insert a fenced div
- *
- * @param   {EditorView}  target  The target view
+ * @param   {EditorView}  target      The target view
+ * @param   {string}      type        Whether to insert a fenced div or bracketed span
  * @param   {string}      attributes  Attributes to assign to the div
  *
- * @return  {boolean}             Whether the command was applicable
+ * @return  {boolean}                 Whether the command was applicable
 */
-export function insertFencedDiv (target: EditorView, attributes: string): boolean {
+export function insertFenceOrBracket (target: EditorView, type: string, attributes: string): boolean {
   if (!viewContainsMarkdown(target)) {
     return false
   }
 
-  let opening: string = `\n::: {${attributes}}\n`
-  let closing: string = '\n:::\n'
+  let opening: string = ''
+  let closing: string = ''
+
+  switch (type) {
+    case 'fence':
+      opening = `\n::: {${attributes}}\n`
+      closing = '\n:::\n'
+    case 'bracket':
+      opening = '['
+      closing = `]{${attributes}}`
+  }
 
   applyInlineMarkup(target, opening, closing)
+
   return true
 }

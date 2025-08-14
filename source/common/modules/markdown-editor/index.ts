@@ -639,7 +639,7 @@ export default class MarkdownEditor extends EventEmitter {
         .trim()
         .split(/\s+/)
         .filter(word => word.trim() !== '')
-        .map(word => prefix + word)
+        .map(word => word.startsWith(prefix) ? word : prefix + word)
         .join(join)
 
     const divattributes: string = formatAttributes(`${formatAttributes(formatAttributes(identifiers, '', '-'), '#')} ${formatAttributes(classes, '.')} ${attributes}`, '')

@@ -41,6 +41,7 @@ export interface ConfigOptions {
   }
   attachmentExtensions: string[]
   darkMode: boolean
+  darkModeEditor: 'match'|'light'|'dark'
   alwaysReloadFiles: boolean
   autoDarkMode: 'off'|'system'|'schedule'
   autoDarkModeStart: string
@@ -226,6 +227,7 @@ export function getConfigTemplate (): ConfigOptions {
     attachmentExtensions: ATTACHMENT_EXTENSIONS,
     // UI related options
     darkMode: false,
+    darkModeEditor: 'match', // Possible values: 'match', 'light', 'dark'
     alwaysReloadFiles: true, // Should Zettlr automatically load remote changes?
     autoDarkMode: 'system', // Possible values: 'off', 'system', 'schedule', 'auto'
     autoDarkModeStart: '21:00', // Switch into dark mode at this time

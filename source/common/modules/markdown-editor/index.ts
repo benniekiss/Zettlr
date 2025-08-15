@@ -545,6 +545,7 @@ export default class MarkdownEditor extends EventEmitter {
   private onConfigUpdate (newOptions: Partial<EditorConfiguration>): void {
     const inputModeChanged = newOptions.inputMode !== undefined && newOptions.inputMode !== this.config.inputMode
     const darkModeChanged = newOptions.darkMode !== undefined && newOptions.darkMode !== this.config.darkMode
+    const editorModeChanged = newOptions.darkModeEditor !== undefined && newOptions.darkModeEditor !== this.config.darkModeEditor
     const themeChanged = newOptions.theme !== undefined && newOptions.theme !== this.config.theme
 
     // Third: The input mode, if applicable
@@ -559,12 +560,28 @@ export default class MarkdownEditor extends EventEmitter {
     }
 
     // Fourth: Switch theme, if applicable
-    if (darkModeChanged || themeChanged) {
+    if (darkModeChanged || editorModeChanged || themeChanged) {
       const themes = getMainEditorThemes()
+
+      let useDarkMode
+      const darkMode = newOptions.darkMode ?? this.config.darkMode
+      const darkModeEditor = newOptions.darkModeEditor ?? this.config.darkModeEditor
+
+      switch (darkModeEditor) {
+        case 'match':
+          useDarkMode = darkMode
+          break
+        case 'light':
+          useDarkMode = false
+          break
+        case 'dark':
+          useDarkMode = true
+          break
+      }
 
       this._instance.dispatch({
         effects: darkModeEffect.of({
-          darkMode: newOptions.darkMode,
+          darkMode: useDarkMode,
           ...themes[newOptions.theme ?? this.config.theme]
         })
       })

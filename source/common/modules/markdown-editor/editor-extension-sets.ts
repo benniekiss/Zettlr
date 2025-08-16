@@ -61,7 +61,7 @@ import { renderers } from './renderers'
 import { mdPasteDropHandlers } from './plugins/md-paste-drop-handlers'
 import { footnoteGutter } from './plugins/footnote-gutter'
 import { yamlFrontmatterLint } from './linters/yaml-frontmatter-lint'
-import { darkMode } from './theme/dark-mode'
+import { darkMode, useDarkModeEditor } from './theme/dark-mode'
 import { themeBerlinLight, themeBerlinDark } from './theme/berlin'
 import { themeBielefeldLight, themeBielefeldDark } from './theme/bielefeld'
 import { themeBordeauxLight, themeBordeauxDark } from './theme/bordeaux'
@@ -162,21 +162,13 @@ function getCoreExtensions (options: CoreExtensionOptions): Extension[] {
 
   const themes = getMainEditorThemes()
 
-  const darkModeEditor = options.initialConfig.darkModeEditor
-  const useDarkMode =
-  darkModeEditor === 'match'
-    ? options.initialConfig.darkMode
-    : darkModeEditor === 'light'
-      ? false
-      : true
-
   return [
     // Both vim and emacs modes need to be included first, before any other
     // keymap.
     inputModeCompartment.of(inputMode),
     // Then, include the default keymap
     defaultKeymap(),
-    darkMode({ darkMode: useDarkMode, ...themes[options.initialConfig.theme] }),
+    darkMode({ darkMode: useDarkModeEditor(options.initialConfig.darkMode, options.initialConfig.darkModeEditor), ...themes[options.initialConfig.theme] }),
     // CODE FOLDING
     codeFolding(),
     foldGutter(),

@@ -24,7 +24,7 @@ import { tableEditorKeymap } from '../keymaps/table-editor'
 import { dispatchFromSubview, maybeDispatchToSubview, syncAnnotation } from './util/data-exchange'
 import { configField, type EditorConfiguration } from '../util/configuration'
 import { getMainEditorThemes } from '../editor-extension-sets'
-import { darkMode } from '../theme/dark-mode'
+import { darkMode, useDarkModeEditor } from '../theme/dark-mode'
 import { markdownSyntaxHighlighter } from '../theme/syntax'
 
 /**
@@ -215,14 +215,6 @@ export function createSubviewForCell (
   const cfg: EditorConfiguration = JSON.parse(JSON.stringify(mainView.state.field(configField)))
   const themes = getMainEditorThemes()
 
-  const darkModeEditor = cfg.darkModeEditor
-  const useDarkMode =
-  darkModeEditor === 'match'
-    ? cfg.darkMode
-    : darkModeEditor === 'light'
-      ? false
-      : true
-
   const state = EditorState.create({
     // Subviews always hold the entire document. This is to make synchronizing
     // updates between main and subviews faster and simpler. This should only
@@ -241,7 +233,7 @@ export function createSubviewForCell (
       // The config field will automagically update since we forward any effects
       // to the subview.
       configField.init(_state => cfg),
-      darkMode({ darkMode: useDarkMode, ...themes[cfg.theme] }),
+      darkMode({ darkMode: useDarkModeEditor(cfg.darkMode, cfg.darkModeEditor), ...themes[cfg.theme] }),
       syntaxHighlighting(defaultHighlightStyle),
       markdownSyntaxHighlighter(),
       EditorView.lineWrapping,

@@ -93,7 +93,7 @@ import {
 import { markdownToAST } from '../markdown-utils'
 import { countField } from './plugins/statistics-fields'
 import type { SyntaxNode } from '@lezer/common'
-import { darkModeEffect } from './theme/dark-mode'
+import { useDarkModeEditor, darkModeEffect } from './theme/dark-mode'
 import { editorMetadataFacet } from './plugins/editor-metadata'
 import { projectInfoUpdateEffect, type ProjectInfo } from './plugins/project-info-field'
 
@@ -563,25 +563,12 @@ export default class MarkdownEditor extends EventEmitter {
     if (darkModeChanged || editorModeChanged || themeChanged) {
       const themes = getMainEditorThemes()
 
-      let useDarkMode
       const darkMode = newOptions.darkMode ?? this.config.darkMode
       const darkModeEditor = newOptions.darkModeEditor ?? this.config.darkModeEditor
 
-      switch (darkModeEditor) {
-        case 'match':
-          useDarkMode = darkMode
-          break
-        case 'light':
-          useDarkMode = false
-          break
-        case 'dark':
-          useDarkMode = true
-          break
-      }
-
       this._instance.dispatch({
         effects: darkModeEffect.of({
-          darkMode: useDarkMode,
+          darkMode: useDarkModeEditor(darkMode, darkModeEditor),
           ...themes[newOptions.theme ?? this.config.theme]
         })
       })

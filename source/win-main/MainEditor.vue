@@ -748,6 +748,22 @@ function maybeHighlightSearchResults (): void {
   .cm-content {
     overflow-x: hidden !important; // Necessary to hide the horizontal scrollbar
   }
+
+  // Style the statusbar and formatting-bar
+  // so they adopt the main ui theme, not the editor theme
+  .cm-statusbar.cm-panel {
+    color: black;
+    background-color: #f5f5f5;
+  }
+
+  .cm-formatting-bar {
+    background-color: #f5f5f5;
+
+    .cm-tooltip-arrow::after {
+      border-top-color: #f5f5f5;
+      border-bottom-color: #f5f5f5;
+    }
+  }
 }
 
 body.dark .main-editor-wrapper {
@@ -759,6 +775,26 @@ body.dark .main-editor-wrapper {
       background-color: rgb(20, 20, 30);
       border-style: none;
     }
+
+  // Style the statusbar and formatting-bar
+  // so they adopt the main ui theme, not the editor theme
+  .cm-statusbar.cm-panel {
+    color: #ddd;
+    background-color: #333;
+  }
+
+  .cm-formatting-bar {
+    background-color: #333333;
+
+    button.formatting-toolbar-button {
+      color: #c8c8c8;
+    }
+
+    .cm-tooltip-arrow::after {
+      border-top-color: #333333;
+      border-bottom-color: #333333;
+    }
+  }
 }
 
 // CodeMirror fullscreen

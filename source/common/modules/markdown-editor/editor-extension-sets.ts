@@ -162,13 +162,21 @@ function getCoreExtensions (options: CoreExtensionOptions): Extension[] {
 
   const themes = getMainEditorThemes()
 
+  const darkModeEditor = options.initialConfig.darkModeEditor
+  const useDarkMode =
+  darkModeEditor === 'match'
+    ? options.initialConfig.darkMode
+    : darkModeEditor === 'light'
+      ? false
+      : true
+
   return [
     // Both vim and emacs modes need to be included first, before any other
     // keymap.
     inputModeCompartment.of(inputMode),
     // Then, include the default keymap
     defaultKeymap(),
-    darkMode({ darkMode: options.initialConfig.darkMode, ...themes[options.initialConfig.theme] }),
+    darkMode({ darkMode: useDarkMode, ...themes[options.initialConfig.theme] }),
     // CODE FOLDING
     codeFolding(),
     foldGutter(),

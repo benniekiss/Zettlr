@@ -7,7 +7,7 @@
  * Maintainer:      Hendrik Erz
  * License:         GNU GPL v3
  *
- * Description:     This module contains a set of methods that are used to 
+ * Description:     This module contains a set of methods that are used to
  *                  create and manage subviews within table editor widgets. A
  *                  subview is a CodeMirror instance that mirrors the main
  *                  document, but only allows editing the span of text within a
@@ -215,6 +215,14 @@ export function createSubviewForCell (
   const cfg: EditorConfiguration = JSON.parse(JSON.stringify(mainView.state.field(configField)))
   const themes = getMainEditorThemes()
 
+  const darkModeEditor = cfg.darkModeEditor
+  const useDarkMode =
+  darkModeEditor === 'match'
+    ? cfg.darkMode
+    : darkModeEditor === 'light'
+      ? false
+      : true
+
   const state = EditorState.create({
     // Subviews always hold the entire document. This is to make synchronizing
     // updates between main and subviews faster and simpler. This should only
@@ -233,7 +241,7 @@ export function createSubviewForCell (
       // The config field will automagically update since we forward any effects
       // to the subview.
       configField.init(_state => cfg),
-      darkMode({ darkMode: cfg.darkMode, ...themes[cfg.theme] }),
+      darkMode({ darkMode: useDarkMode, ...themes[cfg.theme] }),
       syntaxHighlighting(defaultHighlightStyle),
       markdownSyntaxHighlighter(),
       EditorView.lineWrapping,

@@ -61,6 +61,15 @@ const wrapperId = ref<string>('code-editor')
 const cleanFlag = ref<boolean>(true)
 
 function getExtensions (mode: 'css'|'yaml'|'markdown-snippets'): Extension[] {
+
+  const darkModeEditor = configStore.config.darkModeEditor
+  const useDarkMode =
+  darkModeEditor === 'match'
+    ? configStore.config.darkMode
+    : darkModeEditor === 'light'
+      ? false
+      : true
+
   const extensions = [
     defaultKeymap(),
     search({ top: true }),
@@ -80,7 +89,7 @@ function getExtensions (mode: 'css'|'yaml'|'markdown-snippets'): Extension[] {
     bracketMatching(),
     indentOnInput(),
     codeSyntaxHighlighter(), // This comes from the main editor component
-    darkMode({ darkMode: configStore.config.darkMode }),
+    darkMode({ darkMode: useDarkMode }),
     plainLinkHighlighter,
     EditorView.updateListener.of((update) => {
       if (update.docChanged) {

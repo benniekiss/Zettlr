@@ -780,7 +780,7 @@ body.dark .main-editor-wrapper {
   // so they adopt the main ui theme, not the editor theme
   .cm-statusbar.cm-panel {
     color: #ddd;
-    background-color: #333;
+    background-color: #333333;
   }
 
   .cm-formatting-bar {

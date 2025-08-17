@@ -37,12 +37,14 @@
  * @ignore
  * BEGIN HEADER
  *
- * Contains:        Tag Cloud Popover
+ * Contains:        Fenced Div and Bracketed Span Popover
  * CVM-Role:        View
  * Maintainer:      Hendrik Erz
  * License:         GNU GPL v3
  *
- * Description:     A popover which displays a tag cloud
+ * Description:     This popover allows a user to insert and configure
+ *                  the identifier, classes, and key-value attributes
+ *                  of a Pandoc fenced div or bracketed span.
  *
  * END HEADER
  */

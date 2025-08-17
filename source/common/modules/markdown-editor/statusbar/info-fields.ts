@@ -16,9 +16,11 @@ import { type EditorState } from '@codemirror/state'
 import { type EditorView } from '@codemirror/view'
 import { trans } from '@common/i18n-renderer'
 import localiseNumber from '@common/util/localise-number'
+import { countAll } from '@common/util/counter'
 import { type StatusbarItem } from '.'
 import { countField } from '../plugins/statistics-fields'
 import { configField } from '../util/configuration'
+import { markdownToAST } from '../../markdown-utils'
 
 /**
  * Displays the cursor position
@@ -36,6 +38,12 @@ export function cursorStatus (state: EditorState, _view: EditorView): StatusbarI
   }
 }
 
+function countSelection (state: EditorState): { words: number, chars: number } {
+  const sel = state.selection.main
+  const ast = markdownToAST(state.sliceDoc(sel.from, sel.to))
+  return countAll(ast)
+}
+
 /**
  * Displays the word count, if applicable
  *
@@ -45,6 +53,13 @@ export function cursorStatus (state: EditorState, _view: EditorView): StatusbarI
  * @return  {StatusbarItem}         Returns the element or null
  */
 export function wordcountStatus (state: EditorState, _view: EditorView): StatusbarItem|null {
+  if (!state.selection.main.empty) {
+    const { words, chars } = countSelection(state)
+    return {
+      content: trans('%s selected', localiseNumber(words))
+    }
+  }
+
   const counter = state.field(countField, false)
   const config = state.field(configField, false)
   if (counter === undefined || config?.countChars === true) {
@@ -65,6 +80,13 @@ export function wordcountStatus (state: EditorState, _view: EditorView): Statusb
  * @return  {StatusbarItem}         Returns the element or null
  */
 export function charcountStatus (state: EditorState, _view: EditorView): StatusbarItem|null {
+  if (!state.selection.main.empty) {
+    const { words, chars } = countSelection(state)
+    return {
+      content: trans('%s selected', localiseNumber(chars))
+    }
+  }
+
   const counter = state.field(countField, false)
   const config = state.field(configField, false)
   if (counter === undefined|| config?.countChars === false) {

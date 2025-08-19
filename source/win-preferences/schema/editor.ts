@@ -263,6 +263,11 @@ export function getEditorFields (config: ConfigOptions): PreferencesFieldset[] {
         },
         {
           type: 'checkbox',
+          label: trans('Show Line Endings'),
+          model: 'editor.showLinePilcrow'
+        },
+        {
+          type: 'checkbox',
           label: trans('Highlight whitespace'),
           model: 'editor.showWhitespace'
         },

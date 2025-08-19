@@ -267,6 +267,7 @@ const editorConfiguration = computed<EditorConfigOptions>(() => {
     darkMode,
     theme: display.theme,
     highlightWhitespace: editor.showWhitespace,
+    showLinePilcrow: editor.showLinePilcrow,
     countChars: editor.countChars
   } satisfies EditorConfigOptions
 })

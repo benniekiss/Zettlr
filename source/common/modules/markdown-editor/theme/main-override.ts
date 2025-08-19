@@ -82,6 +82,22 @@ export const mainOverride = EditorView.baseTheme({
   },
   '&dark .cm-highlight': {
     backgroundColor: '#ffff0060',
+  },
+  '&.pilcrow .cm-line:not(:last-child):not(:has(br:only-child))::after': {
+    content: '"¶"',
+    color: '#666',
+    display: 'inline',
+    marginLeft: '1px',
+    width: '0',
+    pointerEvents: 'none'
+  },
+  '&.pilcrow .cm-line:has(br:only-child)::before': {
+    content: '"¶"',
+    color: '#666',
+    display: 'inline-block',
+    marginLeft: '1px',
+    width: '0',
+    pointerEvents: 'none'
   }
 })
 

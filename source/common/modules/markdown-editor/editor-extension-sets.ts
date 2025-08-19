@@ -69,6 +69,7 @@ import { themeFrankfurtLight, themeFrankfurtDark } from './theme/frankfurt'
 import { themeKarlMarxStadtLight, themeKarlMarxStadtDark } from './theme/karl-marx-stadt'
 import { mainOverride } from './theme/main-override'
 import { highlightWhitespace } from './plugins/highlight-whitespace'
+import { showLinePilcrow } from './plugins/line-endings'
 import { tagClasses } from './plugins/tag-classes'
 import { autocompleteTriggerCharacter } from './autocomplete/snippets'
 import { defaultKeymap } from './keymaps/default'
@@ -178,6 +179,7 @@ function getCoreExtensions (options: CoreExtensionOptions): Extension[] {
     // Overrides the default browser selection drawing, allows styling
     drawSelection({ drawRangeCursor: false, cursorBlinkRate: 1000 }),
     highlightWhitespace(options.initialConfig.highlightWhitespace),
+    showLinePilcrow(options.initialConfig.showLinePilcrow),
     dropCursor(),
     EditorState.allowMultipleSelections.of(true),
     // Ensure the cursor never completely sticks to the top or bottom of the editor

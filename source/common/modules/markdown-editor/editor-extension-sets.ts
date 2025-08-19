@@ -27,7 +27,6 @@ import { Compartment, EditorState, type Extension } from '@codemirror/state'
 import {
   drawSelection,
   EditorView,
-  lineNumbers,
   dropCursor,
   type ViewUpdate,
   type DOMEventHandlers
@@ -69,6 +68,7 @@ import { themeFrankfurtLight, themeFrankfurtDark } from './theme/frankfurt'
 import { themeKarlMarxStadtLight, themeKarlMarxStadtDark } from './theme/karl-marx-stadt'
 import { mainOverride } from './theme/main-override'
 import { highlightWhitespace } from './plugins/highlight-whitespace'
+import { showLineNumbers } from './plugins/line-numbers'
 import { tagClasses } from './plugins/tag-classes'
 import { autocompleteTriggerCharacter } from './autocomplete/snippets'
 import { defaultKeymap } from './keymaps/default'
@@ -178,6 +178,7 @@ function getCoreExtensions (options: CoreExtensionOptions): Extension[] {
     // Overrides the default browser selection drawing, allows styling
     drawSelection({ drawRangeCursor: false, cursorBlinkRate: 1000 }),
     highlightWhitespace(options.initialConfig.highlightWhitespace),
+    showLineNumbers(options.initialConfig.showLineNumbers),
     dropCursor(),
     EditorState.allowMultipleSelections.of(true),
     // Ensure the cursor never completely sticks to the top or bottom of the editor
@@ -233,7 +234,6 @@ function getCoreExtensions (options: CoreExtensionOptions): Extension[] {
 function getGenericCodeExtensions (options: CoreExtensionOptions): Extension[] {
   return [
     ...getCoreExtensions(options),
-    lineNumbers(),
     bracketMatching(),
     indentOnInput(),
     codeSyntaxHighlighter()

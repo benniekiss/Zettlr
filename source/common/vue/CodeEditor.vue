@@ -23,7 +23,7 @@
 
 // import { trans } from '@common/i18n-renderer'
 
-import { drawSelection, dropCursor, EditorView, lineNumbers } from '@codemirror/view'
+import { drawSelection, dropCursor, EditorView } from '@codemirror/view'
 import { onMounted, ref, toRef, watch } from 'vue'
 import { closeBrackets } from '@codemirror/autocomplete'
 import { bracketMatching, codeFolding, foldGutter, indentOnInput } from '@codemirror/language'
@@ -42,6 +42,7 @@ import { plainLinkHighlighter } from '@common/modules/markdown-utils/plain-link-
 import { useConfigStore } from 'source/pinia'
 import { darkMode, darkModeEffect } from '../modules/markdown-editor/theme/dark-mode'
 import { highlightWhitespace, highlightWhitespaceEffect } from '../modules/markdown-editor/plugins/highlight-whitespace'
+import { showLineNumbers, showLineNumbersEffect } from '../modules/markdown-editor/plugins/line-numbers'
 import { defaultKeymap } from '../modules/markdown-editor/keymaps/default'
 
 const configStore = useConfigStore()
@@ -68,6 +69,7 @@ function getExtensions (mode: 'css'|'yaml'|'markdown-snippets'): Extension[] {
     foldGutter(),
     history(),
     highlightWhitespace(configStore.config.editor.showWhitespace),
+    showLineNumbers(configStore.config.editor.showLineNumbers),
     drawSelection({ drawRangeCursor: false, cursorBlinkRate: 1000 }),
     dropCursor(),
     statusbar,
@@ -75,7 +77,6 @@ function getExtensions (mode: 'css'|'yaml'|'markdown-snippets'): Extension[] {
     // Ensure the cursor never completely sticks to the top or bottom of the editor
     EditorView.scrollMargins.of(_view => { return { top: 30, bottom: 30 } }),
     lintGutter(),
-    lineNumbers(),
     closeBrackets(),
     bracketMatching(),
     indentOnInput(),
@@ -146,7 +147,8 @@ configStore.$subscribe((_mutation, state) => {
   cmInstance.dispatch({
     effects: [
       darkModeEffect.of({ darkMode: state.config.darkMode }),
-      highlightWhitespaceEffect.of(state.config.editor.showWhitespace)
+      highlightWhitespaceEffect.of(state.config.editor.showWhitespace),
+      showLineNumbersEffect.of(state.config.editor.showLineNumbers),
     ]
   })
 })

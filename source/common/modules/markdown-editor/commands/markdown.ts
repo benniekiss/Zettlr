@@ -504,6 +504,33 @@ export function applyTaskList (target: EditorView): boolean {
 }
 
 /**
+ * Format the inputs into a string to be inserted into a
+ * Pandoc attributes marker, `{#id .classes key=value}`.
+ *
+ * @param     {string}    identifier    The identifier to assign. Whitespace will
+*                                       be replaced by '-', and '#' will be prepended if
+*                                       it is not already
+ * @param     {string}    classes       The classes to include. A '.' will be prepended to
+ *                                      each word, split on whitespace, if it is not already
+ * @param     {string}    attributes    Key=Value attributes to include.
+ *
+ * @returns   {string}                  The formatted string
+ */
+export function formatPandocAttributes (identifier: string, classes: string, attributes: string): string {
+  const formatAttributes = (input: string, prefix: string, join: string = ' '): string =>
+    input
+      .trim()
+      .split(/\s+/)
+      .filter(word => word.trim() !== '')
+      .map(word => word.startsWith(prefix) ? word : prefix + word)
+      .join(join)
+
+  const pandocAttributes: string = formatAttributes(`${formatAttributes(formatAttributes(identifier, '', '-'), '#')} ${formatAttributes(classes, '.')} ${attributes}`, '')
+
+  return pandocAttributes
+}
+
+/**
  * Insert a fenced div or bracketed span
  *
  * @param   {EditorView}  target      The target view
@@ -517,13 +544,15 @@ export function applyFenceOrBracket (target: EditorView, type: string, attribute
     return false
   }
 
+  const newLine = target.state.lineBreak
+
   let opening: string = ''
   let closing: string = ''
 
   switch (type) {
     case 'fence':
-      opening = `\n::: {${attributes}}\n`
-      closing = '\n:::\n'
+      opening = `${newLine}::: {${attributes}}${newLine}`
+      closing = `${newLine}:::${newLine}`
       break
     case 'bracket':
       opening = '['

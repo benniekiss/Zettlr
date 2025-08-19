@@ -73,6 +73,7 @@ import {
   applyTaskList,
   insertImage,
   insertLink,
+  formatPandocAttributes,
   applyFenceOrBracket
 } from './commands/markdown'
 import { addNewFootnote } from './commands/footnotes'
@@ -628,23 +629,13 @@ export default class MarkdownEditor extends EventEmitter {
    * or bracketed span, `[my text]{#id}`
    * around the main selection.
    *
-   * @param   {string}  type  The type of div to insert
-   * @param   {string}  identifiers  Identifier attribute. Spaces are replaced with a hyphen `-`
-   * @param   {string}  classes  Class attributes. Words are prepended with `.`
+   * @param   {string}  type        The type of div to insert
+   * @param   {string}  identifier  Identifier attribute. Spaces are replaced with a hyphen `-`
+   * @param   {string}  classes     Class attributes. Words are prepended with `.`
    * @param   {string}  attributes  Key=Value attributes.
    */
-  insertFence (type: string, identifiers: string, classes: string, attributes: string): void {
-    const formatAttributes = (input: string, prefix: string, join: string = ' '): string =>
-      input
-        .trim()
-        .split(/\s+/)
-        .filter(word => word.trim() !== '')
-        .map(word => word.startsWith(prefix) ? word : prefix + word)
-        .join(join)
-
-    const divattributes: string = formatAttributes(`${formatAttributes(formatAttributes(identifiers, '', '-'), '#')} ${formatAttributes(classes, '.')} ${attributes}`, '')
-
-    applyFenceOrBracket(this._instance, type, divattributes)
+  insertFence (type: string, identifier: string, classes: string, attributes: string): void {
+    applyFenceOrBracket(this._instance, type, formatPandocAttributes(identifier, classes, attributes))
   }
 
   /**

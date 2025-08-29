@@ -54,19 +54,19 @@ export interface PandocProfileMetadata {
 }
 
 export type AssetsProviderIPCAPI = IPCAPI<{
-  'get-defaults-file': { filename: string }
-  'set-defaults-file': { filename: string, contents: string }
-  'rename-defaults-file': { oldName: string, newName: string }
-  'remove-defaults-file': { filename: string }
-  'get-snippet': { name: string }
-  'remove-snippet': { name: string }
-  'rename-snippet': { name: string, newName: string }
-  'set-snippet': { name: string, contents: string }
-  'list-defaults': unknown
-  'list-export-profiles': unknown
+  'get-defaults-file': { filename: string, path?: string }
+  'set-defaults-file': { filename: string, contents: string, path?: string }
+  'rename-defaults-file': { oldName: string, newName: string, path?: string }
+  'remove-defaults-file': { filename: string, path?: string }
+  'get-snippet': { name: string, path?: string }
+  'remove-snippet': { name: string, path?: string }
+  'rename-snippet': { name: string, newName: string, path?: string }
+  'set-snippet': { name: string, contents: string, path?: string }
+  'list-defaults': { path?: string }
+  'list-export-profiles': { path?: string }
   'open-defaults-directory': unknown
   'open-snippets-directory': unknown
-  'list-snippets': unknown
+  'list-snippets': { path?: string }
 }>
 
 export default class AssetsProvider extends ProviderContract {
@@ -114,31 +114,31 @@ export default class AssetsProvider extends ProviderContract {
       // file contents programmatically should thus make use of the bundled YAML
       // module to parse and stringify the files accordingly.
       if (command === 'get-defaults-file') {
-        return await this.getDefaultsFile(payload.filename, true)
+        return await this.getDefaultsFile(payload.filename, payload.path, true)
       } else if (command === 'set-defaults-file') {
-        return await this.setDefaultsFile(payload.filename, payload.contents, true)
+        return await this.setDefaultsFile(payload.filename, payload.contents, payload.path, true)
       } else if (command === 'rename-defaults-file') {
-        return await this.renameDefaultsFile(payload.oldName, payload.newName)
+        return await this.renameDefaultsFile(payload.oldName, payload.newName, payload.path)
       } else if (command === 'remove-defaults-file') {
-        return await this.removeDefaultsFile(payload.filename)
+        return await this.removeDefaultsFile(payload.filename, payload.path,)
       } else if (command === 'list-defaults') {
-        return await this.listDefaults()
+        return await this.listDefaults(payload.path)
       } else if (command === 'list-export-profiles') {
-        const profiles = await this.listDefaults()
+        const profiles = await this.listDefaults(payload.path)
         return profiles.concat(getCustomProfiles())
       } else if (command === 'open-defaults-directory') {
         this._logger.info(`[AssetsProvider] Opening path ${this._defaultsPath}`)
         return await shell.openPath(this._defaultsPath)
       } else if (command === 'get-snippet') {
-        return await this.getSnippet(payload.name)
+        return await this.getSnippet(payload.name, payload.path)
       } else if (command === 'set-snippet') {
-        return await this.setSnippet(payload.name, payload.contents)
+        return await this.setSnippet(payload.name, payload.contents, payload.path)
       } else if (command === 'remove-snippet') {
-        return await this.removeSnippet(payload.name)
+        return await this.removeSnippet(payload.name, payload.path)
       } else if (command === 'list-snippets') {
-        return await this.listSnippets()
+        return await this.listSnippets(payload.path)
       } else if (command === 'rename-snippet') {
-        return await this.renameSnippet(payload.name, payload.newName)
+        return await this.renameSnippet(payload.name, payload.newName, payload.path)
       } else if (command === 'open-snippets-directory') {
         this._logger.info(`[AssetsProvider] Opening path ${this._snippetsPath}`)
         return await shell.openPath(this._snippetsPath)
@@ -200,11 +200,15 @@ export default class AssetsProvider extends ProviderContract {
    *
    * @return  {Promise<string>[]}  Resolves with an array of absolute paths
    */
-  async getAllFilters (): Promise<string[]> {
-    const files = await fs.readdir(this._filterPath)
+  async getAllFilters (fp?: string): Promise<string[]> {
+    if (fp === null || fp === undefined) {
+      fp = this._filterPath
+    }
+
+    const files = await fs.readdir(fp)
     return files
       .filter(file => /\.lua$/.test(file))
-      .map(file => path.join(this._filterPath, file))
+      .map(file => path.join(fp, file))
   }
 
   /**
@@ -214,8 +218,12 @@ export default class AssetsProvider extends ProviderContract {
    *
    * @return  {Promise<any>}    The defaults (parsed from YAML)
    */
-  async getDefaultsFile (filename: string, verbatim: boolean = false): Promise<any|string> {
-    const absPath = path.join(this._defaultsPath, filename)
+  async getDefaultsFile (filename: string, fp?: string, verbatim: boolean = false): Promise<any|string> {
+    if (fp === null || fp === undefined) {
+      fp = this._defaultsPath
+    }
+
+    const absPath = path.join(fp, filename)
     const yaml = await fs.readFile(absPath, { encoding: 'utf-8' })
     // Either return the string contents or a JavaScript object
     return (verbatim) ? yaml : YAML.parse(yaml)
@@ -224,13 +232,17 @@ export default class AssetsProvider extends ProviderContract {
   /**
    * Overwrites the defaults for a given writer.
    *
-   * @param   {string}            absPath      The file to write
+   * @param   {string}            filename      The file to write
    * @param   {any}               newDefaults  The new defaults (object to be cast to YAML string)
    *
    * @return  {Promise<boolean>}      Whether or not the operation was successful.
    */
-  async setDefaultsFile (filename: string, newDefaults: any, verbatim: boolean = false): Promise<boolean> {
-    const absPath = path.join(this._defaultsPath, filename)
+  async setDefaultsFile (filename: string, newDefaults: any, fp?: string, verbatim: boolean = false): Promise<boolean> {
+    if (fp === null || fp === undefined) {
+      fp = this._defaultsPath
+    }
+
+    const absPath = path.join(fp, filename)
 
     try {
       // Stringify the new defaults according to the verbatim flag
@@ -251,9 +263,13 @@ export default class AssetsProvider extends ProviderContract {
    *
    * @return  {Promise<boolean>}           True upon success
    */
-  async renameDefaultsFile (oldName: string, newName: string): Promise<boolean> {
-    const oldPath = path.join(this._defaultsPath, oldName)
-    const newPath = path.join(this._defaultsPath, newName)
+  async renameDefaultsFile (oldName: string, newName: string, fp?: string): Promise<boolean> {
+    if (fp === null || fp === undefined) {
+      fp = this._defaultsPath
+    }
+
+    const oldPath = path.join(fp, oldName)
+    const newPath = path.join(fp, newName)
 
     try {
       await fs.rename(oldPath, newPath)
@@ -278,8 +294,12 @@ export default class AssetsProvider extends ProviderContract {
    *
    * @return  {Promise<boolean>}           Returns true upon success
    */
-  async removeDefaultsFile (filename: string): Promise<boolean> {
-    const absPath = path.join(this._defaultsPath, filename)
+  async removeDefaultsFile (filename: string, fp?: string): Promise<boolean> {
+    if (fp === null || fp === undefined) {
+      fp = this._defaultsPath
+    }
+
+    const absPath = path.join(fp, filename)
     try {
       await fs.unlink(absPath)
       // If removing that file removed a protected one, restore it immediately.
@@ -321,13 +341,17 @@ export default class AssetsProvider extends ProviderContract {
    *
    * @return  {Promise<PandocProfileMetadata[]>}The parsed metadata for all profiles
    */
-  async listDefaults (): Promise<PandocProfileMetadata[]> {
+  async listDefaults (fp?: string): Promise<PandocProfileMetadata[]> {
+    if (fp === null || fp === undefined) {
+      fp = this._defaultsPath
+    }
+
     const profiles: PandocProfileMetadata[] = []
 
-    const defaultsFiles = await fs.readdir(this._defaultsPath)
+    const defaultsFiles = await fs.readdir(fp)
     const defaults = defaultsFiles.filter(file => /\.ya?ml$/.test(file))
     for (const file of defaults) {
-      const absolutePath = path.join(this._defaultsPath, file)
+      const absolutePath = path.join(fp, file)
       try {
         const contents = await fs.readFile(absolutePath, { encoding: 'utf-8' })
         const yaml = YAML.parse(contents)
@@ -369,8 +393,12 @@ export default class AssetsProvider extends ProviderContract {
    *
    * @return  {Promise<string>}        The file contents
    */
-  async getSnippet (name: string): Promise<string> {
-    const filePath = path.join(this._snippetsPath, name + '.tpl.md')
+  async getSnippet (name: string, fp?: string): Promise<string> {
+    if (fp === null || fp === undefined) {
+      fp = this._snippetsPath
+    }
+
+    const filePath = path.join(fp, name + '.tpl.md')
     return await fs.readFile(filePath, { encoding: 'utf-8' })
   }
 
@@ -383,9 +411,13 @@ export default class AssetsProvider extends ProviderContract {
    *
    * @return  {Promise<boolean>}           Returns false if there was an error
    */
-  async setSnippet (name: string, content: string): Promise<boolean> {
+  async setSnippet (name: string, content: string, fp?: string): Promise<boolean> {
+    if (fp === null || fp === undefined) {
+      fp = this._snippetsPath
+    }
+
     try {
-      const filePath = path.join(this._snippetsPath, name + '.tpl.md')
+      const filePath = path.join(fp, name + '.tpl.md')
       await fs.writeFile(filePath, content)
       broadcastIpcMessage('assets-provider', 'snippets-updated')
       return true
@@ -402,9 +434,13 @@ export default class AssetsProvider extends ProviderContract {
    *
    * @return  {Promise<boolean>}        Returns false if there was an error
    */
-  async removeSnippet (name: string): Promise<boolean> {
+  async removeSnippet (name: string, fp?: string): Promise<boolean> {
+    if (fp === null || fp === undefined) {
+      fp = this._snippetsPath
+    }
+
     try {
-      const filePath = path.join(this._snippetsPath, name + '.tpl.md')
+      const filePath = path.join(fp, name + '.tpl.md')
       await fs.unlink(filePath)
       broadcastIpcMessage('assets-provider', 'snippets-updated')
       return true
@@ -422,10 +458,14 @@ export default class AssetsProvider extends ProviderContract {
    *
    * @return  {Promise<boolean>}           Returns false if there was an error.
    */
-  async renameSnippet (name: string, newName: string): Promise<boolean> {
+  async renameSnippet (name: string, newName: string, fp?: string): Promise<boolean> {
+    if (fp === null || fp === undefined) {
+      fp = this._snippetsPath
+    }
+
     try {
-      const oldPath = path.join(this._snippetsPath, name + '.tpl.md')
-      const newPath = path.join(this._snippetsPath, newName + '.tpl.md')
+      const oldPath = path.join(fp, name + '.tpl.md')
+      const newPath = path.join(fp, newName + '.tpl.md')
       await fs.rename(oldPath, newPath)
       broadcastIpcMessage('assets-provider', 'snippets-updated')
       return true
@@ -440,8 +480,12 @@ export default class AssetsProvider extends ProviderContract {
    *
    * @return  {Promise<string[]>}  The promise resolves with a list of existing snippets.
    */
-  async listSnippets (): Promise<string[]> {
-    const files = await fs.readdir(this._snippetsPath)
+  async listSnippets (fp?: string): Promise<string[]> {
+    if (fp === null || fp === undefined) {
+      fp = this._snippetsPath
+    }
+
+    const files = await fs.readdir(fp)
     const snippetFiles = files.filter(file => /\.tpl\.md$/.test(file))
     return snippetFiles.map(file => file.replace(/\.tpl\.md$/, ''))
   }

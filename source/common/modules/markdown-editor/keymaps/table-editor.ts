@@ -71,9 +71,9 @@ export function tableEditorKeymap (mainView: EditorView): Extension {
       { key: 'Mod-a', run: selectAllCommand, preventDefault: true },
       // Add a few more keyboard shortcuts.
       { key: 'Tab', run: _v => moveNextCell(mainView), shift: _v => movePrevCell(mainView) },
-      { key: 'Ctrl-l', run: _v => alignLeft(mainView), preventDefault: true },
-      { key: 'Ctrl-c', run: _v => alignCenter(mainView), preventDefault: true },
-      { key: 'Ctrl-r', run: _v => alignRight(mainView), preventDefault: true },
+      { key: 'Ctrl-Shift-l', mac: 'Cmd-Shift-l', run: _v => alignLeft(mainView), preventDefault: true },
+      { key: 'Ctrl-Shift-e', mac: 'Cmd-Shift-e', run: _v => alignCenter(mainView), preventDefault: true },
+      { key: 'Ctrl-Shift-r', mac: 'Cmd-Shift-r', run: _v => alignRight(mainView), preventDefault: true },
 
       // Further (relevant) keyboard commands (taken from the `markdownKeymap`).
       // NOTE: This is a subset of all commands, because block-based actions won't

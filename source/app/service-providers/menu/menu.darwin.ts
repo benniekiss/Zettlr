@@ -403,7 +403,7 @@ export default function getMenu (
         {
           id: 'menu.copy_id',
           label: trans('Copy ID'),
-          accelerator: 'Cmd+Shift+L',
+          accelerator: 'Cmd+Alt+L',
           click: function (_menuitem, focusedWindow) {
             (focusedWindow as BrowserWindow|undefined)?.webContents.send('shortcut', 'copy-current-id')
           }
@@ -437,7 +437,7 @@ export default function getMenu (
         {
           id: 'menu.toggle_theme',
           label: trans('Dark mode'),
-          accelerator: 'Cmd+Alt+L',
+          accelerator: 'Cmd+Alt+D',
           type: 'checkbox',
           checked: config.get('darkMode'),
           click: function (_menuitem, _focusedWindow) {

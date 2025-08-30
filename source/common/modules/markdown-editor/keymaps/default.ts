@@ -235,9 +235,9 @@ export function defaultKeymap (): Extension {
     // Table Editor Keys. These need to be the last, since they override some
     // commands and need to only run if nothing equivalently mapped can be run
     // within the corresponding cells.
-    { key: 'Ctrl-l', run: alignLeft, preventDefault: true },
-    { key: 'Ctrl-c', run: alignCenter, preventDefault: true },
-    { key: 'Ctrl-r', run: alignRight, preventDefault: true },
+    { key: 'Ctrl-Shift-l', mac: 'Cmd-Shift-l', run: alignLeft, preventDefault: true },
+    { key: 'Ctrl-Shift-e', mac: 'Cmd-Shift-e', run: alignCenter, preventDefault: true },
+    { key: 'Ctrl-Shift-r', mac: 'Cmd-Shift-r', run: alignRight, preventDefault: true },
     { key: 'Mod-Shift-a', run: v => alignTables(v, v.state.selection.main.head) },
     { key: 'Alt-ArrowUp', run: swapPrevRow, shift: addRowBefore },
     { key: 'Alt-ArrowDown', run: swapNextRow, shift: addRowAfter },

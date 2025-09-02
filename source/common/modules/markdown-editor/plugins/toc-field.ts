@@ -198,19 +198,18 @@ export const tocField = StateField.define<ToCEntry[]>({
       const newPos = transaction.changes.desc.mapPos(entry.pos, 1,  MapMode.TrackAfter)
       if (newPos !== null) {
         const newLine = transaction.newDoc.lineAt(newPos)
-        const text = newLine.text
+        // we take the next line to check for Setext headings
+        const nextLine = transaction.newDoc.line(Math.min(newLine.number + 1, transaction.newDoc.lines))
+        const text = transaction.newDoc.sliceString(newLine.from, nextLine.to)
         // finally, make sure the line is still a heading
         const ast = markdownToAST(text)
         const headings: ASTNode[] = extractASTNodes(ast, 'Heading')
-        if (headings.length !== 0) {
-          entry.line = newLine.number
-          entry.pos = newPos
-          entry.text = text
+        if (headings.length > 0) {
           tocEntries.push({
             ...entry,
             line: newLine.number,
             pos: newLine.from,
-            text: text
+            text: newLine.text,
           })
         }
       }
@@ -218,6 +217,7 @@ export const tocField = StateField.define<ToCEntry[]>({
 
     // Iterate over the changes and push any new headings into the list
     transaction.changes.iterChangedRanges((fromA, toA, fromB, toB) => {
+      // get the line before in case of Setext headings
       const lineBefore = Math.max(transaction.newDoc.lineAt(fromB).number - 1, 1)
       const from = transaction.newDoc.line(lineBefore).from
       const to = transaction.newDoc.lineAt(toB).to
@@ -228,7 +228,7 @@ export const tocField = StateField.define<ToCEntry[]>({
 
       for (const node of headings) {
         if (node.type === 'Heading') {
-          const nodeLine = transaction.newDoc.lineAt(node.from)
+          const nodeLine = transaction.newDoc.lineAt(node.from + from)
           tocEntries.push({
             line: nodeLine.number,
             pos: nodeLine.from,

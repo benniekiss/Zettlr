@@ -144,8 +144,6 @@ const ltLinter = linter(async view => {
     rangePromises.push((async () => {
       const text = view.state.sliceDoc(from, to)
 
-      console.log('TEXT', text)
-
       const ast = markdownToAST(text)
       const textNodes = extractTextnodes(ast)
       // To avoid too high loads, we have to send a "pseudo-plain text" document.

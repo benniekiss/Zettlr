@@ -13,9 +13,9 @@
  * END HEADER
  */
 
-import { StateField, type EditorState } from '@codemirror/state'
-import { ensureSyntaxTree, syntaxTree } from '@codemirror/language'
-
+import { StateField, MapMode } from '@codemirror/state'
+import { markdownToAST, extractASTNodes } from '@common/modules/markdown-utils'
+import { type ASTNode } from '../../markdown-utils/markdown-ast'
 /**
  * Takes a heading (the full line) and transforms it into an ID. This function
  * will first look for a Pandoc-style ID ({#heading-id}), then for a named
@@ -102,14 +102,13 @@ export interface ToCEntry {
 }
 
 /**
- * This function generates a Table of Contents based on the EditorState
+ * This function generates a rendering level for a list of Table of Contents
  *
- * @param   {EditorState}  state  The editor state to create a ToC from
+ * @param   {ToCEntry[]}  headings  A list of headings
  *
  * @return  {ToCEntry[]}          The ToC
  */
-function generateToc (state: EditorState): ToCEntry[] {
-  const toc: ToCEntry[] = []
+function generateToc (headings: ToCEntry[]): ToCEntry[] {
   let h1 = 0
   let h2 = 0
   let h3 = 0
@@ -117,110 +116,73 @@ function generateToc (state: EditorState): ToCEntry[] {
   let h5 = 0
   let h6 = 0
 
-  // We try to retrieve the full syntax tree, and if that fails, fall back to
-  // the (possibly incomplete) syntax tree. For the ToC we definitely want to
-  // utilize the full tree.
-  let tree = ensureSyntaxTree(state, state.doc.length, 1000)
-  if (tree === null) {
-    tree = syntaxTree(state)
+  for (const entry of headings) {
+    switch (entry.level) {
+      case 1: {
+        h1++
+        h2 = h3 = h4 = h5 = h6 = 0
+        entry.renderedLevel = [h1].join('.')
+        break
+      }
+      case 2: {
+        h2++
+        h3 = h4 = h5 = h6 = 0
+        entry.renderedLevel = [ h1, h2 ].join('.')
+        break
+      }
+      case 3: {
+        h3++
+        h4 = h5 = h6 = 0
+        entry.renderedLevel = [ h1, h2, h3 ].join('.')
+        break
+      }
+      case 4: {
+        h4++
+        h5 = h6 = 0
+        entry.renderedLevel = [ h1, h2, h3, h4 ].join('.')
+        break
+      }
+      case 5: {
+        h5++
+        h6 = 0
+        entry.renderedLevel = [ h1, h2, h3, h4, h5 ].join('.')
+        break
+      }
+      case 6: {
+        h6++
+        entry.renderedLevel = [ h1, h2, h3, h4, h5, h6 ].join('.')
+        break
+      }
+      default:
+        break
+    }
   }
 
-  tree.iterate({
-    enter (node) {
-      if (node.type.name === 'Document') {
-        return
-      }
-
-      switch (node.type.name) {
-        case 'ATXHeading1':
-        case 'SetextHeading1': {
-          h1++
-          h2 = h3 = h4 = h5 = h6 = 0
-          const from = node.type.name === 'ATXHeading1' ? node.from + 2 : node.from
-          toc.push({
-            line: state.doc.lineAt(node.from).number,
-            pos: node.from,
-            text: state.doc.sliceString(from, node.to),
-            level: 1,
-            renderedLevel: [h1].join('.'),
-            id: headingToID(state.doc.sliceString(from, node.to))
-          })
-          return false
-        }
-        case 'ATXHeading2':
-        case 'SetextHeading2': {
-          h2++
-          h3 = h4 = h5 = h6 = 0
-          const from = node.type.name === 'ATXHeading2' ? node.from + 3 : node.from
-          toc.push({
-            line: state.doc.lineAt(node.from).number,
-            pos: node.from,
-            text: state.doc.sliceString(from, node.to),
-            level: 2,
-            renderedLevel: [ h1, h2 ].join('.'),
-            id: headingToID(state.doc.sliceString(from, node.to))
-          })
-          return false
-        }
-        case 'ATXHeading3':
-          h3++
-          h4 = h5 = h6 = 0
-          toc.push({
-            line: state.doc.lineAt(node.from).number,
-            pos: node.from,
-            text: state.doc.sliceString(node.from + 4, node.to),
-            level: 3,
-            renderedLevel: [ h1, h2, h3 ].join('.'),
-            id: headingToID(state.doc.sliceString(node.from + 4, node.to))
-          })
-          return false
-        case 'ATXHeading4':
-          h4++
-          h5 = h6 = 0
-          toc.push({
-            line: state.doc.lineAt(node.from).number,
-            pos: node.from,
-            text: state.doc.sliceString(node.from + 5, node.to),
-            level: 4,
-            renderedLevel: [ h1, h2, h3, h4 ].join('.'),
-            id: headingToID(state.doc.sliceString(node.from + 5, node.to))
-          })
-          return false
-        case 'ATXHeading5':
-          h5++
-          h6 = 0
-          toc.push({
-            line: state.doc.lineAt(node.from).number,
-            pos: node.from,
-            text: state.doc.sliceString(node.from + 6, node.to),
-            level: 5,
-            renderedLevel: [ h1, h2, h3, h4, h5 ].join('.'),
-            id: headingToID(state.doc.sliceString(node.from + 6, node.to))
-          })
-          return false
-        case 'ATXHeading6':
-          h6++
-          toc.push({
-            line: state.doc.lineAt(node.from).number,
-            pos: node.from,
-            text: state.doc.sliceString(node.from + 7, node.to),
-            level: 6,
-            renderedLevel: [ h1, h2, h3, h4, h5, h6 ].join('.'),
-            id: headingToID(state.doc.sliceString(node.from + 7, node.to))
-          })
-          return false
-        default:
-          return false
-      }
-    }
-  })
-
-  return toc
+  return headings
 }
 
 export const tocField = StateField.define<ToCEntry[]>({
   create (state) {
-    return generateToc(state)
+    const tocEntries: ToCEntry[] = []
+
+    const ast = markdownToAST(state.doc.toString())
+    const headings: ASTNode[] = extractASTNodes(ast, 'Heading')
+
+    for (const node of headings) {
+      if (node.type === 'Heading') {
+        const nodeLine = state.doc.lineAt(node.from)
+        tocEntries.push({
+          line: nodeLine.number,
+          pos: node.from,
+          text: nodeLine.text,
+          level: node.level,
+          renderedLevel: '',
+          id: headingToID(nodeLine.text)
+        })
+      }
+    }
+
+    return generateToc(tocEntries)
   },
 
   update (value, transaction) {
@@ -228,6 +190,64 @@ export const tocField = StateField.define<ToCEntry[]>({
       return value
     }
 
-    return generateToc(transaction.state)
+    // map old headings to new positions
+    const tocEntries: ToCEntry[] = []
+    for (const entry of value) {
+      // we track the changes and associate with the characters after the position
+      // to cleanup any headings that may have been deleted in the transaction.
+      const newPos = transaction.changes.desc.mapPos(entry.pos, 1,  MapMode.TrackAfter)
+      if (newPos !== null) {
+        const newLine = transaction.newDoc.lineAt(newPos)
+        const text = newLine.text
+        // finally, make sure the line is still a heading
+        const ast = markdownToAST(text)
+        const headings: ASTNode[] = extractASTNodes(ast, 'Heading')
+        if (headings.length !== 0) {
+          entry.line = newLine.number
+          entry.pos = newPos
+          entry.text = text
+          tocEntries.push({
+            ...entry,
+            line: newLine.number,
+            pos: newLine.from,
+            text: text
+          })
+        }
+      }
+    }
+
+    // Iterate over the changes and push any new headings into the list
+    transaction.changes.iterChangedRanges((fromA, toA, fromB, toB) => {
+      const lineBefore = Math.min(transaction.newDoc.lineAt(fromB).number - 1, 1)
+      const from = transaction.newDoc.line(lineBefore).from
+      const to = transaction.newDoc.lineAt(toB).to
+      const text = transaction.newDoc.sliceString(from, to)
+
+      const ast = markdownToAST(text)
+      const headings: ASTNode[] = extractASTNodes(ast, 'Heading')
+
+      for (const node of headings) {
+        if (node.type === 'Heading') {
+          const nodeLine = transaction.newDoc.lineAt(node.from)
+          tocEntries.push({
+            line: nodeLine.number,
+            pos: nodeLine.from,
+            text: nodeLine.text,
+            level: node.level,
+            renderedLevel: '',
+            id: headingToID(nodeLine.text)
+          })
+        }
+      }
+    })
+    // sort the list
+    tocEntries.sort((a, b) => a.line - b.line)
+    // filter out duplicate entries where
+    // later entries override earlier ones.
+    const sortedToC = Array.from(
+      new Map(tocEntries.map(obj => [ obj.line, obj ])).values()
+    )
+
+    return generateToc(sortedToC)
   }
 })

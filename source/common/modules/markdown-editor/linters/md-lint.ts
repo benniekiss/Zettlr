@@ -164,7 +164,7 @@ export const mdLint = linter(async view => {
     // we need to get the context around the changes
     // so that the formatting linters can pick up any surrounding
     // issues
-    const { from, to } = getBlockPosition(view, fromB, toB, 1)
+    const { from, to } = getBlockPosition(view, fromB, toB, 5)
     ranges.push({ from, to })
   })
 

@@ -1,3 +1,18 @@
+/**
+ * @ignore
+ * BEGIN HEADER
+ *
+ * Contains:        Functions to expand the range of a selection
+ * CVM-Role:        Utility Function
+ * Maintainer:      Hendrik Erz
+ * License:         GNU GPL v3
+ *
+ * Description:     Contains a set of functions to expand a selection
+ *                  range.
+ *
+ * END HEADER
+ */
+
 import { type EditorView } from '@codemirror/view'
 
 export function getWordPosition (view: EditorView, from: number, to: number): { from: number, to: number } {

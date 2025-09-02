@@ -12,11 +12,18 @@
  *
  * END HEADER
  */
-
-import { linter, type Diagnostic } from '@codemirror/lint'
+import {
+  StateField,
+  StateEffect,
+  ChangeSet,
+  type ChangeDesc,
+  type Transaction
+} from '@codemirror/state'
+import { linter, forEachDiagnostic, type Diagnostic } from '@codemirror/lint'
 import { extractTextnodes, markdownToAST } from '@common/modules/markdown-utils'
 import { configField } from '../util/configuration'
 import { trans } from '@common/i18n-renderer'
+import { type EditorView } from '@codemirror/view'
 
 const ipcRenderer = window.ipc
 
@@ -151,6 +158,65 @@ async function checkWord (word: string, index: number, nodeStart: number, autoco
   }
 }
 
+const resetspellcheckChanges = StateEffect.define<null>()
+export const spellcheckerChangesField = StateField.define<ChangeDesc>({
+  // create a ChangeSet that covers the entire document so that
+  // the entire document is linted on startup.
+  create: (state) => ChangeSet.of({ from: 0, to: state.doc.length, insert: state.doc.toString() }, state.doc.length).desc,
+  update (value, transaction: Transaction) {
+    for (let e of transaction.effects) {
+      if (e.is(resetspellcheckChanges)) {
+        return ChangeSet.empty(transaction.newDoc.length).desc
+      }
+    }
+
+    if (!transaction.docChanged) {
+      return value
+    }
+
+    const composedChanges = value.composeDesc(transaction.changes.desc)
+
+    return composedChanges
+  }
+})
+
+function getWordPosition (view: EditorView, from: number, to: number): { from: number, to: number } {
+  const fromWord = view.state.wordAt(from)
+  const toWord = view.state.wordAt(to)
+
+  const newFrom: number = fromWord ? fromWord.from : from
+  const newTo: number = toWord ? toWord.to : to
+
+  return { from: newFrom, to: newTo }
+}
+
+function mergeRangesInPlace (ranges: { from: number, to: number }[]): void {
+  if (ranges.length <= 1) {
+    return
+  }
+
+  ranges.sort((a, b) => a.from - b.from)
+
+  let writeIndex = 0 // last merged index
+
+  for (let readIndex = 1; readIndex < ranges.length; readIndex++) {
+    const current = ranges[writeIndex]
+    const next = ranges[readIndex]
+
+    if (next.from <= current.to + 1) {
+      // merge into current
+      current.to = Math.max(current.to, next.to)
+    } else {
+      // move next up to the next slot
+      writeIndex++
+      ranges[writeIndex] = next
+    }
+  }
+
+  // cut off the leftovers
+  ranges.length = writeIndex + 1
+}
+
 /**
  * Defines a spellchecker that runs over the text content of the document and
  * highlights misspelled words
@@ -158,40 +224,94 @@ async function checkWord (word: string, index: number, nodeStart: number, autoco
 export const spellcheck = linter(async view => {
   const diagnostics: Diagnostic[] = []
   const autocorrectValues = view.state.field(configField).autocorrect.replacements.map(x => x.value)
-  const ast = markdownToAST(view.state.doc.toString())
-  const textNodes = extractTextnodes(ast)
+  const changes = view.state.field(spellcheckerChangesField)
 
-  const wordsToCheck: Array<{ word: string, index: number, nodeStart: number }> = textNodes
-    // First, extract all words from the node's value
-    .flatMap(node => {
-      const words: Array<{ index: number, word: string }> = []
-      for (const match of node.value.matchAll(anyLetterRE)) {
-        // Remove words that only consists, e.g., of quotes
-        if (!noneLetterRE.test(match[0])) {
-          // Remove none-letters from the beginnings and ends of words
-          let word = match[0]
-          while (nonLetters.includes(word[0])) {
-            word = word.slice(1)
+  const ranges: { from: number, to: number }[] = []
+  changes.iterChangedRanges((fromA, toA, fromB, toB) => {
+    // we need to get the entire word, not just the changed text
+    // because the changes could start in the middle of a word
+    const { from, to } = getWordPosition(view, fromB, toB)
+    ranges.push({ from, to })
+  })
+
+  // exclude any diagnostics that cover text within the ranges.
+  // they will be recalculated.
+  const overlaps = (d: Diagnostic): boolean => {
+    return ranges.some(r => !(d.to < r.from || d.from > r.to))
+  }
+
+  // this tracks the new position of the diagnostic, so
+  // we can just push it with the updated from and to.
+  forEachDiagnostic(view.state, (d, from, to) => {
+    if (d.source !== undefined && d.source?.includes('spellcheck')) {
+      if (!overlaps(d)) {
+        diagnostics.push({
+          ...d,
+          from: from,
+          to: to,
+        })
+      } else {
+        // since the changed ranges overlap with the diagnostic
+        // we need to expand the context to include the entire diagnostic
+        // to ensure we lint correctly
+        ranges.push({ from, to })
+      }
+    }
+  })
+
+  // sort the ranges and merge any overlapping regions
+  mergeRangesInPlace(ranges)
+
+  const rangePromises: Promise<void>[] = []
+
+  for (const { from, to } of ranges) {
+    // iterChangedRanges is synchronous, so we have to work around the async functions
+    rangePromises.push((async () => {
+      const text = view.state.sliceDoc(from, to)
+
+      const ast = markdownToAST(text)
+      const textNodes = extractTextnodes(ast)
+
+      const wordsToCheck: Array<{ word: string, index: number, nodeStart: number }> = textNodes
+        // First, extract all words from the node's value
+        .flatMap(node => {
+          const words: Array<{ index: number, word: string }> = []
+          for (const match of node.value.matchAll(anyLetterRE)) {
+            // Remove words that only consists, e.g., of quotes
+            if (!noneLetterRE.test(match[0])) {
+              // Remove none-letters from the beginnings and ends of words
+              let word = match[0]
+              while (nonLetters.includes(word[0])) {
+                word = word.slice(1)
+              }
+              while (nonLetters.includes(word[word.length - 1])) {
+                word = word.slice(0, word.length - 1)
+              }
+              words.push({ word, index: match.index })
+            }
           }
-          while (nonLetters.includes(word[word.length - 1])) {
-            word = word.slice(0, word.length - 1)
-          }
-          words.push({ word, index: match.index })
+
+          return words.map(x => ({ ...x, nodeStart: node.from + from }))
+        })
+
+      // Now make sure everything is cached beforehand with two IPC calls
+      await batchCheck(wordsToCheck.map(x => x.word))
+
+      for (const { word, index, nodeStart } of wordsToCheck) {
+        const diagnostic = await checkWord(word, index, nodeStart, autocorrectValues)
+        if (diagnostic !== undefined) {
+          diagnostics.push(diagnostic)
         }
       }
-
-      return words.map(x => ({ ...x, nodeStart: node.from }))
-    })
-
-  // Now make sure everything is cached beforehand with two IPC calls
-  await batchCheck(wordsToCheck.map(x => x.word))
-
-  for (const { word, index, nodeStart } of wordsToCheck) {
-    const diagnostic = await checkWord(word, index, nodeStart, autocorrectValues)
-    if (diagnostic !== undefined) {
-      diagnostics.push(diagnostic)
-    }
+    })())
   }
+
+  await Promise.all(rangePromises)
+
+  // since we've linted, we can reset the accumulated changes
+  view.dispatch({
+    effects: resetspellcheckChanges.of(null)
+  })
 
   return diagnostics
 })

@@ -23,7 +23,7 @@ import { linter, forEachDiagnostic, type Diagnostic } from '@codemirror/lint'
 import { extractTextnodes, markdownToAST } from '@common/modules/markdown-utils'
 import { configField } from '../util/configuration'
 import { trans } from '@common/i18n-renderer'
-import { getWordPosition, mergeRanges } from '../util/expand-selection'
+import { getWordPosition, rangesOverlap, mergeRanges } from '../util/expand-selection'
 
 const ipcRenderer = window.ipc
 
@@ -197,17 +197,11 @@ export const spellcheck = linter(async view => {
     ranges.push({ from, to })
   })
 
-  // exclude any diagnostics that cover text within the ranges.
-  // they will be recalculated.
-  const overlaps = (d: Diagnostic): boolean => {
-    return ranges.some(r => !(d.to < r.from || d.from > r.to))
-  }
-
   // this tracks the new position of the diagnostic, so
   // we can just push it with the updated from and to.
   forEachDiagnostic(view.state, (d, from, to) => {
     if (d.source !== undefined && d.source?.includes('spellcheck')) {
-      if (!overlaps(d)) {
+      if (!rangesOverlap({ from: d.from, to: d.to }, ranges)) {
         diagnostics.push({
           ...d,
           from: from,

@@ -49,7 +49,7 @@ import remarkLintStrongMarker from 'remark-lint-strong-marker'
 import remarkLintTableCellPadding from 'remark-lint-table-cell-padding'
 import remarkLint from 'remark-lint'
 import { type Text } from '@codemirror/state'
-import { getBlockPosition, mergeRanges } from '../util/expand-selection'
+import { getBlockPosition, rangesOverlap, mergeRanges } from '../util/expand-selection'
 
 const remarkLinter = remark()
   .use(remarkFrontmatter, [
@@ -168,17 +168,11 @@ export const mdLint = linter(async view => {
     ranges.push({ from, to })
   })
 
-  // exclude any diagnostics that cover text within the ranges.
-  // they will be recalculated.
-  const overlaps = (d: Diagnostic): boolean => {
-    return ranges.some(r => !(d.to < r.from || d.from > r.to))
-  }
-
   // this tracks the new position of the diagnostic, so
   // we can just push it with the updated from and to.
   forEachDiagnostic(view.state, (d, from, to) => {
     if (d.source !== undefined && d.source?.includes('remark-lint')) {
-      if (!overlaps(d)) {
+      if (!rangesOverlap({ from: d.from, to: d.to }, ranges)) {
         diagnostics.push({
           ...d,
           from: from,

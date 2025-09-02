@@ -143,6 +143,25 @@ export function getBlockPosition (view: EditorView, from: number, to: number, co
 }
 
 /**
+ * Test whether a range overlaps any range in a list of ranges.
+ *
+ * @param   {Range}    r       The range to test
+ * @param   {Range[]}  ranges  A list of ranges to test against
+ *
+ * @return  {boolean}          Whether the range overlaps any range in ranges.
+ */
+export function rangesOverlap (r: Range, ranges: Range[]): boolean {
+  return ranges.some(range => {
+    // zero-width range
+    if (r.from === r.to) {
+      // only count as overlap if range actually contains the point r.from
+      return r.from < range.to && r.to > range.from
+    }
+    return !(r.to < range.from || r.from > range.to)
+  })
+}
+
+/**
  * Merge overlapping ranges in a list of ranges
  *
  * @param   {Range[]}  ranges  A list of { from, to } ranges.

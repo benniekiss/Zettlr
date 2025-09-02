@@ -23,7 +23,7 @@ import { linter, forEachDiagnostic, type Diagnostic } from '@codemirror/lint'
 import { extractTextnodes, markdownToAST } from '@common/modules/markdown-utils'
 import { configField } from '../util/configuration'
 import { trans } from '@common/i18n-renderer'
-import { type EditorView } from '@codemirror/view'
+import { getWordPosition, mergeRangesInPlace } from '../util/expand-selection'
 
 const ipcRenderer = window.ipc
 
@@ -179,43 +179,6 @@ export const spellcheckerChangesField = StateField.define<ChangeDesc>({
     return composedChanges
   }
 })
-
-function getWordPosition (view: EditorView, from: number, to: number): { from: number, to: number } {
-  const fromWord = view.state.wordAt(from)
-  const toWord = view.state.wordAt(to)
-
-  const newFrom: number = fromWord ? fromWord.from : from
-  const newTo: number = toWord ? toWord.to : to
-
-  return { from: newFrom, to: newTo }
-}
-
-function mergeRangesInPlace (ranges: { from: number, to: number }[]): void {
-  if (ranges.length <= 1) {
-    return
-  }
-
-  ranges.sort((a, b) => a.from - b.from)
-
-  let writeIndex = 0 // last merged index
-
-  for (let readIndex = 1; readIndex < ranges.length; readIndex++) {
-    const current = ranges[writeIndex]
-    const next = ranges[readIndex]
-
-    if (next.from <= current.to + 1) {
-      // merge into current
-      current.to = Math.max(current.to, next.to)
-    } else {
-      // move next up to the next slot
-      writeIndex++
-      ranges[writeIndex] = next
-    }
-  }
-
-  // cut off the leftovers
-  ranges.length = writeIndex + 1
-}
 
 /**
  * Defines a spellchecker that runs over the text content of the document and

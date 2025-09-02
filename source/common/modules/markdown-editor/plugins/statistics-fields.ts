@@ -14,7 +14,6 @@
  * END HEADER
  */
 
-import { syntaxTree } from '@codemirror/language'
 import { StateField, type EditorState } from '@codemirror/state'
 import { markdownToAST } from '@common/modules/markdown-utils'
 import { countAll } from '@common/util/counter'
@@ -33,8 +32,45 @@ export const countField = StateField.define<{ chars: number, words: number }>({
       return value
     }
 
-    const ast = markdownToAST(transaction.state.doc.toString(), syntaxTree(transaction.state))
-    return countAll(ast)
+    let { words, chars } = value
+
+    transaction.changes.iterChanges((fromA, toA, fromB, toB) => {
+      const processSegment = (state: EditorState, from: number, to: number, sign: 1 | -1) => {
+        const startWord = state.wordAt(from)
+        const endWord = state.wordAt(to)
+
+        let start
+        let end
+
+        if (startWord === null) {
+          start = from
+        } else {
+          start = startWord.from
+        }
+
+        if (endWord === null) {
+          end = to
+        } else {
+          end = endWord.to
+        }
+
+        const text = state.doc.sliceString(start, end)
+        let counts = countAll(markdownToAST(text))
+
+        // we have to account for single character words.
+        if (counts.words === 0 && /^\p{L}$|^\p{N}$/u.test(text.trim())) {
+          counts = { words: 1, chars: 1 }
+        }
+
+        words += sign * counts.words
+        chars += sign * counts.chars
+      }
+
+      processSegment(transaction.startState, fromA, toA, -1)
+      processSegment(transaction.state, fromB, toB, +1)
+    })
+
+    return { words, chars }
   },
 
   compare (a, b): boolean {

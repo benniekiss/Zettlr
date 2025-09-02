@@ -218,7 +218,7 @@ export const tocField = StateField.define<ToCEntry[]>({
 
     // Iterate over the changes and push any new headings into the list
     transaction.changes.iterChangedRanges((fromA, toA, fromB, toB) => {
-      const lineBefore = Math.min(transaction.newDoc.lineAt(fromB).number - 1, 1)
+      const lineBefore = Math.max(transaction.newDoc.lineAt(fromB).number - 1, 1)
       const from = transaction.newDoc.line(lineBefore).from
       const to = transaction.newDoc.lineAt(toB).to
       const text = transaction.newDoc.sliceString(from, to)

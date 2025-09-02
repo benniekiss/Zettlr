@@ -15,27 +15,84 @@
 
 import { type EditorView } from '@codemirror/view'
 
-export function getWordPosition (view: EditorView, from: number, to: number): { from: number, to: number } {
-  const fromWord = view.state.wordAt(from)
-  const toWord = view.state.wordAt(to)
+type Range = { from: number, to: number }
 
-  const newFrom: number = fromWord ? fromWord.from : from
-  const newTo: number = toWord ? toWord.to : to
+/**
+ * This function takes a range and expands it to the nearest
+ * word boundary before `from` and after `to`
+ *
+ * @param   {EditorView}  view     The Editor View
+ * @param   {number}      from     The beginning of the selection
+ * @param   {number}      to       The end of the selection
+ * @param   {number}      context  Expand the selection by `context`
+ *                                 number of positions before `from` and after `to`
+ *
+ * @return  {Range}                The selection expanded to the nearest word boundaries
+ */
+export function getWordPosition (view: EditorView, from: number, to: number, context: number = 0): Range {
+  const totalChars = view.state.doc.length
 
-  return { from: newFrom, to: newTo }
+  const fromWordNum = Math.max(0, from - context)
+  const toWordNum = Math.min(totalChars, to + context)
+
+  const fromWord = view.state.wordAt(fromWordNum)
+  const toWord = view.state.wordAt(toWordNum)
+
+  const wordFrom: number = fromWord ? fromWord.from : fromWordNum
+  const wordTo: number = toWord ? toWord.to : toWordNum
+
+  return { from: wordFrom, to: wordTo }
 }
 
-export function getSurroundingLinePosition (view: EditorView, from: number, to: number, context: number = 0): { from: number, to: number } {
+/**
+ * This function takes a range and expands it to the nearest
+ * line boundary before `from` and after `to`.
+ *
+ * @param   {EditorView}  view     The Editor View
+ * @param   {number}      from     The beginning of the selection
+ * @param   {number}      to       The end of the selection
+ * @param   {number}      context  Expand the selection by `context`
+ *                                 number of lines before `from` and after `to`
+ *
+ * @return  {Range}                The selection expanded to the nearest line boundaries
+ */
+export function getLinePosition (view: EditorView, from: number, to: number, context: number = 0): Range {
   const totalLines = view.state.doc.lines
-  let fromLine = Math.max(1, view.state.doc.lineAt(from).number - context)
-  let toLine = Math.min(totalLines, view.state.doc.lineAt(to).number + context)
+
+  const fromLineNum = Math.max(1, view.state.doc.lineAt(from).number - context)
+  const toLineNum = Math.min(totalLines, view.state.doc.lineAt(to).number + context)
+
+  const fromLine = view.state.doc.line(fromLineNum)
+  const toLine = view.state.doc.line(toLineNum)
+
+  return { from: fromLine.from, to: toLine.to }
+}
+
+/**
+ * This function takes a range and expands it to the nearest
+ * block boundary before `from` and after `to`
+ *
+ * @param   {EditorView}  view     The Editor View
+ * @param   {number}      from     The beginning of the selection
+ * @param   {number}      to       The end of the selection
+ * @param   {number}      context  Expand the selection by `context`
+ *                                 number of blocks before `from` and after `to`
+ *
+ * @return  {Range}                The selection expanded to the nearest block boundaries
+ */
+export function getBlockPosition (view: EditorView, from: number, to: number, context: number = 0): Range {
+  const totalLines = view.state.doc.lines
+  let fromLineNum = view.state.doc.lineAt(from).number
+  let toLineNum = view.state.doc.lineAt(to).number
 
   // we expand the context to the top of the previous block
   let prevBlock: boolean = false
+  let nextBlock: boolean = false
   let currentBlock: boolean = true
+  let blocks: number = 0
 
-  while (fromLine > 1) {
-    if (view.state.doc.line(fromLine - 1).text.trim() === '') {
+  while (fromLineNum > 1) {
+    if (view.state.doc.line(fromLineNum - 1).text.trim() === '') {
       // we hit a newline, so we are no longer in the starting block
       currentBlock = false
       // we hit the top of the previous block
@@ -45,17 +102,21 @@ export function getSurroundingLinePosition (view: EditorView, from: number, to: 
     // if we aren't in the current block and hit text,
     // it means we are now in the previous block
     } else if (!currentBlock) {
-      prevBlock = true
+      if (blocks >= context) {
+        prevBlock = true
+      } else {
+        blocks++
+        currentBlock = true
+      }
     }
-    fromLine--
+    fromLineNum--
   }
 
   // we expand the context to the bottom of the next block
-  let nextBlock: boolean = false
   currentBlock = true
-
-  while (toLine < totalLines) {
-    if (view.state.doc.line(toLine + 1).text.trim() === '') {
+  blocks = 0
+  while (toLineNum < totalLines) {
+    if (view.state.doc.line(toLineNum + 1).text.trim() === '') {
       // we hit a newline, so we are no longer in the starting block
       currentBlock = false
       // we hit the bottom of the next block
@@ -65,40 +126,47 @@ export function getSurroundingLinePosition (view: EditorView, from: number, to: 
     // if we aren't in the current block and hit text,
     // it means we are now in the next block
     } else if (!currentBlock) {
-      nextBlock = true
+      if (blocks >= context) {
+        nextBlock = true
+      } else {
+        blocks++
+        currentBlock = true
+      }
     }
-    toLine++
+    toLineNum++
   }
 
-  const newFrom = view.state.doc.line(fromLine).from
-  const newTo = view.state.doc.line(toLine).to
+  const blockFrom = view.state.doc.line(fromLineNum).from
+  const blockTo = view.state.doc.line(toLineNum).to
 
-  return { from: newFrom, to: newTo }
+  return { from: blockFrom, to: blockTo }
 }
 
-export function mergeRangesInPlace (ranges: { from: number, to: number }[]): void {
+/**
+ * Merge overlapping ranges in a list of ranges
+ *
+ * @param   {Range[]}  ranges  A list of { from, to } ranges.
+ *
+ * @return  {Range[]}          A new list of merged ranges.
+ */
+export function mergeRanges (ranges: Range[]): Range[] {
   if (ranges.length <= 1) {
-    return
+    return [...ranges]
   }
 
-  ranges.sort((a, b) => a.from - b.from)
+  const sorted = [...ranges].sort((a, b) => a.from - b.from)
+  const merged: Range[] = [{ ...sorted[0] }]
 
-  let writeIndex = 0 // last merged index
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = merged[merged.length - 1]
+    const next = sorted[i]
 
-  for (let readIndex = 1; readIndex < ranges.length; readIndex++) {
-    const current = ranges[writeIndex]
-    const next = ranges[readIndex]
-
-    if (next.from <= current.to + 1) {
-      // merge into current
-      current.to = Math.max(current.to, next.to)
+    if (next.from <= prev.to + 1) {
+      prev.to = Math.max(prev.to, next.to)
     } else {
-      // move next up to the next slot
-      writeIndex++
-      ranges[writeIndex] = next
+      merged.push({ ...next })
     }
   }
 
-  // cut off the leftovers
-  ranges.length = writeIndex + 1
+  return merged
 }

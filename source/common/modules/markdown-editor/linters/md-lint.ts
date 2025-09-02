@@ -49,7 +49,7 @@ import remarkLintStrongMarker from 'remark-lint-strong-marker'
 import remarkLintTableCellPadding from 'remark-lint-table-cell-padding'
 import remarkLint from 'remark-lint'
 import { type Text } from '@codemirror/state'
-import { getSurroundingLinePosition, mergeRangesInPlace } from '../util/expand-selection'
+import { getBlockPosition, mergeRanges } from '../util/expand-selection'
 
 const remarkLinter = remark()
   .use(remarkFrontmatter, [
@@ -159,12 +159,12 @@ export const mdLint = linter(async view => {
 
   // Precalculate the ranges so that we can use them
   // when filtering the previous diagnositcs
-  const ranges: { from: number, to: number }[] = []
+  let ranges: { from: number, to: number }[] = []
   changes.iterChangedRanges((fromA, toA, fromB, toB) => {
     // we need to get the context around the changes
     // so that the formatting linters can pick up any surrounding
     // issues
-    const { from, to } = getSurroundingLinePosition(view, fromB, toB, 1000)
+    const { from, to } = getBlockPosition(view, fromB, toB, 1)
     ranges.push({ from, to })
   })
 
@@ -194,7 +194,7 @@ export const mdLint = linter(async view => {
   })
 
   // sort the ranges and merge any overlapping regions
-  mergeRangesInPlace(ranges)
+  ranges = mergeRanges(ranges)
 
   const config = view.state.field(configField, false)
   const emphasisMarker = config?.italicFormatting

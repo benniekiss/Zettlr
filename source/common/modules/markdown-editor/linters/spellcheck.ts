@@ -23,7 +23,7 @@ import { linter, forEachDiagnostic, type Diagnostic } from '@codemirror/lint'
 import { extractTextnodes, markdownToAST } from '@common/modules/markdown-utils'
 import { configField } from '../util/configuration'
 import { trans } from '@common/i18n-renderer'
-import { getWordPosition, mergeRangesInPlace } from '../util/expand-selection'
+import { getWordPosition, mergeRanges } from '../util/expand-selection'
 
 const ipcRenderer = window.ipc
 
@@ -189,7 +189,7 @@ export const spellcheck = linter(async view => {
   const autocorrectValues = view.state.field(configField).autocorrect.replacements.map(x => x.value)
   const changes = view.state.field(spellcheckerChangesField)
 
-  const ranges: { from: number, to: number }[] = []
+  let ranges: { from: number, to: number }[] = []
   changes.iterChangedRanges((fromA, toA, fromB, toB) => {
     // we need to get the entire word, not just the changed text
     // because the changes could start in the middle of a word
@@ -223,7 +223,7 @@ export const spellcheck = linter(async view => {
   })
 
   // sort the ranges and merge any overlapping regions
-  mergeRangesInPlace(ranges)
+  ranges = mergeRanges(ranges)
 
   const rangePromises: Promise<void>[] = []
 

@@ -54,7 +54,7 @@ function countSelection (state: EditorState): { words: number, chars: number } {
  */
 export function wordcountStatus (state: EditorState, _view: EditorView): StatusbarItem|null {
   if (!state.selection.main.empty) {
-    const { words, chars } = countSelection(state)
+    const { words } = countSelection(state)
     return {
       content: trans('%s selected', localiseNumber(words))
     }
@@ -81,7 +81,7 @@ export function wordcountStatus (state: EditorState, _view: EditorView): Statusb
  */
 export function charcountStatus (state: EditorState, _view: EditorView): StatusbarItem|null {
   if (!state.selection.main.empty) {
-    const { words, chars } = countSelection(state)
+    const { chars } = countSelection(state)
     return {
       content: trans('%s selected', localiseNumber(chars))
     }

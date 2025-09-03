@@ -155,6 +155,11 @@ body div#toolbar {
 
   button {
     flex-grow: 1;
+
+    cds-icon {
+      width: 1.0rem;
+      height: 1.0rem;
+    }
   }
 }
 

@@ -62,12 +62,12 @@ function getToolbar (state: EditorState): Tooltip[] {
       const comment = document.createElement('button')
       comment.classList.add('formatting-toolbar-button')
       comment.setAttribute('title', trans('Comment'))
-      comment.innerHTML = '<cds-icon shape="code-alt"></cds-icon>'
+      comment.innerHTML = '<cds-icon shape="code"></cds-icon>'
 
       const code = document.createElement('button')
       code.classList.add('formatting-toolbar-button')
       code.setAttribute('title', trans('Code'))
-      code.innerHTML = '<cds-icon shape="code"></cds-icon>'
+      code.innerHTML = '<cds-icon shape="code-alt"></cds-icon>'
 
       buttonWrapper.append(bold, italic, link, image, comment, code)
       dom.append(buttonWrapper)
@@ -118,6 +118,10 @@ export const formattingToolbar = [
       lineHeight: '30px',
       padding: '0',
       width: '30px'
+    },
+    '.cm-tooltip.cm-formatting-bar button.formatting-toolbar-button cds-icon': {
+      width: '1.0rem',
+      height: '1.0rem'
     },
     '&dark .cm-tooltip.cm-formatting-bar button.formatting-toolbar-button': {
       color: 'rgb(200, 200, 200)'

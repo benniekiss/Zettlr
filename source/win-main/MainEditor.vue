@@ -751,7 +751,7 @@ function maybeHighlightSearchResults (): void {
 
   // Style the statusbar and formatting-bar
   // so they adopt the main ui theme, not the editor theme
-  .cm-statusbar.cm-panel {
+  .cm-statusbar.cm-panel, .cm-tooltip {
     color: black;
     background-color: #f5f5f5;
   }
@@ -778,7 +778,7 @@ body.dark .main-editor-wrapper {
 
   // Style the statusbar and formatting-bar
   // so they adopt the main ui theme, not the editor theme
-  .cm-statusbar.cm-panel {
+  .cm-statusbar.cm-panel, .cm-tooltip {
     color: #ddd;
     background-color: #333333;
   }

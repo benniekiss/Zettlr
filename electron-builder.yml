@@ -37,7 +37,7 @@ mac:
   artifactName: "Zettlr-${version}-${arch}.${ext}"
   icon: "./resources/icons/icon.icns"
   darkModeSupport: true
-  hardenedRuntime: true
+  hardenedRuntime: false
   gatekeeperAssess: false
   entitlements: "./scripts/assets/entitlements.plist"
   entitlementsInherit: "./scripts/assets/entitlements.plist"
@@ -50,11 +50,14 @@ win:
   artifactName: "Zettlr-${version}-${arch}.${ext}"
   icon: "./resources/icons/icon.ico"
   # New signing options for use with Azure Trusted Signing
-  azureSignOptions:
-    publisherName: "Hendrik Erz"
-    endpoint: "https://neu.codesigning.azure.net/"
-    certificateProfileName: "zettlr-code-sign-cert"
-    codeSigningAccountName: "zettlr"
+  ###########################
+  # DISABLE TRUSTED SIGNING #
+  ###########################
+  # azureSignOptions:
+  #   publisherName: "Hendrik Erz"
+  #   endpoint: "https://neu.codesigning.azure.net/"
+  #   certificateProfileName: "zettlr-code-sign-cert"
+  #   codeSigningAccountName: "zettlr"
 #
 # Generic Linux options
 #

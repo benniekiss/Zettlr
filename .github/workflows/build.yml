@@ -54,11 +54,9 @@ name: Build
 
 on:
   push:
-    branches:
-      - master
+    tags:
+      - 'v*'
   workflow_dispatch: {} # Used to manually trigger a nightly build.
-  schedule: # Every Monday at noon (UTC) we run a scheduled nightly build
-    - cron: '0 12 * * 1'
 
 # Defaults for every job and step in this workflow
 defaults:
@@ -71,7 +69,7 @@ env:
   # Specify the branch name which will cause regular nightly builds
   NIGHTLY_BRANCH: 'develop'
   # Specify the branch name which will cause release drafts to be published
-  RELEASE_BRANCH: 'master'
+  RELEASE_BRANCH: 'main'
   # DEBUG: '*' # Uncomment to debug Electron building packages
 
 # Ensure only a single build workflow runs at any one time
@@ -96,10 +94,10 @@ jobs:
     name: 'Preflight: Verify version tag'
     runs-on: ubuntu-22.04
     steps:
-      - name: Clone repository (master branch)
+      - name: Clone repository (main branch)
         uses: actions/checkout@v4
         with:
-          ref: 'master'
+          ref: ${{ env.RELEASE_BRANCH }}
           fetch-depth: 0 # Required for the tag verification step.
       - name: Setup NodeJS ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v4
@@ -110,12 +108,9 @@ jobs:
         id: ref
         run: echo "version=$(cat package.json | jq -r '.version')" >> $GITHUB_ENV
       - name: Verify the corresponding tag does not yet exist
-        if: github.ref_name == 'master'
+        if: github.ref_name == env.RELEASE_BRANCH
         # NOTE: the ! will return 0 if the command fails, and 1 otherwise
         run: '! git rev-parse "v${{env.version}}"'
-
-
-
 
   # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
   #                                                                           #
@@ -149,11 +144,14 @@ jobs:
       - name: Package & Release
         run: yarn package:win-x64 && yarn release:win-x64
         shell: pwsh # Run this using Powershell because it requires that for CodeSigning
-        env:
-          # Use OpenID Authentication flow
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        # env:
+        #   ########################
+        #   # ENABLE CODE SIGNING  #
+        #   ########################
+        #   # # Use OpenID Authentication flow
+        #   # AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        #   # AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        #   # AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
       - name: Cache installer
         uses: actions/upload-artifact@v4
         with:
@@ -166,52 +164,55 @@ jobs:
   #                               MACOS BUILDS                                #
   #                                                                           #
   # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-  build_macos_x64:
-    name: macOS (x86_64)
-    env:
-      npm_config_arch: x64
-    needs: [preflight, verify_version]
-    runs-on: macos-latest
-    steps:
-      # Check out master for a regular release, or develop branch for a nightly
-      - name: Checkout branch ${{ github.ref_name }}
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref_name }}
-      - name: Setup NodeJS ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'yarn'
-      - name: Set up build environment
-        run: yarn install --immutable
-      - name: Set tag version to nightly
-        if: github.ref_name == env.NIGHTLY_BRANCH
-        run: echo "$(cat package.json | jq '.version = .version + "-nightly"')" > package.json
-      - name: Retrieve tag version
-        id: ref
-        run: echo "version=$(cat package.json | jq -r '.version')" >> $GITHUB_ENV
-      # Save the macOS certificate on this runner for forge to access it in the
-      # next step below.
-      - name: Retrieve code signing certificate
-        run: ./scripts/add-osx-cert.sh
-        env:
-          MACOS_CERT: ${{ secrets.MACOS_CERT_2030_01_14 }}
-          MACOS_CERT_PASS: ${{ secrets.MACOS_CERT_PASS_2030_01_14 }}
-      - name: Package
-        run: yarn package:mac-x64
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_ID_PASS: ${{ secrets.APPLE_ID_PASS }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      - name: Release
-        run: yarn release:mac-x64
-      - name: Cache image file
-        uses: actions/upload-artifact@v4
-        with:
-          name: darwin_x64
-          path: |
-            ./release/Zettlr-${{env.version}}-x64.dmg
+  ############################
+  # DISABLE MACOS x64 BUILDS #
+  ############################
+  # build_macos_x64:
+  #   name: macOS (x86_64)
+  #   env:
+  #     npm_config_arch: x64
+  #   needs: [preflight, verify_version]
+  #   runs-on: macos-latest
+  #   steps:
+  #     # Check out master for a regular release, or develop branch for a nightly
+  #     - name: Checkout branch ${{ github.ref_name }}
+  #       uses: actions/checkout@v4
+  #       with:
+  #         ref: ${{ github.ref_name }}
+  #     - name: Setup NodeJS ${{ env.NODE_VERSION }}
+  #       uses: actions/setup-node@v4
+  #       with:
+  #         node-version: ${{ env.NODE_VERSION }}
+  #         cache: 'yarn'
+  #     - name: Set up build environment
+  #       run: yarn install --immutable
+  #     - name: Set tag version to nightly
+  #       if: github.ref_name == env.NIGHTLY_BRANCH
+  #       run: echo "$(cat package.json | jq '.version = .version + "-nightly"')" > package.json
+  #     - name: Retrieve tag version
+  #       id: ref
+  #       run: echo "version=$(cat package.json | jq -r '.version')" >> $GITHUB_ENV
+  #     # Save the macOS certificate on this runner for forge to access it in the
+  #     # next step below.
+  #     - name: Retrieve code signing certificate
+  #       run: ./scripts/add-osx-cert.sh
+  #       env:
+  #         MACOS_CERT: ${{ secrets.MACOS_CERT_2030_01_14 }}
+  #         MACOS_CERT_PASS: ${{ secrets.MACOS_CERT_PASS_2030_01_14 }}
+  #     - name: Package
+  #       run: yarn package:mac-x64
+  #       env:
+  #         APPLE_ID: ${{ secrets.APPLE_ID }}
+  #         APPLE_ID_PASS: ${{ secrets.APPLE_ID_PASS }}
+  #         APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+  #     - name: Release
+  #       run: yarn release:mac-x64
+  #     - name: Cache image file
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: darwin_x64
+  #         path: |
+  #           ./release/Zettlr-${{env.version}}-x64.dmg
 
   build_macos_arm64:
     name: macOS (arm64)
@@ -237,19 +238,29 @@ jobs:
       - name: Retrieve tag version
         id: ref
         run: echo "version=$(cat package.json | jq -r '.version')" >> $GITHUB_ENV
-      # Save the macOS certificate on this runner for forge to access it in the
-      # next step below.
-      - name: Retrieve code signing certificate
-        run: ./scripts/add-osx-cert.sh
-        env:
-          MACOS_CERT: ${{ secrets.MACOS_CERT_2030_01_14 }}
-          MACOS_CERT_PASS: ${{ secrets.MACOS_CERT_PASS_2030_01_14 }}
+      ########################
+      # DISABLE CODE SIGNING #
+      ########################
+      # # Save the macOS certificate on this runner for forge to access it in the
+      # # next step below.
+      # - name: Retrieve code signing certificate
+      #   run: ./scripts/add-osx-cert.sh
+      #   env:
+      #     MACOS_CERT: ${{ secrets.MACOS_CERT_2030_01_14 }}
+      #     MACOS_CERT_PASS: ${{ secrets.MACOS_CERT_PASS_2030_01_14 }}
       - name: Package
         run: yarn package:mac-arm
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_ID_PASS: ${{ secrets.APPLE_ID_PASS }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        # env:
+        #   ########################
+        #   # DISABLE CODE SIGNING #
+        #   ########################
+        #   # CSC_IDENTITY_AUTO_DISCOVERY: false
+        #   ########################
+        #   # ENABLE CODE SIGNING  #
+        #   ########################
+        #   # APPLE_ID: ${{ secrets.APPLE_ID }}
+        #   # APPLE_ID_PASS: ${{ secrets.APPLE_ID_PASS }}
+        #   # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       - name: Release
         run: yarn release:mac-arm
       - name: Cache image file
@@ -368,7 +379,7 @@ jobs:
     needs:
       - build_win_x64
       # - build_win_arm64 # DEBUG: Disable win arm for now
-      - build_macos_x64
+      # - build_macos_x64 # DEBUG: Disable macOS x64
       - build_macos_arm64
       - build_linux_x64
       - build_linux_arm64
@@ -397,11 +408,11 @@ jobs:
         with:
           name: win32_x64
           path: ./release
-      - name: Retrieve installers (macOS x86_64)
-        uses: actions/download-artifact@v4
-        with:
-          name: darwin_x64
-          path: ./release
+      # - name: Retrieve installers (macOS x86_64)
+      #   uses: actions/download-artifact@v4
+      #   with:
+      #     name: darwin_x64
+      #     path: ./release
       - name: Retrieve installers (macOS arm64)
         uses: actions/download-artifact@v4
         with:
@@ -420,10 +431,10 @@ jobs:
       # Generate the checksums
       - name: Generate SHA256 checksums
         #  sha256sum "Zettlr-${{env.version}}-arm64.exe" >> "SHA256SUMS.txt" # DEBUG: Disable win arm for now
+        #  sha256sum "Zettlr-${{env.version}}-x64.dmg" >> "SHA256SUMS.txt" # DEBUG: Disable macOS x64
         run: |
           cd ./release
           sha256sum "Zettlr-${{env.version}}-x64.exe" > "SHA256SUMS.txt"
-          sha256sum "Zettlr-${{env.version}}-x64.dmg" >> "SHA256SUMS.txt"
           sha256sum "Zettlr-${{env.version}}-arm64.dmg" >> "SHA256SUMS.txt"
           sha256sum "Zettlr-${{env.version}}-x86_64.AppImage" >> "SHA256SUMS.txt"
           sha256sum "Zettlr-${{env.version}}-arm64.AppImage" >> "SHA256SUMS.txt"
@@ -437,29 +448,32 @@ jobs:
           cd ./release
           sha256sum -c SHA256SUMS.txt
           cd ..
-      # IF WE BUILD A NIGHTLY, AT THIS POINT JUST UPLOAD TO THE SERVER.
-      # We must make sure to copy the three additional files
-      # to the release folder because of the --delete flag in rsync below.
-      - name: Copy Nightly Static Files
-        if: github.ref_name == env.NIGHTLY_BRANCH
-        run: |
-          cp ./scripts/assets/nightly-index.php ./release/index.php
-          cp ./scripts/assets/nightly-sm_preview.png ./release/sm_preview.png
-          cp ./resources/icons/png/512x512.png ./release/logo.png
-      - name: Upload nightlies to the server
-        if: github.ref_name == env.NIGHTLY_BRANCH
-        uses: easingthemes/ssh-deploy@v3.0.1
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.NIGHTLY_SSH_PRIVATE_KEY }}
-          # --delete so that no old releases remain on the server. Each iteration is approx. 1GB in size.
-          ARGS: "-vzhr --delete" # verbose, compress, human-readble, recursive, delete
-          SOURCE: "release/"
-          REMOTE_HOST: ${{ secrets.NIGHTLY_REMOTE_HOST }}
-          REMOTE_USER: ${{ secrets.NIGHTLY_REMOTE_USER }}
-          TARGET: ${{ secrets.NIGHTLY_TARGET }}
+      ##########################
+      # DISABLE NIGHTLY BUILDS #
+      ##########################
+      # # IF WE BUILD A NIGHTLY, AT THIS POINT JUST UPLOAD TO THE SERVER.
+      # # We must make sure to copy the three additional files
+      # # to the release folder because of the --delete flag in rsync below.
+      # - name: Copy Nightly Static Files
+      #   if: github.ref_name == env.NIGHTLY_BRANCH
+      #   run: |
+      #     cp ./scripts/assets/nightly-index.php ./release/index.php
+      #     cp ./scripts/assets/nightly-sm_preview.png ./release/sm_preview.png
+      #     cp ./resources/icons/png/512x512.png ./release/logo.png
+      # - name: Upload nightlies to the server
+      #   if: github.ref_name == env.NIGHTLY_BRANCH
+      #   uses: easingthemes/ssh-deploy@v3.0.1
+      #   env:
+      #     SSH_PRIVATE_KEY: ${{ secrets.NIGHTLY_SSH_PRIVATE_KEY }}
+      #     # --delete so that no old releases remain on the server. Each iteration is approx. 1GB in size.
+      #     ARGS: "-vzhr --delete" # verbose, compress, human-readble, recursive, delete
+      #     SOURCE: "release/"
+      #     REMOTE_HOST: ${{ secrets.NIGHTLY_REMOTE_HOST }}
+      #     REMOTE_USER: ${{ secrets.NIGHTLY_REMOTE_USER }}
+      #     TARGET: ${{ secrets.NIGHTLY_TARGET }}
       # OTHERWISE: Create a new release draft
       - name: Create release draft
-        if: github.ref_name == env.RELEASE_BRANCH
+        if: startsWith(github.ref_name, 'v')
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

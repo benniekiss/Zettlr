@@ -53,17 +53,17 @@ function countSelection (state: EditorState): { words: number, chars: number } {
  * @return  {StatusbarItem}         Returns the element or null
  */
 export function wordcountStatus (state: EditorState, _view: EditorView): StatusbarItem|null {
+  const counter = state.field(countField, false)
+  const config = state.field(configField, false)
+  if (counter === undefined || config?.countChars === true) {
+    return null
+  }
+
   if (!state.selection.main.empty) {
     const { words } = countSelection(state)
     return {
       content: trans('%s selected', localiseNumber(words))
     }
-  }
-
-  const counter = state.field(countField, false)
-  const config = state.field(configField, false)
-  if (counter === undefined || config?.countChars === true) {
-    return null
   } else {
     return {
       content: trans('%s words', localiseNumber(counter.words))
@@ -80,17 +80,17 @@ export function wordcountStatus (state: EditorState, _view: EditorView): Statusb
  * @return  {StatusbarItem}         Returns the element or null
  */
 export function charcountStatus (state: EditorState, _view: EditorView): StatusbarItem|null {
+  const counter = state.field(countField, false)
+  const config = state.field(configField, false)
+  if (counter === undefined|| config?.countChars === false) {
+    return null
+  }
+
   if (!state.selection.main.empty) {
     const { chars } = countSelection(state)
     return {
       content: trans('%s selected', localiseNumber(chars))
     }
-  }
-
-  const counter = state.field(countField, false)
-  const config = state.field(configField, false)
-  if (counter === undefined|| config?.countChars === false) {
-    return null
   } else {
     return {
       content: trans('%s characters', localiseNumber(counter.chars))

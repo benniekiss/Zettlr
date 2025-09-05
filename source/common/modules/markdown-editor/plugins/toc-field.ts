@@ -217,10 +217,11 @@ export const tocField = StateField.define<ToCEntry[]>({
 
     // Iterate over the changes and push any new headings into the list
     transaction.changes.iterChangedRanges((fromA, toA, fromB, toB) => {
-      // get the line before in case of Setext headings
+      // get the line before and after in case of Setext headings
       const lineBefore = Math.max(transaction.newDoc.lineAt(fromB).number - 1, 1)
+      const lineAfter = Math.min(transaction.newDoc.lineAt(toB).number + 1, transaction.newDoc.lines)
       const from = transaction.newDoc.line(lineBefore).from
-      const to = transaction.newDoc.lineAt(toB).to
+      const to = transaction.newDoc.line(lineAfter).to
       const text = transaction.newDoc.sliceString(from, to)
 
       const ast = markdownToAST(text)

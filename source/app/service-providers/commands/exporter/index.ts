@@ -86,7 +86,7 @@ export async function makeExport (
   options: ExporterOptions,
   logger: LogProvider,
   config: ConfigProvider,
-  assets: AssetsProvider
+  assets: AssetsProvider,
 ): Promise<ExporterOutput> {
   // We already know where the exported file will end up, so set the property
   const inputFiles = options.sourceFiles.map(file => file.path)
@@ -97,7 +97,7 @@ export async function makeExport (
       return await runPandoc(logger, defaults, options.cwd)
     },
     loadDefaults: async (filename: string, overrides: PandocDefaults = {}) => {
-      return await loadDefaults(filename, overrides, logger, config, assets, options.defaultsOverride)
+      return await loadDefaults(filename, overrides, logger, config, assets, options.profile.parent, options.defaultsOverride)
     },
     listDefaults: async () => {
       return await assets.listDefaults()
@@ -177,9 +177,10 @@ async function loadDefaults (
   logger: LogProvider,
   config: ConfigProvider,
   assets: AssetsProvider,
+  parent?: string,
   defaultsOverride?: DefaultsOverride
 ): Promise<PandocDefaults> {
-  const defaults: PandocDefaults = await assets.getDefaultsFile(filename)
+  const defaults: PandocDefaults = await assets.getDefaultsFile(filename, false, parent)
 
   const cfg = config.get()
   const { cslLibrary, cslStyle, stripTags, stripLinks, enforceMarkSupport } = cfg.export
@@ -259,7 +260,9 @@ async function loadDefaults (
   }
 
   const filters = await assets.listFilters(true)
-  defaults.filters = defaults.filters.concat(filters)
+  const workspaceFilters = parent !== undefined ? await assets.listFilters(true, parent) : []
+
+  defaults.filters = defaults.filters.concat(filters, workspaceFilters)
 
   // After we have added our default keys, let the plugin add keys, which
   // may be overridden by the default file if already set.

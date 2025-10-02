@@ -44,6 +44,15 @@ function refreshUserDictionary (): void {
       userDictionary.add(rec.word)
     }
   }).catch(console.error)
+
+  ipcRenderer.invoke(
+    'dictionary-provider',
+    { command: 'get-ws-dictionary' }
+  ).then((dictionary: DictionaryRecord[]) => {
+    for (const rec of dictionary) {
+      userDictionary.add(rec.word)
+    }
+  }).catch(console.error)
 }
 
 // watch the dictionary-provider to update the user dictionary
@@ -93,6 +102,7 @@ export function isLanguageToolMisspelling (diag: Diagnostic): boolean {
 
 export interface LanguageToolStateField {
   running: boolean
+  cancel: boolean|undefined
   lastDetectedLanguage: string
   supportedLanguages: string[]
   overrideLanguage: 'auto'|string
@@ -120,6 +130,7 @@ export const languageToolState = StateField.define<LanguageToolStateField>({
 
     return {
       running: false,
+      cancel: undefined,
       lastDetectedLanguage: 'auto',
       lastError: undefined,
       overrideLanguage,
@@ -131,6 +142,7 @@ export const languageToolState = StateField.define<LanguageToolStateField>({
     for (const e of transaction.effects) {
       if (e.is(updateLTState)) {
         value.running = e.value.running ?? value.running
+        value.cancel = e.value.cancel ?? value.cancel
         value.lastDetectedLanguage = e.value.lastDetectedLanguage ?? value.lastDetectedLanguage
         value.lastError = e.value.lastError
         value.supportedLanguages = e.value.supportedLanguages ?? value.supportedLanguages

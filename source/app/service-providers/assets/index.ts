@@ -24,11 +24,19 @@ import { getCustomProfiles } from '@providers/commands/exporter'
 import { PANDOC_READERS, PANDOC_WRITERS } from '@common/pandoc-util/pandoc-maps'
 import { parseReaderWriter } from '@common/pandoc-util/parse-reader-writer'
 
+const DEFAULTS_FOLDER_NAME = 'defaults'
+const SNIPPETS_FOLDER_NAME = 'snippets'
+const LUA_FILTER_FOLDER_NAME = 'lua-filter'
+
 export interface PandocProfileMetadata {
   /**
    * The filename of the defaults file
    */
   name: string
+  /**
+   * Parent directory of the file
+   */
+  parent?: string
   /**
    * The writer, can be an empty string
    */
@@ -58,26 +66,26 @@ export interface PandocProfileMetadata {
 }
 
 export type AssetsProviderIPCAPI = IPCAPI<{
-  'get-filter': { filename: string },
-  'set-filter': { filename: string, contents: string },
-  'rename-filter': { oldName: string, newName: string },
-  'remove-filter': { filename: string },
-  'list-filter': unknown,
+  'get-filter': { filename: string, dir?: string },
+  'set-filter': { filename: string, contents: string, dir?: string },
+  'rename-filter': { oldName: string, newName: string, dir?: string },
+  'remove-filter': { filename: string, dir?: string },
+  'list-filter': { dir?: string },
   'list-protected-filter': unknown,
-  'get-defaults-file': { filename: string }
-  'set-defaults-file': { filename: string, contents: string }
-  'rename-defaults-file': { oldName: string, newName: string }
-  'remove-defaults-file': { filename: string }
-  'get-snippet': { name: string }
-  'remove-snippet': { name: string }
-  'rename-snippet': { name: string, newName: string }
-  'set-snippet': { name: string, contents: string }
-  'list-defaults': unknown
-  'list-export-profiles': unknown
+  'get-defaults-file': { filename: string, dir?: string }
+  'set-defaults-file': { filename: string, contents: string, dir?: string }
+  'rename-defaults-file': { oldName: string, newName: string, dir?: string }
+  'remove-defaults-file': { filename: string, dir?: string }
+  'get-snippet': { name: string, dir?: string }
+  'remove-snippet': { name: string, dir?: string }
+  'rename-snippet': { name: string, newName: string, dir?: string }
+  'set-snippet': { name: string, contents: string, dir?: string }
+  'list-defaults': { dir?: string }
+  'list-export-profiles': { dir?: string }
+  'list-snippets': { dir?: string }
   'open-defaults-directory': unknown
   'open-snippets-directory': unknown
   'open-filter-directory': unknown
-  'list-snippets': unknown
 }>
 
 export default class AssetsProvider extends ProviderContract {
@@ -99,6 +107,14 @@ export default class AssetsProvider extends ProviderContract {
    * @var {string}
    */
   private readonly _filterPath: string
+
+  /**
+   * Holds the path where workspace assets are stored.
+   *
+   * @var {string}
+   */
+  private readonly _workspaceAssetPath: string
+
   /**
    * Holds a list of all protected defaults files. Protected defaults files are
    * those that come by default with the app. Protected simply means here that
@@ -121,9 +137,10 @@ export default class AssetsProvider extends ProviderContract {
   constructor (private readonly _logger: LogProvider) {
     super()
 
-    this._defaultsPath = path.join(app.getPath('userData'), '/defaults')
-    this._snippetsPath = path.join(app.getPath('userData'), '/snippets')
-    this._filterPath = path.join(app.getPath('userData'), '/lua-filter')
+    this._defaultsPath = path.join(app.getPath('userData'), DEFAULTS_FOLDER_NAME)
+    this._snippetsPath = path.join(app.getPath('userData'), SNIPPETS_FOLDER_NAME)
+    this._filterPath = path.join(app.getPath('userData'), LUA_FILTER_FOLDER_NAME)
+    this._workspaceAssetPath = '.zettlr'
     this._protectedDefaults = []
     this._protectedFilters = []
 
@@ -151,29 +168,29 @@ export default class AssetsProvider extends ProviderContract {
       } else if (command === 'get-defaults-file') {
         return await this.getDefaultsFile(payload.filename, true)
       } else if (command === 'set-defaults-file') {
-        return await this.setDefaultsFile(payload.filename, payload.contents, true)
+        return await this.setDefaultsFile(payload.filename, payload.contents, true, payload.dir)
       } else if (command === 'rename-defaults-file') {
-        return await this.renameDefaultsFile(payload.oldName, payload.newName)
+        return await this.renameDefaultsFile(payload.oldName,payload.newName, payload.dir)
       } else if (command === 'remove-defaults-file') {
-        return await this.removeDefaultsFile(payload.filename)
+        return await this.removeDefaultsFile(payload.filename, payload.dir)
       } else if (command === 'list-defaults') {
-        return await this.listDefaults()
+        return await this.listDefaults(payload?.dir)
       } else if (command === 'list-export-profiles') {
-        const profiles = await this.listDefaults()
+        const profiles = await this.listDefaults(payload?.dir)
         return profiles.concat(getCustomProfiles())
       } else if (command === 'open-defaults-directory') {
         this._logger.info(`[AssetsProvider] Opening path ${this._defaultsPath}`)
         return await shell.openPath(this._defaultsPath)
       } else if (command === 'get-snippet') {
-        return await this.getSnippet(payload.name)
+        return await this.getSnippet(payload.name, payload.dir)
       } else if (command === 'set-snippet') {
-        return await this.setSnippet(payload.name, payload.contents)
+        return await this.setSnippet(payload.name, payload.contents, payload.dir)
       } else if (command === 'remove-snippet') {
-        return await this.removeSnippet(payload.name)
+        return await this.removeSnippet(payload.name, payload.dir)
       } else if (command === 'list-snippets') {
-        return await this.listSnippets()
+        return await this.listSnippets(payload?.dir)
       } else if (command === 'rename-snippet') {
-        return await this.renameSnippet(payload.name, payload.newName)
+        return await this.renameSnippet(payload.name, payload.newName, payload.dir)
       } else if (command === 'open-snippets-directory') {
         this._logger.info(`[AssetsProvider] Opening path ${this._snippetsPath}`)
         return await shell.openPath(this._snippetsPath)
@@ -366,11 +383,23 @@ export default class AssetsProvider extends ProviderContract {
    * @return  {Promise<string>[]}                       Resolves with an array
    *                                                    of filters.
    */
-  async listFilters (returnAbsolutePaths: boolean = false): Promise<string[]> {
-    const files = await fs.readdir(this._filterPath)
+  async listFilters (returnAbsolutePaths: boolean = false, dir?: string): Promise<string[]> {
+    const rootPath = dir !== undefined ? path.join(dir, this._workspaceAssetPath, LUA_FILTER_FOLDER_NAME) : this._filterPath
+    let files: string[] = []
+
+    try {
+      files = await fs.readdir(rootPath)
+    } catch (err: any) {
+      if (dir === undefined) {
+        this._logger.error(`[Assets Provider] Could not list lua filters: ${String(err.message)}`, err)
+      } else {
+        this._logger.warning(`[Assets Provider] Could not list lua filters for workspace: ${dir}`)
+      }
+      return []
+    }
     return files
       .filter(file => /\.lua$/i.test(file))
-      .map(file => returnAbsolutePaths ? path.join(this._filterPath, file) : file)
+      .map(file => returnAbsolutePaths ? path.join(rootPath, file) : file)
   }
 
   /**
@@ -394,9 +423,20 @@ export default class AssetsProvider extends ProviderContract {
    *
    * @return  {Promise<any>}    The defaults (parsed from YAML)
    */
-  async getDefaultsFile (filename: string, verbatim: boolean = false): Promise<any|string> {
-    const absPath = path.join(this._defaultsPath, filename)
-    const yaml = await fs.readFile(absPath, { encoding: 'utf-8' })
+  async getDefaultsFile (filename: string, verbatim: boolean = false, dir?: string): Promise<any|string> {
+    const rootPath = dir !== undefined ? path.join(dir, this._workspaceAssetPath, DEFAULTS_FOLDER_NAME) : this._defaultsPath
+    const absPath = path.join(rootPath, filename)
+
+    let yaml: string = ''
+    try {
+      yaml = await fs.readFile(absPath, { encoding: 'utf-8' })
+    } catch (err: any) {
+      if (dir === undefined) {
+        this._logger.error(`[Assets Provider] Could not get defaults file: ${String(err.message)}`, err)
+      } else {
+        this._logger.warning(`[Assets Provider] Could not get defaults file for workspace: ${filename} (${dir})`)
+      }
+    }
     // Either return the string contents or a JavaScript object
     return (verbatim) ? yaml : YAML.parse(yaml)
   }
@@ -410,7 +450,7 @@ export default class AssetsProvider extends ProviderContract {
    *
    * @return  {Promise<boolean>}      Whether or not the operation was successful.
    */
-  async setDefaultsFile (filename: string, newDefaults: string, verbatim: boolean = false): Promise<boolean> {
+  async setDefaultsFile (filename: string, newDefaults: string, verbatim: boolean = false, dir?: string): Promise<boolean> {
     filename = filename.trim()
     if (filename === '') {
       throw new Error('Cannot set defaults file: Filename was empty.')
@@ -420,7 +460,9 @@ export default class AssetsProvider extends ProviderContract {
       filename += filename.endsWith('.') ? 'yaml' : '.yaml'
     }
 
-    const absPath = path.join(this._defaultsPath, filename)
+    const rootPath = dir !== undefined ? path.join(dir, this._workspaceAssetPath, DEFAULTS_FOLDER_NAME) : this._defaultsPath
+
+    const absPath = path.join(rootPath, filename)
 
     try {
       // Stringify the new defaults according to the verbatim flag
@@ -428,7 +470,11 @@ export default class AssetsProvider extends ProviderContract {
       await fs.writeFile(absPath, yaml)
       return true
     } catch (err: unknown) {
-      this._logger.error(`[Assets Provider] Could not save defaults file: ${err instanceof Error ? err.message : 'unknown error'}`, err)
+      if (dir === undefined) {
+        this._logger.error(`[Assets Provider] Could not save defaults file: ${err instanceof Error ? err.message : 'unknown error'}`, err)
+      } else {
+        this._logger.warning(`[Assets Provider] Could not save defaults file for workspace: ${filename} (${dir})`)
+      }
       return false
     }
   }
@@ -441,7 +487,7 @@ export default class AssetsProvider extends ProviderContract {
    *
    * @return  {Promise<boolean>}           True upon success
    */
-  async renameDefaultsFile (oldName: string, newName: string): Promise<boolean> {
+  async renameDefaultsFile (oldName: string, newName: string, dir?: string): Promise<boolean> {
     newName = newName.trim()
     oldName = oldName.trim()
     if (newName === '' || oldName === '') {
@@ -452,8 +498,10 @@ export default class AssetsProvider extends ProviderContract {
       newName += newName.endsWith('.') ? 'yaml' : '.yaml'
     }
 
-    const oldPath = path.join(this._defaultsPath, oldName)
-    const newPath = path.join(this._defaultsPath, newName)
+    const rootPath = dir !== undefined ? path.join(dir, this._workspaceAssetPath, DEFAULTS_FOLDER_NAME) : this._defaultsPath
+
+    const oldPath = path.join(rootPath, oldName)
+    const newPath = path.join(rootPath, newName)
 
     try {
       await fs.rename(oldPath, newPath)
@@ -464,7 +512,11 @@ export default class AssetsProvider extends ProviderContract {
       }
       return true
     } catch (err: unknown) {
-      this._logger.error(`[Assets Provider] Could not rename file ${oldPath} to ${newPath}.`, err)
+      if (dir === undefined) {
+        this._logger.error(`[Assets Provider] Could not rename defaults file ${oldName} to ${newName}.`, err)
+      } else {
+        this._logger.warning(`[Assets Provider] Could not rename defaults file ${oldPath} to ${newPath} for workspace.`)
+      }
       return false
     }
   }
@@ -478,8 +530,10 @@ export default class AssetsProvider extends ProviderContract {
    *
    * @return  {Promise<boolean>}           Returns true upon success
    */
-  async removeDefaultsFile (filename: string): Promise<boolean> {
-    const absPath = path.join(this._defaultsPath, filename)
+  async removeDefaultsFile (filename: string, dir?: string): Promise<boolean> {
+    const rootPath = dir !== undefined ? path.join(dir, this._workspaceAssetPath, DEFAULTS_FOLDER_NAME) : this._defaultsPath
+    const absPath = path.join(rootPath, filename)
+
     try {
       await fs.unlink(absPath)
       // If removing that file removed a protected one, restore it immediately.
@@ -489,7 +543,11 @@ export default class AssetsProvider extends ProviderContract {
       }
       return true
     } catch (err: unknown) {
-      this._logger.error(`[Assets Provider] Could not remove defaults file: ${absPath}`, err)
+      if (dir === undefined) {
+        this._logger.error(`[Assets Provider] Could not remove defaults file: ${absPath}`, err)
+      } else {
+        this._logger.warning(`[Assets Provider] Could not remove defaults file for workspace: ${absPath}`)
+      }
       return false
     }
   }
@@ -521,13 +579,26 @@ export default class AssetsProvider extends ProviderContract {
    *
    * @return  {Promise<PandocProfileMetadata[]>}The parsed metadata for all profiles
    */
-  async listDefaults (): Promise<PandocProfileMetadata[]> {
+  async listDefaults (dir?: string): Promise<PandocProfileMetadata[]> {
+    const rootPath = dir !== undefined ? path.join(dir, this._workspaceAssetPath, DEFAULTS_FOLDER_NAME) : this._defaultsPath
+
     const profiles: PandocProfileMetadata[] = []
 
-    const defaultsFiles = await fs.readdir(this._defaultsPath)
+    let defaultsFiles: string[] = []
+    try {
+      defaultsFiles = await fs.readdir(rootPath)
+    } catch (err: any) {
+      if (dir === undefined) {
+        this._logger.error(`[Assets Provider] Could not list defaults files: ${String(err.message)}`, err)
+      } else {
+        this._logger.warning(`[Assets Provider] Could not list defaults files for workspace: ${dir}`)
+      }
+      return []
+    }
+
     const defaults = defaultsFiles.filter(file => /\.ya?ml$/.test(file))
     for (const file of defaults) {
-      const absolutePath = path.join(this._defaultsPath, file)
+      const absolutePath = path.join(rootPath, file)
       try {
         const contents = await fs.readFile(absolutePath, { encoding: 'utf-8' })
         const yaml = YAML.parse(contents)
@@ -545,6 +616,7 @@ export default class AssetsProvider extends ProviderContract {
 
         profiles.push({
           name: file,
+          parent: dir,
           writer: yaml.writer ?? '',
           reader: yaml.reader ?? '',
           outputFile: outputFile,
@@ -555,6 +627,7 @@ export default class AssetsProvider extends ProviderContract {
         this._logger.warning(`[Assets Provider] Installed profile ${file} had an error and could not be parsed`)
         profiles.push({
           name: file,
+          parent: dir,
           writer: '',
           reader: '',
           outputFile: '',
@@ -578,13 +651,26 @@ export default class AssetsProvider extends ProviderContract {
    *
    * @return  {Promise<string>}        The file contents
    */
-  async getSnippet (name: string): Promise<string> {
+  async getSnippet (name: string, dir?: string): Promise<string> {
     if (!name.toLowerCase().endsWith('.tpl.md')) {
       name += '.tpl.md'
     }
 
-    const filePath = path.join(this._snippetsPath, name)
-    return await fs.readFile(filePath, { encoding: 'utf-8' })
+    const rootPath = dir !== undefined ? path.join(dir, this._workspaceAssetPath, SNIPPETS_FOLDER_NAME) : this._snippetsPath
+
+    const filePath = path.join(rootPath, name)
+
+    try {
+      return await fs.readFile(filePath, { encoding: 'utf-8' })
+    } catch (err: any) {
+      if (dir === undefined) {
+        this._logger.error(`[Assets Provider] Could not get snippet file: ${String(err.message)}`, err)
+      } else {
+        this._logger.warning(`[Assets Provider] Could not get snippet file for workspace: ${name} (${dir})`)
+      }
+      return ''
+    }
+
   }
 
   /**
@@ -596,7 +682,9 @@ export default class AssetsProvider extends ProviderContract {
    *
    * @return  {Promise<boolean>}           Returns false if there was an error
    */
-  async setSnippet (name: string, content: string): Promise<boolean> {
+  async setSnippet (name: string, content: string, dir?: string): Promise<boolean> {
+    const rootPath = dir !== undefined ? path.join(dir, this._workspaceAssetPath, SNIPPETS_FOLDER_NAME) : this._snippetsPath
+
     name = name.trim()
     if (name === '') {
       throw new Error('Cannot set snippet: Name was empty.')
@@ -607,12 +695,16 @@ export default class AssetsProvider extends ProviderContract {
     }
 
     try {
-      const filePath = path.join(this._snippetsPath, name)
+      const filePath = path.join(rootPath, name)
       await fs.writeFile(filePath, content)
       broadcastIpcMessage('assets-provider', 'snippets-updated')
       return true
     } catch (err: unknown) {
-      this._logger.error(`[Assets Provider] Could not save snippets file: ${err instanceof Error ? err.message : 'unknown error'}`, err)
+      if (dir === undefined) {
+        this._logger.error(`[Assets Provider] Could not save snippet file: ${err instanceof Error ? err.message : 'unknown error'}`, err)
+      } else {
+        this._logger.warning(`[Assets Provider] Could not save snippet file for workspace: ${name} (${dir})`)
+      }
       return false
     }
   }
@@ -624,17 +716,23 @@ export default class AssetsProvider extends ProviderContract {
    *
    * @return  {Promise<boolean>}        Returns false if there was an error
    */
-  async removeSnippet (name: string): Promise<boolean> {
+  async removeSnippet (name: string, dir?: string): Promise<boolean> {
+    const rootPath = dir !== undefined ? path.join(dir, this._workspaceAssetPath, SNIPPETS_FOLDER_NAME) : this._snippetsPath
+
     try {
       if (!name.toLowerCase().endsWith('.tpl.md')) {
         name += '.tpl.md'
       }
-      const filePath = path.join(this._snippetsPath, name)
+      const filePath = path.join(rootPath, name)
       await fs.unlink(filePath)
       broadcastIpcMessage('assets-provider', 'snippets-updated')
       return true
     } catch (err: unknown) {
-      this._logger.error(`[Assets Provider] Could not remove snippets file: ${err instanceof Error ? err.message : 'unknown error'}`, err)
+      if (dir === undefined) {
+        this._logger.error(`[Assets Provider] Could not remove snippet file: ${err instanceof Error ? err.message : 'unknown error'}`, err)
+      } else {
+        this._logger.warning(`[Assets Provider] Could not remove snippet file for workspace: ${name} (${dir})`)
+      }
       return false
     }
   }
@@ -647,7 +745,9 @@ export default class AssetsProvider extends ProviderContract {
    *
    * @return  {Promise<boolean>}           Returns false if there was an error.
    */
-  async renameSnippet (name: string, newName: string): Promise<boolean> {
+  async renameSnippet (name: string, newName: string, dir?: string): Promise<boolean> {
+    const rootPath = dir !== undefined ? path.join(dir, this._workspaceAssetPath, SNIPPETS_FOLDER_NAME) : this._snippetsPath
+
     name = name.trim()
     newName = newName.trim()
 
@@ -659,19 +759,18 @@ export default class AssetsProvider extends ProviderContract {
       name += '.tpl.md'
     }
 
-    if (!newName.endsWith('.tpl.md')) {
-      newName += '.tpl.md'
-    }
-
     try {
-
-      const oldPath = path.join(this._snippetsPath, name)
-      const newPath = path.join(this._snippetsPath, newName)
+      const oldPath = path.join(rootPath, name)
+      const newPath = path.join(rootPath, newName)
       await fs.rename(oldPath, newPath)
       broadcastIpcMessage('assets-provider', 'snippets-updated')
       return true
     } catch (err: unknown) {
-      this._logger.error(`[Assets Provider] Could not rename snippets file: ${err instanceof Error ? err.message : 'unknown error'}`, err)
+      if (dir === undefined) {
+        this._logger.error(`[Assets Provider] Could not rename snippet file: ${err instanceof Error ? err.message : 'unknown error'}`, err)
+      } else {
+        this._logger.warning(`[Assets Provider] Could not rename snippet file for workspace: ${name} (${dir})`)
+      }
       return false
     }
   }
@@ -681,8 +780,21 @@ export default class AssetsProvider extends ProviderContract {
    *
    * @return  {Promise<string[]>}  The promise resolves with a list of existing snippets.
    */
-  async listSnippets (): Promise<string[]> {
-    const files = await fs.readdir(this._snippetsPath)
+  async listSnippets (dir?: string): Promise<string[]> {
+    const rootPath = dir !== undefined ? path.join(dir, this._workspaceAssetPath, SNIPPETS_FOLDER_NAME) : this._snippetsPath
+    let files: string[] = []
+
+    try {
+      files = await fs.readdir(rootPath)
+    } catch (err: any) {
+      if (dir === undefined) {
+        this._logger.error(`[Assets Provider] Could not list snippet files: ${String(err.message)}`, err)
+      } else {
+        this._logger.warning(`[Assets Provider] Could not list snippet files for workspace: ${dir}`)
+      }
+      return []
+    }
+
     const snippetFiles = files.filter(file => /\.tpl\.md$/.test(file))
     return snippetFiles.map(file => file.replace(/\.tpl\.md$/, ''))
   }

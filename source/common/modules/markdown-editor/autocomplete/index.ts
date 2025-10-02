@@ -115,7 +115,9 @@ export const autocomplete = [
     // avoid a specific decision by CodeMirror to remap the autocomplete toggle
     // on macOS to Alt+\ which, on an Italian keyboard layout, will fail to
     // produce backticks. (See issue #5517)
-    defaultKeymap: false
+    defaultKeymap: false,
+    updateSyncTime: 1000,
+    filterStrict: true
   }),
   // Make sure any configuration fields will be inserted into the state so that
   // the plugins can look them up and function correctly. These fields are not

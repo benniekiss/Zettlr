@@ -8,14 +8,30 @@
       v-bind:name="name"
       v-bind:class="{ inline: inline === true }"
     >
-      <option
-        v-for="(valueLabel, key) in options"
-        v-bind:key="key"
-        v-bind:value="key"
-        v-bind:selected="key === modelValue"
-      >
-        {{ valueLabel }}
-      </option>
+      <template v-for="(value, key) in options" v-bind:key="key">
+        <!-- No groups -->
+        <option
+          v-if="typeof value === 'string' && value !== null"
+          v-bind:value="key"
+          v-bind:selected="key === modelValue"
+        >
+          {{ value }}
+        </option>
+        <!-- Groups -->
+        <optgroup
+          v-else
+          v-bind:label="key"
+        >
+          <option
+            v-for="(valueLabel, item) in value"
+            v-bind:key="item"
+            v-bind:value="{ [key]: item }"
+            v-bind:selected="isSelectedGroup(key, item)"
+          >
+            {{ valueLabel }}
+          </option>
+        </optgroup>
+      </template>
     </select>
   </div>
 </template>
@@ -38,17 +54,25 @@
 import { computed, ref, watch, toRef } from 'vue'
 
 const props = defineProps<{
-  modelValue: string
+  modelValue: string|Record<string, string>
   disabled?: boolean
   inline?: boolean
   label?: string
   name?: string
-  options: Record<string, string>
+  options: Record<string, string|Record<string, string>>
 }>()
 
-const inputValue = ref<string>(props.modelValue)
+const inputValue = ref<string|Record<string, string>>(props.modelValue)
 
-const emit = defineEmits<(e: 'update:modelValue', val: string) => void>()
+function isSelectedGroup (group: string, item: string) {
+  if (typeof props.modelValue === 'object' && props.modelValue !== null) {
+    return props.modelValue[group] === item
+  }
+
+  return false
+}
+
+const emit = defineEmits<(e: 'update:modelValue', val: string|Record<string, string>) => void>()
 
 watch(toRef(props, 'modelValue'), () => {
   inputValue.value = props.modelValue

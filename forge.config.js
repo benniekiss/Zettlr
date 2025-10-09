@@ -60,9 +60,9 @@ async function downloadPandoc (platform, arch) {
  * Since all our renderers share the same static HTML file and the same preload
  * script, we can save on a LOT of repeated code by just generating the entry
  * points with a tiny utility function.
- * 
+ *
  * NOTE:
- * 
+ *
  * * This function assumes that the entry point lives in a folder and has an
  * `index.ts` entry point file.
  *
@@ -218,7 +218,7 @@ module.exports = {
     // The certificate is written to the default keychain during CI build.
     // See ./scripts/add-osx-cert.sh
     osxSign: {
-      identity: 'Developer ID Application: Hendrik Erz (QS52BN8W68)',
+      identity: process.env.APPLE_DEV_ID,
       'hardened-runtime': true,
       'gatekeeper-assess': false,
       entitlements: 'scripts/assets/entitlements.plist',

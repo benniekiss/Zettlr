@@ -824,6 +824,7 @@ export default class FSAL extends ProviderContract {
       .filter(dirent => {
         return (!ignorePath(dirent.name, ignoreDotFiles) && (dirent.isFile() || dirent.isDirectory()))
       })
+
       .map(dirent => {
         const childPath = path.join(directoryPath, dirent.name)
 

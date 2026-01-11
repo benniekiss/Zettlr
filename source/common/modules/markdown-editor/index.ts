@@ -58,7 +58,10 @@ import {
   getTexExtensions,
   getYAMLExtensions,
   inputModeCompartment,
-  getMainEditorThemes
+  getMainEditorThemes,
+  getCssExtensions,
+  getCodeExtensions,
+  getLuaExtensions,
 } from './editor-extension-sets'
 
 import {
@@ -215,7 +218,7 @@ export default class MarkdownEditor extends EventEmitter {
   private readonly databaseCache: {
     tags: TagRecord[]
     citations: Array<{ citekey: string, displayText: string }>
-    snippets: Array<{ name: string, content: string }>
+    snippets: Array<{ name: string, content: string, section?: string }>
     files: Array<{ filename: string, displayName: string, id: string }>
   }
 
@@ -418,6 +421,12 @@ export default class MarkdownEditor extends EventEmitter {
         return getYAMLExtensions(options)
       case DocumentType.LaTeX:
         return getTexExtensions(options)
+      case DocumentType.CSS:
+        return getCssExtensions(options)
+      case DocumentType.Lua:
+        return getLuaExtensions(options)
+      case DocumentType.Code:
+        return getCodeExtensions(options)
     }
   }
 
@@ -728,7 +737,7 @@ export default class MarkdownEditor extends EventEmitter {
    */
   setCompletionDatabase (type: 'tags', database: TagRecord[]): void
   setCompletionDatabase (type: 'citations', database: Array<{ citekey: string, displayText: string }>): void
-  setCompletionDatabase (type: 'snippets', database: Array<{ name: string, content: string }>): void
+  setCompletionDatabase (type: 'snippets', database: Array<{ name: string, content: string, section?: string }>): void
   setCompletionDatabase (type: 'files', database: Array<{ filename: string, displayName: string, id: string }>): void
   setCompletionDatabase (type: string, database: any): void {
     switch (type) {
@@ -742,7 +751,7 @@ export default class MarkdownEditor extends EventEmitter {
         break
       case 'snippets':
         this.databaseCache.snippets = database
-        this._instance.dispatch({ effects: snippetsUpdate.of(database as Array<{ name: string, content: string }>) })
+        this._instance.dispatch({ effects: snippetsUpdate.of(database as Array<{ name: string, content: string, section?: string }>) })
         break
       case 'files':
         this.databaseCache.files = database

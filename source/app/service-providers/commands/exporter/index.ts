@@ -83,7 +83,7 @@ export async function makeExport (
   options: ExporterOptions,
   logger: LogProvider,
   config: ConfigProvider,
-  assets: AssetsProvider
+  assets: AssetsProvider,
 ): Promise<ExporterOutput> {
   // We already know where the exported file will end up, so set the property
   const inputFiles = options.sourceFiles.map(file => file.path)
@@ -94,7 +94,7 @@ export async function makeExport (
       return await runPandoc(logger, defaults, options.cwd)
     },
     writeDefaults: async (filename: string, overrides: any = {}) => {
-      return await writeDefaults(filename, overrides, config, assets, options.defaultsOverride)
+      return await writeDefaults(filename, overrides, config, assets, options.profile.parent, options.defaultsOverride)
     },
     listDefaults: async () => {
       return await assets.listDefaults()
@@ -166,10 +166,11 @@ async function writeDefaults (
   properties: any, // Contains properties that will be written to the defaults
   config: ConfigProvider,
   assets: AssetsProvider,
+  parent?: string,
   defaultsOverride?: DefaultsOverride
 ): Promise<string> {
   const defaultsFile = path.join(app.getPath('temp'), 'defaults.yml')
-  const defaults: any = await assets.getDefaultsFile(filename)
+  const defaults: any = await assets.getDefaultsFile(filename, false, parent)
 
   const cfg = config.get()
   const { cslLibrary, cslStyle, stripTags, stripLinks, enforceMarkSupport } = cfg.export
@@ -179,7 +180,7 @@ async function writeDefaults (
   // the user preferences.
   const parsedReader = parseReaderWriter(defaults.reader as string)
   const readsMarkdown = EXT2READER['md'].includes(parsedReader.name)
-  
+
   // The user can choose to use [[link|title]] or [[title|link]] syntax. In
   // order for the Lua filter to work properly and respect the link removal
   // setting upon export, we need to set the appropriate extension if it is not
@@ -249,12 +250,16 @@ async function writeDefaults (
   }
 
   const filters = await assets.listFilters(true)
-  defaults.filters = defaults.filters.concat(filters)
+  const workspaceFilters = parent !== undefined ? await assets.listFilters(true, parent) : []
+
+  defaults.filters = defaults.filters.concat(filters, workspaceFilters)
 
   // After we have added our default keys, let the plugin add their keys, which
   // enables them to override certain keys if necessary.
   for (const key in properties) {
-    defaults[key] = properties[key]
+    if (defaults[key] === undefined) {
+      defaults[key] = properties[key]
+    }
   }
 
   const YAMLOptions = {

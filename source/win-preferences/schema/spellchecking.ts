@@ -187,6 +187,13 @@ export function getSpellcheckingFields (config: ConfigOptions): PreferencesField
           model: 'editor.lint.languageTool.customServer',
           disabled: config.editor.lint.languageTool.provider !== 'custom'
         },
+        {
+          type: 'number',
+          label: trans('Custom server context'),
+          placeholder: '20_000',
+          model: 'editor.lint.languageTool.context',
+          disabled: config.editor.lint.languageTool.provider !== 'custom'
+        },
         { type: 'separator' },
         {
           type: 'form-text',

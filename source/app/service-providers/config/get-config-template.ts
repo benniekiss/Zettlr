@@ -154,6 +154,7 @@ export interface ConfigOptions {
         ignoredRules: LanguageToolIgnoredRuleEntry[]
         provider: 'official'|'custom'
         customServer: string
+        context: number
         username: string
         apiKey: string
       }
@@ -237,6 +238,13 @@ export interface ConfigOptions {
     showInsertFootnoteButton: boolean
     showDocumentInfoText: boolean
     showPomodoroButton: boolean
+  }
+  workspaces: {
+    loadAllAssets: boolean
+    loadSnippets: boolean
+    loadCSS: boolean
+    loadExportProfiles: boolean
+    loadDictionary: boolean
   }
 }
 
@@ -366,6 +374,7 @@ export function getConfigTemplate (): ConfigOptions {
           ignoredRules: [],
           provider: 'official',
           customServer: '',
+          context: 20_000,
           username: '',
           apiKey: ''
         }
@@ -495,6 +504,13 @@ export function getConfigTemplate (): ConfigOptions {
       showInsertFootnoteButton: true,
       showDocumentInfoText: true,
       showPomodoroButton: true
+    },
+    workspaces: {
+      loadAllAssets: false,
+      loadSnippets: false,
+      loadCSS: false,
+      loadExportProfiles: false,
+      loadDictionary: false,
     },
     uuid: uuid4() // The app's unique anonymous identifier
   }

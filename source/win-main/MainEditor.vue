@@ -229,7 +229,7 @@ const editorConfiguration = computed<EditorConfigOptions>(() => {
   // right after setting the new configurations. Plus, the user won't update
   // everything all the time, but rather do one initial configuration, so
   // even if we incur a performance penalty, it won't be noticed that much.
-  const { editor, display, zkn, darkMode } = configStore.config
+  const { editor, display, zkn, darkMode, darkModeEditor } = configStore.config
 
   const ltContext = editor.lint.languageTool.provider === 'custom' ? editor.lint.languageTool.context : editor.lint.languageTool.apiKey ? 60_000 : 20_000
 
@@ -281,6 +281,7 @@ const editorConfiguration = computed<EditorConfigOptions>(() => {
     showStatusbar: editor.showStatusbar,
     showFormattingToolbar: editor.showFormattingToolbar,
     darkMode,
+    darkModeEditor,
     theme: display.theme,
     highlightWhitespace: editor.showWhitespace,
     showMarkdownLineNumbers: editor.showMarkdownLineNumbers,
@@ -716,6 +717,7 @@ function maybeHighlightSearchResults (): void {
 
 body.dark .main-editor-wrapper {
   background-color: #2b2b2c;
+  .CodeMirror .CodeMirror-gutters { background-color: #2b2b2c; }
 }
 
 // CodeMirror fullscreen

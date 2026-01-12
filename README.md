@@ -1,3 +1,28 @@
+This is a custom fork of Zettlr for my own personal testing.
+
+Notable additional features:
+
+- Workspace assets (enabled under the `Advanced` settings), including:
+  - snippets
+  - css
+  - dictionaries
+  - export profiles
+  - lua filters
+
+- Linter performance patches
+  - user dictionary as a hunspell dictionary
+  - chunked document processing for languagetool and hunspell
+
+- Autocorrect enhancements:
+  - Autocapitalization for sentences
+  - Normalize two capital letters at the start of words
+
+- Editor theme enhancements:
+  - light or dark page theme separate from the UI
+  - page center, border, and width settings
+
+---
+
 <h1 align="center">
   <a href="https://github.com/Zettlr/Zettlr">
     <img src="https://raw.githubusercontent.com/Zettlr/Zettlr/master/resources/icons/png/256x256.png" alt="Zettlr"/>

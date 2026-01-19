@@ -174,7 +174,17 @@ function getCoreExtensions (options: CoreExtensionOptions): Extension[] {
     darkMode({ darkMode: useDarkModeEditor(options.initialConfig.darkMode, options.initialConfig.darkModeEditor), ...themes[options.initialConfig.theme] }),
     // CODE FOLDING
     codeFolding(),
-    Prec.low(foldGutter()), // The fold gutter should appear next to the text content
+    Prec.low(foldGutter({
+      markerDOM: (open) => {
+        const elem = document.createElement('div')
+        if (open) {
+          elem.innerHTML = '<cds-icon shape="angle" direction="down"></cds-icon>'
+        } else {
+          elem.innerHTML = '<cds-icon shape="angle" direction="right"></cds-icon>'
+        }
+        return elem
+      }
+    })), // The fold gutter should appear next to the text content
     // HISTORY
     history(),
     // SELECTIONS

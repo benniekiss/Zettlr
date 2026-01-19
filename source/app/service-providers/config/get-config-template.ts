@@ -146,6 +146,9 @@ export interface ConfigOptions {
     indentWithTabs: boolean
     alwaysIndentLineOnTab: boolean
     fontSize: number
+    pageCenter: boolean
+    pageBorder: boolean
+    pageSize: number
     countChars: boolean
     inputMode: 'default'|'vim'|'emacs'
     boldFormatting: '**'|'__'
@@ -363,6 +366,9 @@ export function getConfigTemplate (): ConfigOptions {
       indentWithTabs: false,
       alwaysIndentLineOnTab: false, // Whether `Tab` always indents the current line
       fontSize: 18, // The editor's font size in pixels
+      pageCenter: true,
+      pageBorder: true,
+      pageSize: 0,
       countChars: false, // Set to true to enable counting characters instead of words
       inputMode: 'default', // Can be default, vim, emacs
       boldFormatting: '**', // Can be ** or __

@@ -48,16 +48,15 @@ export const pandocLinkParser: InlineParser = {
       return -1
     }
 
-    // If there's no valid URL, return so the default parser can handle
-    // the other link types.
-    const match = linkClosingRe.exec(ctx.text.slice(pos - ctx.offset))
-    if (!match?.groups) { return -1 }
-
     const opening = ctx.findOpeningDelimiter(PandocLinkDelimiter)
-    if (opening === null) { return -1 }
+    if (opening === null) {
+      return -1
+    }
 
     const delim = ctx.getDelimiterAt(opening)
-    if (!delim) { return -1 }
+    if (!delim) {
+      return -1
+    }
 
     const isLink = delim.to - delim.from === 1
     let linkContents = ctx.takeContent(opening)
@@ -71,49 +70,61 @@ export const pandocLinkParser: InlineParser = {
       linkContents = linkContents.filter(el => el.type !== linkType && el.type !== urlType)
     }
 
-    // The url may contain additional parenthesis, so we need
-    // to count the internal ones to track potential matching pairs
-    // to find the external matching closing one.
-    let depth = 0
-    let stop = 0
-    let url = match.groups.url
+    let linkEnd = pos + 1
+    const urlChildren = []
 
-    while (stop <= url.length) {
-      const char = url.charAt(stop)
+    // Links may or may not have URLs following the final bracket
+    const match = linkClosingRe.exec(ctx.text.slice(pos - ctx.offset))
+    if (match?.groups) {
+      // The url may contain additional parenthesis, so we need
+      // to count the internal ones to track potential matching pairs
+      // to find the external matching closing one.
+      let depth = 0
+      let stop = 0
+      let url = match.groups.url
 
-      // Found the closing parenthesis
-      if (char === ')' && depth === 0) { break }
+      while (stop <= url.length) {
+        const char = url.charAt(stop)
 
-      if (char === ')') { depth-- }
-      if (char === '(') { depth++ }
-      stop++
+        // Found the closing parenthesis
+        if (char === ')' && depth === 0) { break }
+
+        if (char === ')') { depth-- }
+        if (char === '(') { depth++ }
+        stop++
+      }
+
+      url = url.substring(0, stop)
+
+      let destination = url
+
+      const urlContents = []
+      const title = linkTitleRe.exec(destination)
+
+      if (title?.indices?.groups) {
+        destination = url.substring(0, title.index)
+
+        const linkTitleIndices = title.indices.groups.double ?? title.indices.groups.single ?? title.indices.groups.parens
+        urlContents.push(ctx.elt('LinkTitle', pos + 2 + linkTitleIndices[0], pos + 2 + linkTitleIndices[1]))
+      }
+
+      urlContents.unshift(ctx.elt('URL', pos + 2, pos + 2 + destination.length))
+
+      const openingUrlMark = ctx.elt('LinkMark', pos + 1, pos + 2)
+      const closingUrlMark = ctx.elt('LinkMark', pos + 2 + url.length, pos + 3 + url.length)
+
+      // Closing marks (2) + url text
+      linkEnd += 2 + url.length
+
+      urlChildren.push(openingUrlMark, ...urlContents, closingUrlMark)
     }
-
-    url = url.substring(0, stop)
-
-    let destination = url
-
-    const urlContents = []
-    const title = linkTitleRe.exec(destination)
-
-    if (title?.indices?.groups) {
-      destination = url.substring(0, title.index)
-
-      const linkTitleIndices = title.indices.groups.double ?? title.indices.groups.single ?? title.indices.groups.parens
-      urlContents.push(ctx.elt('LinkTitle', pos + 2 + linkTitleIndices[0], pos + 2 + linkTitleIndices[1]))
-    }
-
-    urlContents.unshift(ctx.elt('URL', pos + 2, pos + 2 + destination.length))
-
-    const openingUrlMark = ctx.elt('LinkMark', pos + 1, pos + 2)
-    const closingUrlMark = ctx.elt('LinkMark', pos + 2 + url.length, pos + 3 + url.length)
 
     const openingMark = ctx.elt('LinkMark', delim.from, delim.to)
     const closingMark = ctx.elt('LinkMark', pos, pos + 1)
 
     // This child node structure mirrors the codemirror Link structure
-    const children = [ openingMark, ...linkContents, closingMark, openingUrlMark, ...urlContents, closingUrlMark ]
+    const children = [ openingMark, ...linkContents, closingMark, ...urlChildren ]
 
-    return ctx.addElement(ctx.elt(isLink ? 'Link' : 'Image', delim.from, pos + 3 + url.length, children))
+    return ctx.addElement(ctx.elt(isLink ? 'Link' : 'Image', delim.from, linkEnd, children))
   }
 }

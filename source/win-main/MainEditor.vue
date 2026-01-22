@@ -4,9 +4,11 @@
     class="main-editor-wrapper"
     role="region"
     v-bind:aria-label="`Markdown Editor: Currently editing file ${pathBasename(props.file.path)}`"
-    v-bind:style="{ 'font-size': `${fontSize}px` }"
+    v-bind:style="{ 'font-size': `${fontSize}px`, '--page-size': `${pageSize}` }"
     v-bind:class="{
       'code-file': !isMarkdown,
+      'page-border': pageBorder,
+      'page-center': pageCenter,
       fullscreen: distractionFree
     }"
   >
@@ -217,6 +219,10 @@ const mainEditorWrapper = ref<HTMLDivElement|null>(null)
 const useH1 = computed<boolean>(() => configStore.config.fileNameDisplay.includes('heading'))
 const useTitle = computed<boolean>(() => configStore.config.fileNameDisplay.includes('title'))
 const fontSize = computed<number>(() => configStore.config.editor.fontSize)
+const pageSize = computed<string>(() => configStore.config.editor.pageSize > 0 ? `${configStore.config.editor.pageSize}px` : 'initial' )
+const pageBorder = computed<boolean>(() => configStore.config.editor.pageBorder)
+const pageCenter = computed<boolean>(() => configStore.config.editor.pageCenter)
+
 const globalSearchResults = computed(() => windowStateStore.searchResults)
 const snippets = computed(() => windowStateStore.snippets)
 const tags = computed(() => tagStore.tags)
@@ -229,7 +235,7 @@ const editorConfiguration = computed<EditorConfigOptions>(() => {
   // right after setting the new configurations. Plus, the user won't update
   // everything all the time, but rather do one initial configuration, so
   // even if we incur a performance penalty, it won't be noticed that much.
-  const { editor, display, zkn, darkMode } = configStore.config
+  const { editor, display, zkn, darkMode, darkModeEditor } = configStore.config
   return {
     indentUnit: editor.indentUnit,
     indentWithTabs: editor.indentWithTabs,
@@ -278,6 +284,7 @@ const editorConfiguration = computed<EditorConfigOptions>(() => {
     showStatusbar: editor.showStatusbar,
     showFormattingToolbar: editor.showFormattingToolbar,
     darkMode,
+    darkModeEditor,
     theme: display.theme,
     highlightWhitespace: editor.showWhitespace,
     showMarkdownLineNumbers: editor.showMarkdownLineNumbers,
@@ -688,14 +695,28 @@ function maybeHighlightSearchResults (): void {
 .main-editor-wrapper {
   width: 100%;
   height: 100%;
-  overflow-x: hidden;
+  overflow-x: visible;
   overflow-y: auto;
   background-color: #ffffff;
   transition: 0.2s background-color ease;
   position: relative;
 
   .cm-editor {
-    .cm-scroller { padding: 50px 50px; }
+    overflow-x: auto;
+  }
+
+  .cm-scroller {
+    padding: 50px 50px;
+  }
+
+  .cm-content {
+    overflow-x: visible !important; // Necessary to hide the horizontal scrollbar
+    min-width: var(--page-size);
+    max-width: var(--page-size);
+  }
+
+  .cm-gutters-before {
+    position: static !important;
   }
 
   // If a code file is loaded, we need to display the editor contents in monospace.
@@ -704,6 +725,21 @@ function maybeHighlightSearchResults (): void {
 
     // Reset the margins for code files
     .cm-scroller { padding: 0px; }
+  }
+
+  &.page-center .cm-content {
+    margin-inline-end: auto;
+  }
+
+  &.page-center .cm-gutters-before {
+    margin-inline-start: auto;
+  }
+
+  &.page-border .cm-content {
+    outline-width: 1px;
+    outline-style: solid;
+    outline-offset: 5px;
+    z-index: 300; // higher than .cm-gutters-before
   }
 }
 

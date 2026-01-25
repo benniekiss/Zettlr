@@ -31,6 +31,15 @@ import enumDictFiles, { type DictFileMetadata } from '@common/util/enum-dict-fil
 import ProviderContract from '../provider-contract'
 import type LogProvider from '../log'
 import type ConfigProvider from '@providers/config'
+import { DP_EVENTS } from 'source/types/common/documents'
+import type { DocumentsUpdateContext } from '../documents'
+import type DocumentManager from '../documents'
+import type { FSALEventPayload } from '../fsal'
+import type FSAL from '../fsal'
+
+export interface DictionaryRecord { word: string, affix?: string }
+
+const hunspellRe = /^(?<word>(?:(?:\\.|[^/])(?!\w{2}:))*)(?<flags>.*)$/
 
 /**
  * This class loads and unloads dictionaries according to the configuration set
@@ -41,24 +50,32 @@ export default class DictionaryProvider extends ProviderContract {
   private readonly hunspell: Nodehun[]
   private readonly _loadedDicts: string[]
   private readonly _userDictionaryPath: string
+  private _workspaceDictionaryPath: string
   private readonly _emitter: EventEmitter
-  private _userDictionary: string[]
+  private _userDictionary: DictionaryRecord[]
+  private _workspaceDictionary: DictionaryRecord[]
   private _fileLock: boolean
   private _unwrittenChanges: boolean
   private _cachedAutocorrect: string[]
   private _reloadWanted: boolean
   private _reloadLock: boolean
+  private _activeWorkspace: string|undefined
 
-  constructor (private readonly _logger: LogProvider, private readonly _config: ConfigProvider) {
+  constructor (private readonly _logger: LogProvider, private readonly _config: ConfigProvider, private readonly _doc: DocumentManager, private readonly _fsal: FSAL) {
     super()
     // Array containing all loaded Hunspell dictionaries
     this.hunspell = []
+
     // Array containing the language codes for which checking currently works
     this._loadedDicts = []
     // Path to the user dictionary
     this._userDictionaryPath = path.join(app.getPath('userData'), 'user.dic')
+    // Path to the workspace dictionary
+    this._workspaceDictionaryPath = path.join('.zettlr', 'user.dic')
+
     // The user dictionary
-    this._userDictionary = ['Zettlr']
+    this._userDictionary = [{ word: 'Zettlr' }]
+    this._workspaceDictionary = []
 
     this._cachedAutocorrect = []
 
@@ -72,31 +89,63 @@ export default class DictionaryProvider extends ProviderContract {
     this._fileLock = false
     this._unwrittenChanges = false
 
-    ipcMain.handle('dictionary-provider', (event, message) => {
+    this._activeWorkspace = undefined
+
+    ipcMain.handle('dictionary-provider', async (event, message) => {
       const terms: string[] = message.terms
       const { command } = message
       if (command === 'get-user-dictionary') {
-        return this._userDictionary.map(elem => elem)
+        return this._userDictionary
+      } else if (command === 'get-ws-dictionary') {
+        return this._workspaceDictionary
       } else if (command === 'set-user-dictionary') {
-        const dict = message.payload
-        if (!Array.isArray(dict) || !dict.every(d => typeof d === 'string')) {
+        const dict = message.payload as DictionaryRecord[]
+        if (!Array.isArray(dict) || !dict.every(d => 'word' in d)) {
           throw new Error('[Dictionary Provider] Cannot set user dictionary: Argument was not a string array.')
         }
-        this.setUserDictionary(dict)
+        await this.setUserDictionary(dict)
       } else if (command === 'check') {
-        return terms.map(t => this.check(t))
+        return Promise.all(terms.map(t => this.check(t)))
       } else if (command === 'suggest') {
-        return terms.map(t => this.suggest(t))
+        const limit: number = message.limit
+        return Promise.all(terms.map(t => this.suggest(t, limit)))
       } else if (command === 'add') {
-        return terms.map(t => this.add(t))
+        return Promise.all(terms.map(t => this.add(t)))
+      } else if (command === 'ignore') {
+        return Promise.all(terms.map(t => this.ignore(t)))
+      } else if (command === 'remove') {
+        return Promise.all(terms.map(t => this.remove(t)))
       } else if (command === 'open-dictionary-folder') {
         shell.showItemInFolder(path.join(app.getPath('userData'), '/dict'))
       }
     })
 
+    this._doc.on(DP_EVENTS.ACTIVE_ROOT, async (context: DocumentsUpdateContext) => {
+      const rootChanged = this._activeWorkspace !== context.filePath
+
+      if (rootChanged) {
+        this._activeWorkspace = context.filePath
+        await this.synchronizeHunspellDictionaries()
+      }
+    })
+
+    this._fsal.on('fsal-event', async (payload: FSALEventPayload) => {
+      let filePath
+      if (payload.event === 'unlink' || payload.event === 'unlinkDir') {
+        filePath = payload.path
+      } else if (payload.event === 'add' || payload.event === 'addDir' || payload.event === 'change') {
+        filePath = payload.descriptor?.path
+      }
+
+      if (this._activeWorkspace === undefined || filePath === undefined) { return }
+
+      if (path.join(this._activeWorkspace, this._workspaceDictionaryPath) === filePath) {
+        await this.synchronizeHunspellDictionaries()
+      }
+    })
+
     // Reload as soon as the config has been updated
     this._config.on('update', (_opt: string) => {
-      // Reload the dictionaries (if applicable) ...
       this.synchronizeHunspellDictionaries()
         .catch(err => {
           this._logger.error(`[Dictionary Provider] Could not (re)load dictionaries: ${err.message as string}`, err)
@@ -109,7 +158,6 @@ export default class DictionaryProvider extends ProviderContract {
   async boot (): Promise<void> {
     this._logger.verbose('Dictionary provider booting up ...')
     await this.synchronizeHunspellDictionaries()
-    await this.loadUserDictionary()
     this._cacheAutoCorrectValues()
   }
 
@@ -122,25 +170,48 @@ export default class DictionaryProvider extends ProviderContract {
   }
 
   /**
+   * Removes hunspell flags from the word list
+   *
+   * @param words
+   * @returns
+   */
+  sanitizeDictionary (words: string[]): DictionaryRecord[] {
+    return words
+      // Strip flags and optional data fields
+      .map(word => {
+        const match = hunspellRe.exec(word)
+        if (match?.groups) {
+          return { word: match?.groups.word, flags: match?.groups.flags }
+        }
+
+        return { word: '' }
+      })
+      .filter(record => record.word)
+  }
+
+  /**
      * Replaces the current user dictionary with a new one
      * @param {Array} dict The new dictionary.
      * @return {Boolean} Whether or not the call succeeded.
      */
-  setUserDictionary (dict: string[]): boolean {
+  async setUserDictionary (dict: DictionaryRecord[]): Promise<boolean> {
     if (!Array.isArray(dict)) {
       return false
     }
 
-    this._userDictionary = dict
-    this._userDictionary = [...new Set(this._userDictionary)]
-    this._userDictionary = this._userDictionary.filter(word => word.trim() !== '')
-    this.persistUserDictionary()
-      .catch(err => {
-        this._logger.error(`[Dictionary Provider] Could not persist user dictionary: ${String(err.message)}`, err)
-      })
+    const newDictionary = dict.filter(elem => elem.word.trim() !== '')
+    const oldDictionary = this._userDictionary
 
-    // Send an invalidation message to the renderer
-    broadcastIpcMessage('dictionary-provider', { command: 'invalidate-dict' })
+    const addedWords = newDictionary.filter(x => !this._userDictionary.find(elem => elem.word === x.word))
+    const removedWords = oldDictionary.filter(x => !newDictionary.find(elem => elem.word === x.word))
+
+    for (const rec of addedWords) {
+      await this.add(rec.word, rec.affix)
+    }
+
+    for (const rec of removedWords) {
+      await this.remove(rec.word)
+    }
 
     return true
   }
@@ -200,6 +271,15 @@ export default class DictionaryProvider extends ProviderContract {
 
     let changeWanted = false
 
+    const userDic = await this.loadUserDictionary()
+    const wsDic = await this.loadWorkspaceDictionary()
+
+    if (userDic === undefined || wsDic === undefined) {
+      this._loadedDicts.splice(0)
+      this.hunspell.splice(0)
+      changeWanted = true
+    }
+
     // This function can also be called during runtime to exchange some dicts,
     // so make sure we don't reload these monstrous things all too often.
     // 1. Which dicts do we have to load?
@@ -233,21 +313,34 @@ export default class DictionaryProvider extends ProviderContract {
 
       try {
         aff = await fs.readFile(dictMeta.aff)
-      } catch (err: any) {
+      } catch (err: unknown) {
         this._logger.error(`[Dictionary Provider] Could not load affix file for ${dict}`, err)
         continue
       }
 
       try {
         dic = await fs.readFile(dictMeta.dic)
-      } catch (err: any) {
-        this._logger.error(`[Dictionary Provider] Could not load .dic-file for ${dict}`, err)
+      } catch (err: unknown) {
+        this._logger.error(`[Dictionary Provider] Could not load .dic file for ${dict}`, err)
         continue
       }
 
-      this._loadedDicts.push(dict)
-      this.hunspell.push(new Nodehun(aff, dic))
-    } // END for
+      try {
+        const hun = new Nodehun(aff, dic)
+        if (userDic !== undefined) {
+          await hun.addDictionary(userDic)
+        }
+        if (wsDic !== undefined) {
+          await hun.addDictionary(wsDic)
+        }
+
+        this.hunspell.push(hun)
+        this._loadedDicts.push(dict)
+      } catch (err: unknown) {
+        this._logger.error(`[Dictionary Provider] Could not load hunspell dictionary ${dict}`, err)
+        continue
+      }
+    }
 
     if (changeWanted) {
       // Don't be noisy: Only emit if necessary
@@ -269,7 +362,7 @@ export default class DictionaryProvider extends ProviderContract {
    * Loads the user dictionary from file.
    * @return {Promise} Will resolve after the dictionary has been loaded.
    */
-  async loadUserDictionary (): Promise<void> {
+  async loadUserDictionary (): Promise<Buffer<ArrayBufferLike>|undefined> {
     try {
       await fs.lstat(this._userDictionaryPath)
     } catch (err) {
@@ -277,18 +370,70 @@ export default class DictionaryProvider extends ProviderContract {
       await this.persistUserDictionary()
     }
 
-    const fileContents = await fs.readFile(this._userDictionaryPath, 'utf8')
-    this._userDictionary = fileContents.split('\n')
+    try {
+      const dic = await fs.readFile(this._userDictionaryPath)
 
-    // String.split() returns an array with one empty string if the file is
-    // empty, so we need to perform in total two operations: Make a set out of
-    // it (remove duplicates) and remove empty strings
-    this._userDictionary = [...new Set(this._userDictionary)]
-    this._userDictionary = this._userDictionary.filter(elem => elem.trim() !== '')
+      const fileContents = dic.toString('utf-8')
+        .split('\n')
+        .filter((elem, index) => index > 0 ? elem.trim() !== '' : !/\d/.test(elem))
 
-    // If the user dictionary is empty, the split will not create an array
-    // Send an invalidation message to the renderer so that it reloads all words
-    broadcastIpcMessage('dictionary-provider', { command: 'invalidate-dict' })
+      const dictionary = new Set(fileContents)
+      const prevUserDic = new Set(this._userDictionary.map(record => record.word + (record.affix ?? '')))
+
+      this._logger.info(`[Dictionary Provider] Loaded the user dictionary: ${this._userDictionaryPath}`)
+
+      // The dictionary did not change
+      if (dictionary.symmetricDifference(prevUserDic).size === 0) {
+        return
+      }
+
+      this._userDictionary = this.sanitizeDictionary([...dictionary])
+
+      return dic
+    } catch (err: unknown) {
+      this._logger.error(`[Dictionary Provider] Could not load the user dictionary: ${this._userDictionaryPath}`, err)
+      return
+    }
+  }
+
+  async loadWorkspaceDictionary (): Promise<Buffer<ArrayBufferLike>|undefined> {
+    const enableAssets: boolean = this._config.get('workspaces.enableAssets')
+    const loadDictionary: boolean = this._config.get('workspaces.loadDictionary')
+
+    if (this._activeWorkspace === undefined || !(enableAssets && loadDictionary)) {
+      this._workspaceDictionary = []
+      return
+    }
+
+    const dictionaryPath = path.join(this._activeWorkspace, this._workspaceDictionaryPath)
+
+    try {
+      const dic = await fs.readFile(dictionaryPath)
+
+      const fileContents = dic.toString('utf-8')
+        .split('\n')
+        .filter((elem, index) => index > 0 ? elem.trim() !== '' : !/\d/.test(elem))
+
+      const dictionary = new Set(fileContents)
+      const prevWsDic = new Set(this._workspaceDictionary.map(record => record.word + (record.affix ?? '')))
+
+      this._logger.info(`[Dictionary Provider] Loaded the user dictionary: ${this._userDictionaryPath}`)
+
+      // The dictionary did not change
+      if (dictionary.symmetricDifference(prevWsDic).size === 0) {
+        return
+      }
+
+      this._workspaceDictionary = this.sanitizeDictionary([...dictionary])
+
+      this._logger.info(`[Dictionary Provider] Loaded the dictionary for workspace: ${this._activeWorkspace}`)
+
+      return dic
+    } catch (err: unknown) {
+      this._workspaceDictionary = []
+      this._logger.warning(`[Dictionary Provider] Could not load dictionary for workspace: ${this._activeWorkspace}`)
+      return
+    }
   }
 
   /**
@@ -302,10 +447,15 @@ export default class DictionaryProvider extends ProviderContract {
     }
 
     // Initiate the filelock, write, release the lock
-    const data = this._userDictionary.join('\n')
+    const data = this._userDictionary
+      .map(elem => elem.word + (elem.affix !== undefined ? elem.affix : ''))
+      .join('\n')
+
+    // The first line has to contain an approximate number of terms in the dictionary.
+    const fileContents = this._userDictionary.length + '\n' + data
     this._fileLock = true
     this._unwrittenChanges = false // NOTE that this has to come before the writing
-    await fs.writeFile(this._userDictionaryPath, data)
+    await fs.writeFile(this._userDictionaryPath, fileContents)
     this._fileLock = false
 
     // After we're done, check if someone tried to call the function in the
@@ -321,7 +471,7 @@ export default class DictionaryProvider extends ProviderContract {
    * @param  {String} term The word/term to check
    * @return {Boolean}      True if the word was confirmed by any dictionary, or false.
    */
-  check (term: string): boolean {
+  async check (term: string): Promise<boolean> {
     // Don't check until all are loaded
     if (this._config.get().selectedDicts.length !== this.hunspell.length) {
       return true
@@ -340,12 +490,8 @@ export default class DictionaryProvider extends ProviderContract {
       return true
     }
 
-    if (this._userDictionary.includes(term)) {
-      return true
-    }
-
     for (const dictionary of this.hunspell) {
-      if (dictionary.spellSync(term)) {
+      if (await dictionary.spell(term)) {
         return true
       }
     }
@@ -355,44 +501,111 @@ export default class DictionaryProvider extends ProviderContract {
 
   /**
    * Returns an array of possible suggestions for the given word.
-   * @param  {String} term The term or word to check for.
+   * @param  {String} term  The term or word to check for.
+   * @param  {number} limit Limit the number of suggestions per dictionary to this number
    * @return {Array}      An array containing all returned possible alternatives.
    */
-  suggest (term: string): string[] {
-    if (this.hunspell.length === 0) {
-      return []
-    }
-
-    // Return no suggestions
-    if (this._config.get().selectedDicts.length !== this.hunspell.length) {
-      return []
-    }
-
+  async suggest (term: string, limit?: number): Promise<string[] >{
     const suggestions: string[] = []
-    for (const dictionary of this.hunspell) {
-      suggestions.push(...(dictionary.suggestSync(term) ?? []))
+
+    // Wait for all dictionaries to load.
+    if (this._config.get().selectedDicts.length !== this.hunspell.length) {
+      return suggestions
     }
 
-    return suggestions
+    if (this.hunspell.length === 0) {
+      return suggestions
+    }
+
+    for (const dictionary of this.hunspell) {
+      const values = await dictionary.suggest(term) ?? []
+      suggestions.push(...values.slice(0, limit))
+    }
+
+    return [...new Set(suggestions)]
   }
 
   /**
    * Adds the given term to the user dictionary
    * @param {String} term The term to add
    */
-  add (term: string): boolean {
+  async add (term: string, affix?: string): Promise<boolean> {
     term = term.trim()
     if (term === '') {
       return false
     }
 
     // Adds the given term to the user dictionary
-    if (!this._userDictionary.includes(term)) {
-      this._userDictionary.push(term)
+    if (!this._userDictionary.find(elem => elem.word === term)) {
+      this._userDictionary.push({ word: term, affix })
       this.persistUserDictionary()
         .catch(err => {
           this._logger.error(`[Dictionary Provider] Could not persist user dictionary: ${String(err.message)}`, err)
         })
+
+      for (const dictionary of this.hunspell) {
+        await dictionary.add(term)
+      }
+
+      // Send an invalidation message to the renderer so that it reloads all words
+      broadcastIpcMessage('dictionary-provider', { command: 'invalidate-dict' })
+
+      return true
+    }
+
+    return false
+  }
+
+  /**
+   * Adds the given term to the runtime dictionary
+   *
+   * @param {String} term The term to add
+   */
+  async ignore (term: string): Promise<boolean> {
+    term = term.trim()
+    if (term === '') {
+      return false
+    }
+
+    // Adds the given term to the user dictionary
+    if (!this._userDictionary.find(elem => elem.word === term)) {
+      for (const dictionary of this.hunspell) {
+        await dictionary.add(term)
+      }
+
+      // Send an invalidation message to the renderer so that it reloads all words
+      broadcastIpcMessage('dictionary-provider', { command: 'invalidate-dict' })
+
+      return true
+    }
+
+    return false
+  }
+
+  /**
+   * Remove the given term from the user dictionary
+   * @param {String} term The term to remove
+   */
+  async remove (term: string): Promise<boolean> {
+    term = term.trim()
+    if (term === '') {
+      return false
+    }
+
+    const elem = this._userDictionary.find(elem => elem.word === term)
+    if (elem) {
+      const idx = this._userDictionary.indexOf(elem)
+
+      this._userDictionary.splice(idx, 1)
+      this.persistUserDictionary()
+        .catch(err => {
+          this._logger.error(`[Dictionary Provider] Could not persist user dictionary: ${String(err.message)}`, err)
+        })
+
+      for (const dictionary of this.hunspell) {
+        await dictionary.remove(term)
+      }
+
       // Send an invalidation message to the renderer so that it reloads all words
       broadcastIpcMessage('dictionary-provider', { command: 'invalidate-dict' })
 

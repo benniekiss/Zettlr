@@ -32,9 +32,11 @@ import {
   type EditorSelection,
   EditorState,
   Text,
+  type ChangeDesc,
   type StateEffect,
   type Extension,
-  type SelectionRange
+  type SelectionRange,
+  ChangeSet,
 } from '@codemirror/state'
 import { foldEffect, foldState, syntaxTree } from '@codemirror/language'
 
@@ -58,7 +60,10 @@ import {
   getTexExtensions,
   getYAMLExtensions,
   inputModeCompartment,
-  getMainEditorThemes
+  getMainEditorThemes,
+  getCssExtensions,
+  getCodeExtensions,
+  getLuaExtensions,
 } from './editor-extension-sets'
 
 import {
@@ -100,6 +105,9 @@ import { useDarkModeEditor, darkModeEffect } from './theme/dark-mode'
 import { editorMetadataFacet } from './plugins/editor-metadata'
 import { projectInfoUpdateEffect, type ProjectInfo } from './plugins/project-info-field'
 import { moveSection } from './commands/move-section'
+import { hunspellChangesEffect, hunspellChangesField } from './linters/hunspell'
+import { ltChangesEffect, ltChangesField } from './linters/language-tool'
+import { forEachDiagnostic, setDiagnosticsEffect, type Diagnostic } from '@codemirror/lint'
 import { parsePandocAttributes } from 'source/common/pandoc-util/parse-pandoc-attributes'
 
 export interface DocumentWrapper {
@@ -179,6 +187,15 @@ export interface EditorViewPersistentState {
    * A decoration set containing currently folded ranges.
    */
   foldedRanges: DecorationSet
+
+  /**
+   * Linter diagnostics
+   */
+  linters: {
+    diagnostics: Diagnostic[]
+    spellcheckChanges: ChangeDesc
+    languagetoolChanges: ChangeDesc
+  }
 }
 
 export default class MarkdownEditor extends EventEmitter {
@@ -215,7 +232,7 @@ export default class MarkdownEditor extends EventEmitter {
   private readonly databaseCache: {
     tags: TagRecord[]
     citations: Array<{ citekey: string, displayText: string }>
-    snippets: Array<{ name: string, content: string }>
+    snippets: Array<{ name: string, content: string, section?: string }>
     files: Array<{ filename: string, displayName: string, id: string }>
   }
 
@@ -419,6 +436,12 @@ export default class MarkdownEditor extends EventEmitter {
         return getYAMLExtensions(options)
       case DocumentType.LaTeX:
         return getTexExtensions(options)
+      case DocumentType.CSS:
+        return getCssExtensions(options)
+      case DocumentType.Lua:
+        return getLuaExtensions(options)
+      case DocumentType.Code:
+        return getCodeExtensions(options)
     }
   }
 
@@ -444,9 +467,19 @@ export default class MarkdownEditor extends EventEmitter {
     if (persistentState !== undefined) {
       // Now that the correct document has been loaded, there will be content
       // and we can restore the persisted information.
-      const { scrollSnapshot, selection, foldedRanges } = persistentState
+      const { scrollSnapshot, selection, foldedRanges, linters } = persistentState
 
       const effects: StateEffect<any>[] = [scrollSnapshot]
+
+      effects.push(setDiagnosticsEffect.of(linters.diagnostics))
+
+      linters.spellcheckChanges.iterChangedRanges((_,__, fromB, toB) => {
+        effects.push(hunspellChangesEffect.of({ from: fromB, to: toB }))
+      })
+
+      linters.languagetoolChanges.iterChangedRanges((_,__, fromB, toB) => {
+        effects.push(ltChangesEffect.of({ from: fromB, to: toB }))
+      })
 
       const cursor = foldedRanges.iter()
       while (cursor.value) {
@@ -488,10 +521,26 @@ export default class MarkdownEditor extends EventEmitter {
    * @return  {EditorViewPersistentState}  The persistent state object.
    */
   public get persistentState (): EditorViewPersistentState {
+    const scrollSnapshot = this._instance.scrollSnapshot()
+    const selection = this._instance.state.selection
+    const foldedRanges = this._instance.state.field(foldState, false) ?? Decoration.set([])
+
+    const diagnostics: Diagnostic[] = []
+    forEachDiagnostic(this._instance.state, (d) => diagnostics.push(d))
+
+    const docLength = this._instance.state.doc.length
+    const spellcheckChanges = this._instance.state.field(hunspellChangesField, false) ?? ChangeSet.empty(docLength).desc
+    const languagetoolChanges = this._instance.state.field(ltChangesField, false) ?? ChangeSet.empty(docLength).desc
+
     return {
-      scrollSnapshot: this._instance.scrollSnapshot(),
-      selection: this._instance.state.selection,
-      foldedRanges: this._instance.state.field(foldState, false) ?? Decoration.set([])
+      scrollSnapshot,
+      selection,
+      foldedRanges,
+      linters: {
+        diagnostics,
+        spellcheckChanges,
+        languagetoolChanges,
+      }
     }
   }
 
@@ -733,7 +782,7 @@ export default class MarkdownEditor extends EventEmitter {
    */
   setCompletionDatabase (type: 'tags', database: TagRecord[]): void
   setCompletionDatabase (type: 'citations', database: Array<{ citekey: string, displayText: string }>): void
-  setCompletionDatabase (type: 'snippets', database: Array<{ name: string, content: string }>): void
+  setCompletionDatabase (type: 'snippets', database: Array<{ name: string, content: string, section?: string }>): void
   setCompletionDatabase (type: 'files', database: Array<{ filename: string, displayName: string, id: string }>): void
   setCompletionDatabase (type: string, database: any): void {
     switch (type) {
@@ -747,7 +796,7 @@ export default class MarkdownEditor extends EventEmitter {
         break
       case 'snippets':
         this.databaseCache.snippets = database
-        this._instance.dispatch({ effects: snippetsUpdate.of(database as Array<{ name: string, content: string }>) })
+        this._instance.dispatch({ effects: snippetsUpdate.of(database as Array<{ name: string, content: string, section?: string }>) })
         break
       case 'files':
         this.databaseCache.files = database

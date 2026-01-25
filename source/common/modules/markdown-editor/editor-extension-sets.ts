@@ -32,6 +32,7 @@ import {
   type ViewUpdate,
   type DOMEventHandlers
 } from '@codemirror/view'
+import { css } from '@codemirror/lang-css'
 import { autocomplete } from './autocomplete'
 import { codeSyntaxHighlighter, markdownSyntaxHighlighter } from './theme/syntax'
 import markdownParser from './parser/markdown-parser'
@@ -39,7 +40,9 @@ import { defaultContextMenu } from './plugins/default-context-menu'
 import { readabilityMode } from './plugins/readability'
 import { hookDocumentAuthority } from './plugins/remote-doc'
 import { lintGutter, linter } from '@codemirror/lint'
-import { spellcheck } from './linters/spellcheck'
+import { linterConfig } from './linters/utils'
+import { hunspell } from './linters/hunspell'
+import { languageTool } from './linters/language-tool'
 import { mdLint } from './linters/md-lint'
 import { countField, countPlugin } from './plugins/statistics-fields'
 import { tocField } from './plugins/toc-field'
@@ -53,7 +56,6 @@ import { softwrapVisualIndent } from './plugins/visual-indent'
 import { backgroundLayers } from './plugins/code-background'
 import { emacs } from '@replit/codemirror-emacs'
 import { distractionFree } from './plugins/distraction-free'
-import { languageTool } from './linters/language-tool'
 import { statusbar } from './statusbar'
 import { renderers } from './renderers'
 import { mdPasteDropHandlers } from './plugins/md-paste-drop-handlers'
@@ -75,6 +77,7 @@ import { vimPlugin } from './plugins/vim-mode'
 import { projectInfoField } from './plugins/project-info-field'
 import { headingGutter } from './renderers/render-headings'
 import { codeTheme } from './renderers/render-code'
+import { lua } from '@codemirror/legacy-modes/mode/lua'
 
 /**
  * This interface describes the required properties which the extension sets
@@ -294,7 +297,8 @@ export function getMarkdownExtensions (options: CoreExtensionOptions): Extension
   // turned on and off with the dictionary settings, and the yamlFrontmatterNode
   // because if that thing has an error, that thing has an error.
   const mdLinterExtensions = [
-    spellcheck,
+    linterConfig,
+    hunspell,
     yamlFrontmatterLint
   ]
 
@@ -411,4 +415,22 @@ export function getTexExtensions (options: CoreExtensionOptions): Extension[] {
     ...getGenericCodeExtensions(options),
     StreamLanguage.define(stex)
   ]
+}
+
+export function getCssExtensions (options: CoreExtensionOptions): Extension[] {
+  return [
+    ...getGenericCodeExtensions(options),
+    css()
+  ]
+}
+
+export function getLuaExtensions (options: CoreExtensionOptions): Extension[] {
+  return [
+    ...getGenericCodeExtensions(options),
+    StreamLanguage.define(lua)
+  ]
+}
+
+export function getCodeExtensions (options: CoreExtensionOptions): Extension[] {
+  return getGenericCodeExtensions(options)
 }

@@ -30,7 +30,7 @@
             shape="file"
             role="presentation"
           ></cds-icon>
-          
+
           {{ fileSectionHeading }}
         </div>
 
@@ -66,7 +66,7 @@
             shape="tree-view"
             role="presentation"
           ></cds-icon>
-          
+
           {{ workspaceSectionHeading }}
         </div>
 
@@ -209,7 +209,7 @@ const flatSortedAndFilteredVisualFileDescriptors = computed<Array<[string, strin
     .filter(descriptor => {
       return query.value === '' ? true : filterResults.value.some(res => res.startsWith(descriptor.path))
     })
-  
+
   const uncollapsed = windowStateStore.uncollapsedDirectories
   const collapsed = allDescriptors
     .filter(d => d.type === 'directory')

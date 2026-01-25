@@ -159,6 +159,9 @@ export interface ConfigOptions {
         ignoredRules: LanguageToolIgnoredRuleEntry[]
         provider: 'official'|'custom'
         customServer: string
+        charsPerRequest: number
+        charsPerMinute: number
+        requestsPerMinute: number
         username: string
         apiKey: string
       }
@@ -242,6 +245,13 @@ export interface ConfigOptions {
     showInsertFootnoteButton: boolean
     showDocumentInfoText: boolean
     showPomodoroButton: boolean
+  }
+  workspaces: {
+    enableAssets: boolean
+    loadSnippets: boolean
+    loadCSS: boolean
+    loadExportProfiles: boolean
+    loadDictionary: boolean
   }
 }
 
@@ -376,6 +386,9 @@ export function getConfigTemplate (): ConfigOptions {
           ignoredRules: [],
           provider: 'official',
           customServer: '',
+          charsPerRequest: 0, // 0 disables the limit
+          charsPerMinute: 0, // 0 disables the limit
+          requestsPerMinute: 0, // 0 disables the limit
           username: '',
           apiKey: ''
         }
@@ -505,6 +518,13 @@ export function getConfigTemplate (): ConfigOptions {
       showInsertFootnoteButton: true,
       showDocumentInfoText: true,
       showPomodoroButton: true
+    },
+    workspaces: {
+      enableAssets: false,
+      loadSnippets: true,
+      loadCSS: true,
+      loadExportProfiles: true,
+      loadDictionary: true,
     },
     uuid: uuid4() // The app's unique anonymous identifier
   }

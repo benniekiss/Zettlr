@@ -715,7 +715,6 @@ function maybeHighlightSearchResults (): void {
   }
 
   .cm-content {
-    overflow-x: visible !important; // Necessary to hide the horizontal scrollbar
     min-width: var(--page-size);
     max-width: var(--page-size);
   }
@@ -759,13 +758,17 @@ body.dark .main-editor-wrapper {
   position: absolute;
   top: 0;
 
-  .cm-scroller {
-    @media(min-width: 1301px) { padding: 0 @editor-margin-fullscreen-xxl; }
-    @media(max-width: 1300px) { padding: 0 @editor-margin-fullscreen-xl; }
-    @media(max-width: 1100px) { padding: 0 @editor-margin-fullscreen-lg; }
-    @media(max-width: 1000px) { padding: 0 @editor-margin-fullscreen-md; }
-    @media(max-width:  800px) { padding: 0 @editor-margin-fullscreen-sm; }
+  .cm-content {
+    min-width: unset;
+    max-width: unset;
+  }
 
+  .cm-scroller {
+    @media(min-width: 1301px) { padding: 50px @editor-margin-fullscreen-xxl; }
+    @media(max-width: 1300px) { padding: 50px @editor-margin-fullscreen-xl; }
+    @media(max-width: 1100px) { padding: 50px @editor-margin-fullscreen-lg; }
+    @media(max-width: 1000px) { padding: 50px @editor-margin-fullscreen-md; }
+    @media(max-width:  800px) { padding: 50px @editor-margin-fullscreen-sm; }
   }
 }
 

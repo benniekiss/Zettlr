@@ -689,13 +689,12 @@ function maybeHighlightSearchResults (): void {
 <style lang="less">
 // Editor Geometry
 
-// Editor margins left and right for all breakpoints in both fullscreen and
-// normal mode.
-@editor-margin-fullscreen-sm:  50px;
-@editor-margin-fullscreen-md:   5vw;
-@editor-margin-fullscreen-lg:  10vw;
-@editor-margin-fullscreen-xl:  20vw;
-@editor-margin-fullscreen-xxl: 30vw;
+// Editor content width for all breakpoints in fullscreen and distraction-free mode.
+@editor-width-fullscreen-sm:  calc(100vw - 100px);
+@editor-width-fullscreen-md:   90vw;
+@editor-width-fullscreen-lg:  80vw;
+@editor-width-fullscreen-xl:  60vw;
+@editor-width-fullscreen-xxl: 40vw;
 
 .main-editor-wrapper {
   width: 100%;
@@ -759,16 +758,19 @@ body.dark .main-editor-wrapper {
   top: 0;
 
   .cm-content {
-    min-width: unset;
-    max-width: unset;
+    margin-inline-end: auto;
+  }
+
+  .cm-gutters-before {
+    margin-inline-start: auto;
   }
 
   .cm-scroller {
-    @media(min-width: 1301px) { padding: 50px @editor-margin-fullscreen-xxl; }
-    @media(max-width: 1300px) { padding: 50px @editor-margin-fullscreen-xl; }
-    @media(max-width: 1100px) { padding: 50px @editor-margin-fullscreen-lg; }
-    @media(max-width: 1000px) { padding: 50px @editor-margin-fullscreen-md; }
-    @media(max-width:  800px) { padding: 50px @editor-margin-fullscreen-sm; }
+    @media(min-width: 1301px) { .cm-content { max-width: @editor-width-fullscreen-xxl; } }
+    @media(max-width: 1300px) { .cm-content { max-width: @editor-width-fullscreen-xl; } }
+    @media(max-width: 1100px) { .cm-content { max-width: @editor-width-fullscreen-lg; } }
+    @media(max-width: 1000px) { .cm-content { max-width: @editor-width-fullscreen-md; } }
+    @media(max-width:  800px) { .cm-content { max-width: @editor-width-fullscreen-sm; } }
   }
 }
 

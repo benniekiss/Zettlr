@@ -15,8 +15,9 @@
 import { trans } from '@common/i18n-renderer'
 import { type PreferencesFieldset } from '../App.vue'
 import { PreferencesGroups } from './_preferences-groups'
+import type { ConfigOptions } from 'source/app/service-providers/config/get-config-template'
 
-export function getAutocorrectFields (): PreferencesFieldset[] {
+export function getAutocorrectFields (config: ConfigOptions): PreferencesFieldset[] {
   return [
     {
       title: trans('Autocorrect'),
@@ -117,6 +118,48 @@ export function getAutocorrectFields (): PreferencesFieldset[] {
           ]
         }
       ]
-    }    
+    },
+    {
+      title: trans('Capitalization'),
+      infoString: trans('Automatically correct common capitalization mistakes'),
+      group: PreferencesGroups.Autocorrect,
+      fields: [
+        {
+          type: 'checkbox',
+          label: 'Autocapitalize the first word of sentences',
+          model: 'editor.autoCorrect.capitalization.autoCapitalize'
+        },
+        {
+          type: 'checkbox',
+          label: 'Normalize two capital letters at the beginning of words',
+          model: 'editor.autoCorrect.capitalization.doubleCaps'
+        },
+      ]
+    },
+    {
+      title: trans('Suggestions'),
+      infoString: trans('Suggest commonly used words as you type'),
+      group: PreferencesGroups.Autocorrect,
+      titleField: {
+        type: 'switch',
+        model: 'editor.autoCorrect.suggestWords.active'
+      },
+      fields: [
+        {
+          type: 'number',
+          label: trans('Minimum word length before it is considered for suggesting'),
+          min: 0,
+          model: 'editor.autoCorrect.suggestWords.minLength',
+          disabled: !config.editor.autoCorrect.suggestWords.active
+        },
+        {
+          type: 'number',
+          label: trans('How many characters have to be typed before suggesting a word'),
+          min: 0,
+          model: 'editor.autoCorrect.suggestWords.numChars',
+          disabled: !config.editor.autoCorrect.suggestWords.active
+        }
+      ]
+    },
   ]
 }

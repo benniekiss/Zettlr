@@ -14,13 +14,15 @@
  */
 
 // The autocorrect plugin is basically just a keymap that listens to spaces and enters
-import { syntaxTree } from '@codemirror/language'
 import { EditorSelection, type ChangeSpec } from '@codemirror/state'
-import { type Command, type EditorView } from '@codemirror/view'
+import type { Command, EditorView } from '@codemirror/view'
+import { syntaxTree } from '@codemirror/language'
+import type { Tree } from '@lezer/common'
 import { configField } from '../util/configuration'
 import { insertNewlineAndIndent, isolateHistory } from '@codemirror/commands'
 import { insertNewlineContinueMarkup } from '@codemirror/lang-markdown'
 import { nodeAtPos } from '../util/node-in-selection'
+import _ from 'lodash'
 
 // These characters can be directly followed by a starting magic quote
 const startChars = ' ([{-–—\n\r\t\v\f/\\'
@@ -31,8 +33,116 @@ const PROTECTED_NODES = [
   'FencedCode', 'CodeText', // Code block
   'HorizontalRule', // --- and ***
   'YAMLFrontmatter',
-  'HTMLTag', 'HTMLBlock' // HTML elements
+  'HTMLTag', 'HTMLBlock', // HTML elements
+  'PandocAttribute',
 ]
+
+/**
+ * Autocorrect words with two leading capital letters to title case.
+ *
+ * @param   {string}    text    The text to correct. Will only affect the last word.
+ * @param   {number}    pos     The document-relative start position of `text`.
+ *
+ * @returns {ChangeSpec|null}   A ChangeSpec representing the replacement, or null
+ *                              if no replacement was made.
+ */
+function normalizeLeadingDoubleCaps (text: string, pos: number, tree: Tree): ChangeSpec | null {
+  const locale: string = window.config.get('appLang')
+  // Matches the last word of the string if it starts with two
+  // upper-case letters and is followed by all-lowercase letters.
+  const match = /\b(\p{Lu})(\p{Lu})\p{Ll}+\p{P}*$/vd.exec(text)
+  if (!match?.indices) {
+    return null
+  }
+
+  const [ , [from], [ , to ] ] = match.indices
+
+  const isProtected = nodeAtPos(pos + from, tree, PROTECTED_NODES, -1) ?? nodeAtPos(pos + to, tree, PROTECTED_NODES, -1)
+  if (isProtected !== null) {
+    return null
+  }
+
+  const insert = match[1] + match[2].toLocaleLowerCase(locale)
+
+  return { from: pos + from, to: pos + to, insert }
+}
+
+/**
+ * Autocapitalize words at the start of sentences.
+ *
+ * @param   {string}    text    The text to correct. Will only affect the last word.
+ * @param   {number}    pos     The document-relative start position of `text`.
+ *
+ * @returns {ChangeSpec|null}   A ChangeSpec representing the replacement, or null
+ *                              if no replacement was made.
+ */
+function capitalizeStartofSentence (text: string, pos: number, tree: Tree): ChangeSpec | null {
+  const locale: string = window.config.get('appLang')
+  const segmenter = new Intl.Segmenter(locale, { granularity: 'sentence' })
+
+  // Matches the last word of the string if it starts with a lowercase letter
+  const match = /\b(\p{Ll})\p{L}+\p{P}*$/vd.exec(text)
+  if (match?.indices) {
+    const [ from, to ] = match.indices[1]
+
+    const isProtected = nodeAtPos(pos + from, tree, PROTECTED_NODES, -1) ?? nodeAtPos(pos + to, tree, PROTECTED_NODES, -1)
+    if (isProtected !== null) {
+      return null
+    }
+
+    // Capitalize the found word, then segment the text into sentences.
+    const saneLine = text.slice(0, from) + match[1].toLocaleUpperCase(locale) + text.slice(to)
+    const segments = [...segmenter.segment(saneLine)]
+
+    // If the last sentence starts at the position of the found word, then
+    // the replacement was correct because it fell at the sentence boundary.
+    // If the last sentence does not start at the position of the found word,
+    // then the replacement did not occur at the start of a sentence and is
+    // invalid.
+    if (segments[segments.length - 1].index === from) {
+      return { from: pos + from, to: pos + to, insert: match[1].toLocaleUpperCase(locale) }
+    }
+  }
+
+  return null
+}
+
+/**
+ * Parse a string into a RegExp. If the string is in the form  of
+ * `/pattern/flags`, then the returned RegExp will be created based on the
+ * provided pattern and flags. If it is a plain string, i.e., not contained
+ * within slashes (`/`), then the string is escaped and appended with a
+ * line-ending assertion and converted into a RegExp object.
+ *
+ * @param {string}    key   The string to parse
+ *
+ * @returns {RegExp}        The newly created regex from `key`.
+ */
+function parseAutocorrectKey (key: string, matchWholeWords: boolean): RegExp {
+  // Must start with slash
+  const prefix = matchWholeWords ? '\b' : ''
+
+  if (key.length >= 2 && key.startsWith('/')) {
+    // There may be flags after the key
+    const lastSlash = key.lastIndexOf('/')
+
+    if (lastSlash > 0) {
+      const body = key.slice(1, lastSlash)
+      const flags = key.slice(lastSlash + 1)
+
+      // Validate flags
+      if (/^[gimsuy]*$/.test(flags)) {
+        try {
+          return new RegExp(prefix + body, flags)
+        } catch {}
+      }
+    }
+  }
+
+  // No regex was detected, so its a regular string replacement. We first
+  // escape the string, then append a line-ending assertion.
+  return new RegExp(prefix + _.escapeRegExp(key) + '$')
+}
 
 // If Autocorrect is active, handles the potential text replacement
 export const handleReplacement: Command = (target: EditorView): boolean => {
@@ -68,7 +178,7 @@ export const handleReplacement: Command = (target: EditorView): boolean => {
     let pos = range.from - 1
 
     // Ignore those cursors that are inside protected nodes
-    if (nodeAtPos(pos, tree, PROTECTED_NODES, -1) != null) {
+    if (nodeAtPos(pos, tree, PROTECTED_NODES, -1) !== null) {
       continue
     }
 
@@ -82,36 +192,47 @@ export const handleReplacement: Command = (target: EditorView): boolean => {
 
     const from = Math.max(pos - maxKeyLength, 0)
     const slice = target.state.sliceDoc(from, pos)
+    for (let { key, value } of replacements) {
+      const re = parseAutocorrectKey(key, autocorrect.matchWholeWords)
 
-    for (const { key, value } of replacements) {
-      if (slice.endsWith(key)) {
-        const startOfReplacement = pos - key.length
-        if (nodeAtPos(startOfReplacement, tree, PROTECTED_NODES, -1) != null) {
-          break // `range.from` is not in a protected area, but start is.
-        }
+      value = slice.replace(re, value)
 
-        const charBefore = startOfReplacement === 0
-          ? ' ' // Assume a space which makes below's code simpler
-          : target.state.sliceDoc(startOfReplacement - 1, startOfReplacement)
+      // Nothing was replaced since the value after replacement is the same.
+      if (value === slice) {
+        continue
+      }
 
-        if (autocorrect.matchWholeWords && !/\W/.test(charBefore)) {
-          // We should match whole words, but the replacement is
-          // not preceeded by a non-word character.
-          break
-        }
+      const start = pos - slice.length
+      if (nodeAtPos(start, tree, PROTECTED_NODES, -1) !== null) {
+        break // `range.from` is not in a protected area, but start is.
+      }
 
-        changes.push({ from: startOfReplacement, to: pos, insert: value })
-        break // Do not check the other possible replacements
+      changes.push({ from: start, to: pos, insert: value })
+      break // Do not check the other possible replacements
+    }
+
+    if (autocorrect.capitalization.doubleCaps) {
+      const doubleCaps = normalizeLeadingDoubleCaps(target.state.sliceDoc(line.from, pos), line.from, tree)
+
+      if (doubleCaps) {
+        changes.push(doubleCaps)
+        break
+      }
+    }
+
+    if (autocorrect.capitalization.autoCapitalize) {
+      const autoCapitalize = capitalizeStartofSentence(target.state.sliceDoc(line.from, pos), line.from, tree)
+
+      if (autoCapitalize) {
+        changes.push(autoCapitalize)
+        break
       }
     }
   }
 
   if (changes.length > 0) {
-    // Isolate the transaction in the undo-history so that a user
-    // can override the replacement without removed the space/newline
     target.dispatch({ changes, annotations: isolateHistory.of('full') })
-
-    // Indicate a replacement happened
+    // Indicate that we did not handle the key, making Codemirror add the key
     return true
   }
 
@@ -228,8 +349,8 @@ export function handleQuote (quote: string): Command {
       // NOTE we're running through the hassle of definitely inserting quotes as
       // otherwise the quote character would be swallowed, even in "protected"
       // areas of the document.
-      const isFromProtected = nodeAtPos(range.from, tree, PROTECTED_NODES, -1) != null
-      const isToProtected = nodeAtPos(range.to, tree, PROTECTED_NODES, -1) != null
+      const isFromProtected = nodeAtPos(range.from, tree, PROTECTED_NODES, -1) !== null
+      const isToProtected = nodeAtPos(range.to, tree, PROTECTED_NODES, -1) !== null
 
       if (range.empty) {
         // Check the character before and insert an appropriate quote

@@ -25,6 +25,8 @@ export interface AutocorrectOptions {
   active: boolean
   matchWholeWords: boolean
   magicQuotes: { primary: string, secondary: string }
+  capitalization: { autoCapitalize: boolean, doubleCaps: boolean }
+  suggestWords: { active: boolean, minLength: number, numChars: number }
   replacements: Array<{ key: string, value: string }>
 }
 
@@ -94,7 +96,16 @@ export function getDefaultConfig (): EditorConfiguration {
         primary: '"…"',
         secondary: "'…'"
       },
-      replacements: []
+      capitalization: {
+        autoCapitalize: false,
+        doubleCaps: false,
+      },
+      suggestWords: {
+        active: false,
+        minLength: 8,
+        numChars: 3,
+      },
+      replacements: [],
     },
     autocompleteSuggestEmojis: false,
     snippetAutocompleteTriggerCharacter: ':',

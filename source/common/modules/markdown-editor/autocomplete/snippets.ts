@@ -18,7 +18,7 @@
 // responsible for snippets in the old implementation, but now disentangled from
 // the other autocompletes thanks to the new plugin structure of Codemirror 6.
 
-import { type Completion } from '@codemirror/autocomplete'
+import type { CompletionSection, Completion } from '@codemirror/autocomplete'
 import {
   StateEffect,
   StateField,
@@ -47,11 +47,19 @@ const applyEmoji = function (view: EditorView, completion: Completion, from: num
   })
 }
 
+const emojiSections: Map<string, CompletionSection> = new Map()
+
 const emojis: Completion[] = gemoji.map(g => {
+  let section = emojiSections.get(g.category)
+  if (section === undefined) {
+    section = { name: g.category }
+    emojiSections.set(g.category, section)
+  }
+
   return {
     label: g.emoji,
     detail: g.names.join(', '),
-    section: g.category,
+    section: section,
     info: g.tags.join(', '),
     apply: applyEmoji
   }
@@ -127,7 +135,9 @@ const shiftNextTabEffect = StateEffect.define()
 /**
  * Use this effect to provide the editor state with a set of new snippets to autocomplete
  */
-export const snippetsUpdate = StateEffect.define<Array<{ name: string, content: string }>>()
+export const snippetsUpdate = StateEffect.define<Array<{ name: string, content: string, section?: string }>>()
+
+const snippetSection: CompletionSection = { name: 'Snippets', rank: 1 }
 
 interface SnippetStateField {
   availableSnippets: Completion[]
@@ -150,6 +160,7 @@ export const snippetsUpdateField = StateField.define<SnippetStateField>({
           return {
             label: entry.name,
             info: entry.content,
+            section: entry.section === undefined ? snippetSection : { name: `${entry.section} (Workspace)`, rank: 2 },
             apply: applySnippet
           }
         })

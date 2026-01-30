@@ -22,7 +22,7 @@ import type { InlineParser, DelimiterType } from '@lezer/markdown'
 
 const PandocLinkDelimiter: DelimiterType = {}
 
-const linkClosingRe = /^\](?:\((?<url>.+)\)| ?\[(?<label>.*)\])/
+const linkClosingRe = /^\](?:\((?<url>.+)\)|\[(?<label>.*)\])/
 
 const linkTitleRe = /(?:^|[ \t]+)(?:"(?<double>(?:\\.|[^"])+)"|'(?<single>(?:\\.|[^'])+)'|\((?<parens>(?:\\.|[^\)])+)\))$/d
 

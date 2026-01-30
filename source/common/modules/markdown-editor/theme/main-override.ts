@@ -39,6 +39,9 @@ export const mainOverride = EditorView.baseTheme({
   '.cm-panel.cm-search': {
     userSelect: 'none' // prevent search panel text elements from being selected
   },
+  '.cm-panel.cm-panel-lint ul': {
+    maxHeight: '20vh',
+  },
   // TOOLTIPS
   '.cm-tooltip': {
     padding: '4px',

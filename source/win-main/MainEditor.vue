@@ -4,7 +4,7 @@
     class="main-editor-wrapper"
     role="region"
     v-bind:aria-label="`Markdown Editor: Currently editing file ${pathBasename(props.file.path)}`"
-    v-bind:style="{ 'font-size': `${fontSize}px`, '--page-size': `${pageSize}` }"
+    v-bind:style="{ 'font-size': `${fontSize}px`, '--min-page-size': `${pageSize}px`, '--max-page-size': `${pageSize > 0 ? pageSize + 'px' : 'initial'}` }"
     v-bind:class="{
       'code-file': !isMarkdown,
       'page-border': pageBorder,
@@ -221,7 +221,7 @@ const mainEditorWrapper = ref<HTMLDivElement|null>(null)
 const useH1 = computed<boolean>(() => configStore.config.fileNameDisplay.includes('heading'))
 const useTitle = computed<boolean>(() => configStore.config.fileNameDisplay.includes('title'))
 const fontSize = computed<number>(() => configStore.config.editor.fontSize)
-const pageSize = computed<string>(() => configStore.config.editor.pageSize > 0 ? `${configStore.config.editor.pageSize}px` : 'initial' )
+const pageSize = computed<number>(() => configStore.config.editor.pageSize)
 const pageBorder = computed<boolean>(() => configStore.config.editor.pageBorder)
 const pageCenter = computed<boolean>(() => configStore.config.editor.pageCenter)
 
@@ -699,23 +699,19 @@ function maybeHighlightSearchResults (): void {
 .main-editor-wrapper {
   width: 100%;
   height: 100%;
-  overflow-x: visible;
+  overflow-x: hidden;
   overflow-y: auto;
   background-color: #ffffff;
   transition: 0.2s background-color ease;
   position: relative;
-
-  .cm-editor {
-    overflow-x: auto;
-  }
 
   .cm-scroller {
     padding: 50px 50px;
   }
 
   .cm-content {
-    min-width: var(--page-size);
-    max-width: var(--page-size);
+    min-width: var(--min-page-size);
+    max-width: var(--max-page-size);
   }
 
   .cm-gutters-before {
@@ -766,11 +762,11 @@ body.dark .main-editor-wrapper {
   }
 
   .cm-scroller {
-    @media(min-width: 1301px) { .cm-content { max-width: @editor-width-fullscreen-xxl; } }
-    @media(max-width: 1300px) { .cm-content { max-width: @editor-width-fullscreen-xl; } }
-    @media(max-width: 1100px) { .cm-content { max-width: @editor-width-fullscreen-lg; } }
-    @media(max-width: 1000px) { .cm-content { max-width: @editor-width-fullscreen-md; } }
-    @media(max-width:  800px) { .cm-content { max-width: @editor-width-fullscreen-sm; } }
+    @media(min-width: 1301px) { .cm-content { max-width: @editor-width-fullscreen-xxl; min-width: 0; } }
+    @media(max-width: 1300px) { .cm-content { max-width: @editor-width-fullscreen-xl; min-width: 0; } }
+    @media(max-width: 1100px) { .cm-content { max-width: @editor-width-fullscreen-lg; min-width: 0; } }
+    @media(max-width: 1000px) { .cm-content { max-width: @editor-width-fullscreen-md; min-width: 0; } }
+    @media(max-width:  800px) { .cm-content { max-width: @editor-width-fullscreen-sm; min-width: 0; } }
   }
 }
 

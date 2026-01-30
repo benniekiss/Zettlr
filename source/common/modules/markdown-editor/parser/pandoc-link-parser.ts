@@ -22,7 +22,7 @@ import type { InlineParser, DelimiterType } from '@lezer/markdown'
 
 const PandocLinkDelimiter: DelimiterType = {}
 
-const linkClosingRe = /^\](?:\((?<url>.+)\)|(?<label> ?\[.*\]))/
+const linkClosingRe = /^\](?:\((?<url>.+)\)| ?\[(?<label>.*)\])/
 
 const linkTitleRe = /(?:^|[ \t]+)(?:"(?<double>(?:\\.|[^"])+)"|'(?<single>(?:\\.|[^'])+)'|\((?<parens>(?:\\.|[^\)])+)\))$/d
 
@@ -129,7 +129,7 @@ export const pandocLinkParser: InlineParser = {
       let label = findEndOfLink(match.groups.label, '[', ']')
 
       // The label marks `[` and `]` are not parsed separately
-      linkDest.push(ctx.elt('LinkLabel', pos + 1, pos + 1 + label.length))
+      linkDest.push(ctx.elt('LinkLabel', pos + 2, pos + 3 + label.length))
       linkEnd += label.length
     }
 

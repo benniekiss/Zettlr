@@ -236,6 +236,8 @@ const editorConfiguration = computed<EditorConfigOptions>(() => {
     autoCloseBrackets: editor.autoCloseBrackets,
     autocorrect: {
       active: editor.autoCorrect.active,
+      fixDoubleCaps: editor.autoCorrect.fixDoubleCaps,
+      autoCapitalize: editor.autoCorrect.autoCapitalize,
       matchWholeWords: editor.autoCorrect.matchWholeWords,
       magicQuotes: {
         primary: editor.autoCorrect.magicQuotes.primary,
@@ -251,8 +253,6 @@ const editorConfiguration = computed<EditorConfigOptions>(() => {
     muteLines: configStore.config.muteLines,
     citeStyle: editor.citeStyle,
     readabilityAlgorithm: editor.readabilityAlgorithm,
-    idRE: zkn.idRE,
-    idGen: zkn.idGen,
     renderCitations: display.renderCitations,
     renderingMode: display.renderingMode,
     renderIframes: display.renderIframes,
@@ -265,6 +265,9 @@ const editorConfiguration = computed<EditorConfigOptions>(() => {
     renderEmphasis: display.renderEmphasis,
     renderPandoc: display.renderPandoc,
     renderHorizontalRules: display.renderHorizontalRules,
+    enableZkn: zkn.enableZkn,
+    idRE: zkn.idRE,
+    idGen: zkn.idGen,
     zknLinkFormat: zkn.linkFormat,
     zknAddFileTitle: zkn.linkAddFileTitle,
     linkWithIDIfPossible: zkn.linkWithIDIfPossible,
@@ -677,6 +680,7 @@ function maybeHighlightSearchResults (): void {
 
   .cm-editor {
     .cm-scroller { padding: 50px 50px; }
+    .cm-content { min-width: 0; }
   }
 
   // If a code file is loaded, we need to display the editor contents in monospace.
@@ -685,10 +689,6 @@ function maybeHighlightSearchResults (): void {
 
     // Reset the margins for code files
     .cm-scroller { padding: 0px; }
-  }
-
-  .cm-content {
-    overflow-x: hidden !important; // Necessary to hide the horizontal scrollbar
   }
 }
 

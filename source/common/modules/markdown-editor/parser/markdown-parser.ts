@@ -158,6 +158,7 @@ const customFoldNodeProp = foldNodeProp.add(type => {
 
 export interface MarkdownParserConfig {
   zknLinkParserConfig?: ZknLinkParserConfig
+  enableZkn?: boolean
 }
 
 // TIP: Uncomment the following line to get a full list of all unique characters
@@ -167,6 +168,15 @@ export interface MarkdownParserConfig {
 // This file returns a syntax extension that provides parsing and syntax
 // capabilities
 export default function markdownParser (config?: MarkdownParserConfig): LanguageSupport {
+
+  const zknParsers = []
+  if (config?.enableZkn !== false) {
+    zknParsers.push(
+      zknLinkParser(config?.zknLinkParserConfig),
+      zknTagParser,
+    )
+  }
+
   return markdown({
     base: markdownLanguage,
     codeLanguages: (infoString) => {
@@ -194,6 +204,7 @@ export default function markdownParser (config?: MarkdownParserConfig): Language
     },
     addKeymap: false,
     extensions: {
+      remove: [],
       props: [
         customFoldNodeProp
       ],
@@ -219,8 +230,7 @@ export default function markdownParser (config?: MarkdownParserConfig): Language
         inlineMathParser,
         footnoteParser,
         citationParser,
-        zknLinkParser(config?.zknLinkParserConfig),
-        zknTagParser,
+        ...zknParsers,
         pandocLinkParser,
         pandocAttributesParser,
         highlightParser,

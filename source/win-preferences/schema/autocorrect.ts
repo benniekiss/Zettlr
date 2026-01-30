@@ -117,6 +117,23 @@ export function getAutocorrectFields (): PreferencesFieldset[] {
           ]
         }
       ]
-    }    
+    },
+    {
+      title: trans('Capitalization'),
+      infoString: trans('Automatically correct common capitalization mistakes'),
+      group: PreferencesGroups.Autocorrect,
+      fields: [
+        {
+          type: 'checkbox',
+          label: 'Autocapitalize the first word of sentences',
+          model: 'editor.autoCorrect.autoCapitalize'
+        },
+        {
+          type: 'checkbox',
+          label: 'Normalize two capital letters at the beginning of words',
+          model: 'editor.autoCorrect.fixDoubleCaps'
+        },
+      ]
+    },
   ]
 }

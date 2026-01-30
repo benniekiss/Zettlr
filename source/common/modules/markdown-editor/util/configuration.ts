@@ -23,6 +23,8 @@ import { type MarkdownTheme } from '@providers/config/get-config-template'
 
 export interface AutocorrectOptions {
   active: boolean
+  fixDoubleCaps: boolean
+  autoCapitalize: boolean
   matchWholeWords: boolean
   magicQuotes: { primary: string, secondary: string }
   replacements: Array<{ key: string, value: string }>
@@ -46,6 +48,7 @@ export interface EditorConfiguration {
   renderHorizontalRules: boolean
   imagePreviewWidth: number
   imagePreviewHeight: number
+  enableZkn: boolean
   idRE: string
   idGen: string
   indentUnit: number
@@ -84,6 +87,8 @@ export function getDefaultConfig (): EditorConfiguration {
   return {
     autocorrect: {
       active: true,
+      fixDoubleCaps: false,
+      autoCapitalize: false,
       matchWholeWords: false,
       magicQuotes: {
         primary: '"…"',
@@ -107,6 +112,7 @@ export function getDefaultConfig (): EditorConfiguration {
     renderHorizontalRules: true,
     imagePreviewWidth: 100,
     imagePreviewHeight: 100,
+    enableZkn: true,
     idRE: '(\\d{14})',
     idGen: '',
     indentUnit: 4,

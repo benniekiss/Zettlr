@@ -71,6 +71,16 @@ export function getAppearanceFields (config: ConfigOptions): PreferencesFieldset
       group: PreferencesGroups.Appearance,
       help: undefined, // TODO
       fields: [
+        {
+          type: 'radio',
+          model: 'darkModeEditor',
+          inline: true,
+          options: {
+            light: trans('Light Theme'),
+            match: trans('Match Application'),
+            dark: trans('Dark Theme')
+          }
+        },
         { type: 'separator' },
         {
           type: 'theme',

@@ -22,13 +22,40 @@ import type { InlineParser, DelimiterType } from '@lezer/markdown'
 
 const PandocLinkDelimiter: DelimiterType = {}
 
-const linkClosingRe = /^\](?:\((?<url>.+)\)|(?<label>\[.+\]))/
+const linkClosingRe = /^\](?:\((?<url>.+)\)|(?<label> ?\[.*\]))/
 
 const linkTitleRe = /(?:^|[ \t]+)(?:"(?<double>(?:\\.|[^"])+)"|'(?<single>(?:\\.|[^'])+)'|\((?<parens>(?:\\.|[^\)])+)\))$/d
 
+// Link destinations can contain nested and balanced internal
+// parenthesis (for URLs) and brackets (for labels). So we need
+// to walk the destination text to find the correct, balanced
+// closing mark since the regex is a greedy match.
+function findEndOfLink (destination: string, opening: string, closing: string): string {
+  let depth = 0
+  let stop = 0
+
+  while (stop <= destination.length) {
+    const char = destination.charAt(stop)
+
+    // Found the closing parenthesis
+    if (char === closing && depth === 0) { break }
+
+    if (char === closing) { depth-- }
+    if (char === opening) { depth++ }
+
+    // Skip the next character if the current
+    // one is an escape character
+    if (char === '\\') { stop++ }
+
+    stop++
+  }
+
+  return destination.substring(0, stop)
+}
+
 export const pandocLinkParser: InlineParser = {
   name: 'pandoc-link-parser',
-  after: 'Link',
+  before: 'Link',
   parse: (ctx, next, pos) => {
     if (next === 91) { // 91 === '['
       ctx.addDelimiter(PandocLinkDelimiter, pos, pos + 1, true, false)
@@ -77,26 +104,7 @@ export const pandocLinkParser: InlineParser = {
     const match = linkClosingRe.exec(ctx.text.slice(pos - ctx.offset))
 
     if (match?.groups?.url !== undefined) {
-      // The url may contain additional parenthesis, so we need
-      // to count the internal ones to track potential matching pairs
-      // to find the external matching closing one.
-      let depth = 0
-      let stop = 0
-      let url = match.groups.url
-
-      while (stop <= url.length) {
-        const char = url.charAt(stop)
-
-        // Found the closing parenthesis
-        if (char === ')' && depth === 0) { break }
-
-        if (char === ')') { depth-- }
-        if (char === '(') { depth++ }
-        stop++
-      }
-
-      url = url.substring(0, stop)
-
+      let url = findEndOfLink(match.groups.url, '(', ')')
       let destination = url
 
       const urlContents = []
@@ -115,13 +123,14 @@ export const pandocLinkParser: InlineParser = {
       const closingUrlMark = ctx.elt('LinkMark', pos + 2 + url.length, pos + 3 + url.length)
 
       linkDest.push(openingUrlMark, ...urlContents, closingUrlMark)
-
       // Closing marks (2) + url text
       linkEnd += 2 + url.length
     } else if (match?.groups?.label !== undefined) {
-      linkDest.push(ctx.elt('LinkLabel', pos + 1, pos + 1 + match.groups.label.length))
+      let label = findEndOfLink(match.groups.label, '[', ']')
 
-      linkEnd += match.groups.label.length
+      // The label marks `[` and `]` are not parsed separately
+      linkDest.push(ctx.elt('LinkLabel', pos + 1, pos + 1 + label.length))
+      linkEnd += label.length
     }
 
     const openingMark = ctx.elt('LinkMark', delim.from, delim.to)

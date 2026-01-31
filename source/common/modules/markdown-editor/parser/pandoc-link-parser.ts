@@ -18,7 +18,7 @@
  * END HEADER
  */
 
-import type { InlineParser, DelimiterType } from '@lezer/markdown'
+import { type InlineParser, type DelimiterType, InlineContext } from '@lezer/markdown'
 
 const PandocLinkDelimiter: DelimiterType = {}
 
@@ -58,19 +58,19 @@ export const pandocLinkParser: InlineParser = {
   before: 'Link',
   parse: (ctx, next, pos) => {
     if (next === 91) { // 91 === '['
-      ctx.addDelimiter(PandocLinkDelimiter, pos, pos + 1, true, false)
-
-      // Return -1 so that the default link parser can add delimiters.
-      // This is required so that the URL parser knows when to terminate
-      // early due to internal logic.
-      return -1
+      // Add the default link delimiter so that the
+      // URL parser knows when to terminate early
+      // due to internal logic.
+      ctx.addDelimiter(InlineContext.linkStart, pos, pos + 2, true, false)
+      return ctx.addDelimiter(PandocLinkDelimiter, pos, pos + 1, true, false)
     }
 
     if (next === 33 && ctx.char(pos + 1) === 91) { // 33 === '!', 91 === '['
-      ctx.addDelimiter(PandocLinkDelimiter, pos, pos + 2, true, false)
-
-      // Return -1 so that the default link parser can add delimiters
-      return -1
+      // Add the default image delimiter so that the
+      // URL parser knows when to terminate early
+      // due to internal logic.
+      ctx.addDelimiter(InlineContext.imageStart, pos, pos + 2, true, false)
+      return ctx.addDelimiter(PandocLinkDelimiter, pos, pos + 2, true, false)
     }
 
     if (next !== 93) { // 93 === ']'

@@ -130,7 +130,7 @@ export const pandocLinkParser: InlineParser = {
 
       // The label marks `[` and `]` are not parsed separately
       linkDest.push(ctx.elt('LinkLabel', pos + 2, pos + 3 + label.length))
-      linkEnd += label.length
+      linkEnd += 2 + label.length
     }
 
     const openingMark = ctx.elt('LinkMark', delim.from, delim.to)

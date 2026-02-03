@@ -32,6 +32,7 @@ import {
   type ViewUpdate,
   type DOMEventHandlers
 } from '@codemirror/view'
+import { css } from '@codemirror/lang-css'
 import { autocomplete } from './autocomplete'
 import { codeSyntaxHighlighter, markdownSyntaxHighlighter } from './theme/syntax'
 import markdownParser from './parser/markdown-parser'
@@ -76,6 +77,7 @@ import { vimPlugin } from './plugins/vim-mode'
 import { projectInfoField } from './plugins/project-info-field'
 import { headingGutter } from './renderers/render-headings'
 import { codeTheme } from './renderers/render-code'
+import { lua } from '@codemirror/legacy-modes/mode/lua'
 
 /**
  * This interface describes the required properties which the extension sets
@@ -413,4 +415,22 @@ export function getTexExtensions (options: CoreExtensionOptions): Extension[] {
     ...getGenericCodeExtensions(options),
     StreamLanguage.define(stex)
   ]
+}
+
+export function getCssExtensions (options: CoreExtensionOptions): Extension[] {
+  return [
+    ...getGenericCodeExtensions(options),
+    css()
+  ]
+}
+
+export function getLuaExtensions (options: CoreExtensionOptions): Extension[] {
+  return [
+    ...getGenericCodeExtensions(options),
+    StreamLanguage.define(lua)
+  ]
+}
+
+export function getCodeExtensions (options: CoreExtensionOptions): Extension[] {
+  return getGenericCodeExtensions(options)
 }

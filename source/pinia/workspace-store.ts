@@ -13,7 +13,7 @@
  * END HEADER
  */
 
-import { defineStore, storeToRefs } from 'pinia'
+import { defineStore } from 'pinia'
 import { type Ref, ref, watch, computed } from 'vue'
 import { useConfigStore } from './config'
 import type { OtherFileDescriptor, AnyDescriptor } from 'source/types/common/fsal'
@@ -94,13 +94,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   // Dependent stores and watched variables
   const configStore = useConfigStore()
   const documentTreeStore = useDocumentTreeStore()
-  const { lastLeafActiveFile } = storeToRefs(documentTreeStore)
 
   // SECTION 1: WORKSPACES AND FILE DESCRIPTORS
+  const lastLeafActiveFile = ref(documentTreeStore.lastLeafActiveFile)
   const openFiles = configStore.config.app.openFiles
   const openWorkspaces = configStore.config.app.openWorkspaces
   const openPaths = ref(openFiles.concat(openWorkspaces))
-
+  const activeWorkspace = ref<AnyDescriptor|undefined>()
   const workspaceMap = ref<Map<string, string[]>>(new Map())
   const pathList = computed(() => ([...workspaceMap.value.values()].flat()))
   const descriptorMap = ref<Map<string, AnyDescriptor>>(new Map())
@@ -144,6 +144,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const openFiles = state.config.app.openFiles
     const openWorkspaces = state.config.app.openWorkspaces
     openPaths.value = openFiles.concat(openWorkspaces)
+  })
+
+  documentTreeStore.$subscribe((_mutation, state) => {
+    lastLeafActiveFile.value = state.lastLeafActiveFile
   })
 
   watch(openPaths, async (value) => {
@@ -217,9 +221,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   watch(lastLeafActiveFile, async () => {
     const activeFile = documentTreeStore.lastLeafActiveFile
     if (activeFile === undefined) {
+      activeWorkspace.value = undefined
       otherFiles.value = []
       return
     }
+
+    const root = [...workspaceMap.value.keys()].find(p => activeFile.path.startsWith(p))
+    activeWorkspace.value = root !== undefined ? descriptorMap.value.get(root) : undefined
 
     const descriptor = descriptorMap.value.get(pathDirname(activeFile.path))
     if (descriptor === undefined || descriptor.type !== 'directory') {
@@ -275,5 +283,5 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     otherFiles.value = att
   })
 
-  return { workspaceMap, pathList, descriptorMap, rootDescriptors, otherFiles }
+  return { workspaceMap, pathList, descriptorMap, rootDescriptors, otherFiles, activeWorkspace }
 })

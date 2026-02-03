@@ -28,7 +28,7 @@ import type LogProvider from '../log'
 import { loadData, trans } from '@common/i18n-main'
 import isFile from '@common/util/is-file'
 import { hasMdOrCodeExt } from '@common/util/file-extention-checks'
-import ignoreDir from '@common/util/ignore-dir'
+import { ignorePath } from '@common/util/ignore-path'
 import { showOnboardingWindow } from './onboarding-window'
 import { DateTime } from 'luxon'
 
@@ -55,7 +55,8 @@ const guardOptions = {
   // The following options only require the editors to reload, since they are,
   // e.g., required by one of the extensions.
   reloadEditors: [
-    'zkn.linkFormat' // Requires a reload since required by the parser that has no access to the editor config
+    'zkn.enableZkn',
+    'zkn.linkFormat', // Requires a reload since required by the parser that has no access to the editor config
   ]
 }
 
@@ -398,9 +399,9 @@ export default class ConfigProvider extends ProviderContract {
     }
 
     const validFile = isFile(p) && hasMdOrCodeExt(p)
-    const validDir = isDir(p) && !ignoreDir(p)
+    const validDir = isDir(p)
 
-    if (validFile || validDir) {
+    if (!ignorePath(p) && (validFile || validDir)) {
 
       if (validFile) {
         this.config.app.openFiles.push(p)

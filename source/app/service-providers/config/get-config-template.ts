@@ -168,12 +168,21 @@ export interface ConfigOptions {
     }
     autoCorrect: {
       active: boolean
+      matchWholeWords: boolean
       magicQuotes: {
         primary: string
         secondary: string
       }
+      capitalization: {
+        autoCapitalize: boolean,
+        doubleCaps: boolean
+      }
+      suggestWords: {
+        active: boolean,
+        minLength: number,
+        numChars: number
+      }
       replacements: Array<{ key: string, value: string }>
-      matchWholeWords: boolean
     }
   }
   display: {
@@ -395,11 +404,21 @@ export function getConfigTemplate (): ConfigOptions {
       },
       autoCorrect: {
         active: true, // AutoCorrect is on by default
+        matchWholeWords: false, // Whether to only autocorrect entire words, not parts
         magicQuotes: {
           // Can be various quote pairs. The default characters (" and ')
           // will disable magic quotes.
           primary: '"…"',
           secondary: "'…'"
+        },
+        capitalization: {
+          autoCapitalize: false, // Autocapitalize the first word of sentences
+          doubleCaps: false // Correct DOuble -> Double
+        },
+        suggestWords: {
+          active: false, // Whether to suggest commonly used words
+          minLength: 8, // Min length of words to suggest
+          numChars: 3 // How many characters to type before suggesting words
         },
         replacements: [
           // Arrows
@@ -457,7 +476,6 @@ export function getConfigTemplate (): ConfigOptions {
           { key: '--', value: '–' },
           { key: '---', value: '—' }
         ],
-        matchWholeWords: false // Whether to only autocorrect entire words, not parts
       } // END autoCorrect options
     },
     display: {

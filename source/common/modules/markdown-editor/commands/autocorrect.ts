@@ -57,6 +57,40 @@ function posInProtectedNode (state: EditorState, pos: number): boolean {
   return false
 }
 
+function normalizeLeadingDoubleCaps (line: string, pos: number): ChangeSpec | null {
+  const locale: string = window.config.get('appLang')
+  // Matches the last word of the string if it starts with two
+  // upper-case letters and is followed by all-lowercase letters.
+  const match = /\b(\p{Lu})(\p{Lu})[\p{Ll}\p{P}]+$/vd.exec(line)
+  if (!match?.indices) {
+    return null
+  }
+
+  const [ , [from], [ ,to ] ] = match.indices
+  const insert = match[1] + match[2].toLocaleLowerCase(locale)
+
+  return { from: pos + from, to: pos + to, insert }
+}
+
+function capitalizeStartofSentence (line: string, pos: number): ChangeSpec | null {
+  const locale: string = window.config.get('appLang')
+  const segmenter = new Intl.Segmenter(undefined, { granularity: 'sentence' })
+
+  const match = /\b(\p{Ll})([\p{L}\p{P}]+)$/vd.exec(line)
+  if (match?.indices) {
+    const [ from, to ] = match.indices[1]
+
+    const saneLine = line.slice(0, from) + match[1].toLocaleUpperCase(locale) + match[2]
+    const segments = [...segmenter.segment(saneLine)]
+
+    if (segments[segments.length - 1].index === from) {
+      return { from: pos + from, to: pos + to, insert: match[1].toLocaleUpperCase(locale) }
+    }
+  }
+
+  return null
+}
+
 /**
  * If AutoCorrect is active, this handles a (potential) replacement on Space or
  * Enter.
@@ -126,6 +160,22 @@ export function handleReplacement (view: EditorView): boolean {
 
         changes.push({ from: startOfReplacement, to: range.from, insert: value })
         break // Do not check the other possible replacements
+      }
+    }
+
+    if (autocorrect.capitalization.doubleCaps) {
+      const doubleCaps = normalizeLeadingDoubleCaps(view.state.sliceDoc(line.from, range.from), line.from)
+      if (doubleCaps) {
+        changes.push(doubleCaps)
+        break
+      }
+    }
+
+    if (autocorrect.capitalization.autoCapitalize) {
+      const autoCapitalize = capitalizeStartofSentence(view.state.sliceDoc(line.from, range.from), line.from)
+      if (autoCapitalize) {
+        changes.push(autoCapitalize)
+        break
       }
     }
   }

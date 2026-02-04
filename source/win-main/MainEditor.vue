@@ -722,8 +722,14 @@ function maybeHighlightSearchResults (): void {
   &.code-file .cm-editor {
     font-family: Inconsolata, monospace;
 
-    // Reset the margins for code files
+    // Remove the margins for code files
     .cm-scroller { padding: 0px; }
+    // Remove page border and width settings
+    .cm-content {
+      outline: none;
+      min-width: 0;
+      max-width: 100%;
+    }
   }
 
   &.page-center .cm-content {

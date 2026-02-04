@@ -21,13 +21,14 @@ import {
   autocompletion,
   type CompletionContext
 } from '@codemirror/autocomplete'
-import { type StateField } from '@codemirror/state'
+import type { EditorState, StateField } from '@codemirror/state'
 import { codeBlocks } from './code-blocks'
 import { citations } from './citations'
 import { snippets } from './snippets'
 import { files } from './files'
 import { tags } from './tags'
 import { headings } from './headings'
+import { words } from './words'
 
 export interface AutocompletePlugin {
   /**
@@ -54,6 +55,7 @@ export interface AutocompletePlugin {
    */
   entries: (ctx: CompletionContext, query: string) => Completion[]
   fields?: Array<StateField<any>>
+  validFor?: RegExp | ((text: string, from: number, to: number, state: EditorState) => boolean)
 }
 
 const forbiddenTokens = [
@@ -77,7 +79,7 @@ const autocompleteSource: CompletionSource = function (ctx): CompletionResult|nu
   let startpos = ctx.pos
 
   // NOTE: Headings has to be checked before tags
-  for (const p of [ codeBlocks, citations, files, headings, tags, snippets ]) {
+  for (const p of [ codeBlocks, citations, files, headings, tags, snippets, words ]) {
     const res = p.applies(ctx)
     if (res !== false) {
       plugin = p
@@ -91,7 +93,7 @@ const autocompleteSource: CompletionSource = function (ctx): CompletionResult|nu
     return {
       from: startpos,
       options: initialOptions,
-      filter: false,
+      validFor: plugin.validFor,
       update: (current, from, to, ctx) => {
         const query = ctx.state.doc.sliceString(from, to).toLowerCase()
         current.options = plugin!.entries(ctx, query)

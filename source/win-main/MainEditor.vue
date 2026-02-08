@@ -706,7 +706,7 @@ function maybeHighlightSearchResults (): void {
   position: relative;
 
   .cm-scroller {
-    padding: 50px 50px;
+    padding: 50px 5px;
   }
 
   .cm-content {
@@ -723,7 +723,7 @@ function maybeHighlightSearchResults (): void {
     font-family: Inconsolata, monospace;
 
     // Remove the margins for code files
-    .cm-scroller { padding: 0px; }
+    .cm-scroller { padding: 0px !important; }
     // Remove page border and width settings
     .cm-content {
       outline: none;

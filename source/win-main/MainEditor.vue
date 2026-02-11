@@ -4,9 +4,11 @@
     class="main-editor-wrapper"
     role="region"
     v-bind:aria-label="`Markdown Editor: Currently editing file ${pathBasename(props.file.path)}`"
-    v-bind:style="{ 'font-size': `${fontSize}px` }"
+    v-bind:style="{ 'font-size': `${fontSize}px`, '--min-page-size': `${pageSize}px`, '--max-page-size': `${pageSize > 0 ? pageSize + 'px' : 'initial'}` }"
     v-bind:class="{
       'code-file': !isMarkdown,
+      'page-border': pageBorder,
+      'page-center': pageCenter,
       fullscreen: distractionFree
     }"
   >
@@ -217,6 +219,10 @@ const mainEditorWrapper = ref<HTMLDivElement|null>(null)
 const useH1 = computed<boolean>(() => configStore.config.fileNameDisplay.includes('heading'))
 const useTitle = computed<boolean>(() => configStore.config.fileNameDisplay.includes('title'))
 const fontSize = computed<number>(() => configStore.config.editor.fontSize)
+const pageSize = computed<number>(() => configStore.config.editor.pageSize)
+const pageBorder = computed<boolean>(() => configStore.config.editor.pageBorder)
+const pageCenter = computed<boolean>(() => configStore.config.editor.pageCenter)
+
 const globalSearchResults = computed(() => windowStateStore.searchResults)
 const snippets = computed(() => windowStateStore.snippets)
 const tags = computed(() => tagStore.tags)
@@ -229,7 +235,7 @@ const editorConfiguration = computed<EditorConfigOptions>(() => {
   // right after setting the new configurations. Plus, the user won't update
   // everything all the time, but rather do one initial configuration, so
   // even if we incur a performance penalty, it won't be noticed that much.
-  const { editor, display, zkn, darkMode } = configStore.config
+  const { editor, display, zkn, darkMode, darkModeEditor } = configStore.config
   return {
     indentUnit: editor.indentUnit,
     indentWithTabs: editor.indentWithTabs,
@@ -279,6 +285,7 @@ const editorConfiguration = computed<EditorConfigOptions>(() => {
     showStatusbar: editor.showStatusbar,
     showFormattingToolbar: editor.showFormattingToolbar,
     darkMode,
+    darkModeEditor,
     theme: display.theme,
     highlightWhitespace: editor.showWhitespace,
     showMarkdownLineNumbers: editor.showMarkdownLineNumbers,
@@ -678,13 +685,12 @@ function maybeHighlightSearchResults (): void {
 <style lang="less">
 // Editor Geometry
 
-// Editor margins left and right for all breakpoints in both fullscreen and
-// normal mode.
-@editor-margin-fullscreen-sm:  50px;
-@editor-margin-fullscreen-md:   5vw;
-@editor-margin-fullscreen-lg:  10vw;
-@editor-margin-fullscreen-xl:  20vw;
-@editor-margin-fullscreen-xxl: 30vw;
+// Editor content width for all breakpoints in fullscreen and distraction-free mode.
+@editor-width-fullscreen-sm:  calc(100vw - 100px);
+@editor-width-fullscreen-md:   90vw;
+@editor-width-fullscreen-lg:  80vw;
+@editor-width-fullscreen-xl:  60vw;
+@editor-width-fullscreen-xxl: 40vw;
 
 .main-editor-wrapper {
   width: 100%;
@@ -695,17 +701,46 @@ function maybeHighlightSearchResults (): void {
   transition: 0.2s background-color ease;
   position: relative;
 
-  .cm-editor {
-    .cm-scroller { padding: 50px 50px; }
-    .cm-content { min-width: 0; }
+  .cm-scroller {
+    padding: 50px 50px 50px 5px;
+  }
+
+  .cm-content {
+    min-width: var(--min-page-size);
+    max-width: var(--max-page-size);
+  }
+
+  .cm-gutters-before {
+    position: static !important;
   }
 
   // If a code file is loaded, we need to display the editor contents in monospace.
   &.code-file .cm-editor {
     font-family: Inconsolata, monospace;
 
-    // Reset the margins for code files
-    .cm-scroller { padding: 0px; }
+    // Remove the margins for code files
+    .cm-scroller { padding: 0px !important; }
+    // Remove page border and width settings
+    .cm-content {
+      outline: none;
+      min-width: 0;
+      max-width: 100%;
+    }
+  }
+
+  &.page-center .cm-content {
+    margin-inline-end: auto;
+  }
+
+  &.page-center .cm-gutters-before {
+    margin-inline-start: auto;
+  }
+
+  &.page-border .cm-content {
+    outline-width: 1px;
+    outline-style: solid;
+    outline-offset: 5px;
+    z-index: 300; // higher than .cm-gutters-before
   }
 }
 
@@ -720,13 +755,20 @@ body.dark .main-editor-wrapper {
   position: absolute;
   top: 0;
 
-  .cm-scroller {
-    @media(min-width: 1301px) { padding: 0 @editor-margin-fullscreen-xxl; }
-    @media(max-width: 1300px) { padding: 0 @editor-margin-fullscreen-xl; }
-    @media(max-width: 1100px) { padding: 0 @editor-margin-fullscreen-lg; }
-    @media(max-width: 1000px) { padding: 0 @editor-margin-fullscreen-md; }
-    @media(max-width:  800px) { padding: 0 @editor-margin-fullscreen-sm; }
+  .cm-content {
+    margin-inline-end: auto;
+  }
 
+  .cm-gutters-before {
+    margin-inline-start: auto;
+  }
+
+  .cm-scroller {
+    @media(min-width: 1301px) { .cm-content { max-width: @editor-width-fullscreen-xxl; min-width: 0; } }
+    @media(max-width: 1300px) { .cm-content { max-width: @editor-width-fullscreen-xl; min-width: 0; } }
+    @media(max-width: 1100px) { .cm-content { max-width: @editor-width-fullscreen-lg; min-width: 0; } }
+    @media(max-width: 1000px) { .cm-content { max-width: @editor-width-fullscreen-md; min-width: 0; } }
+    @media(max-width:  800px) { .cm-content { max-width: @editor-width-fullscreen-sm; min-width: 0; } }
   }
 }
 

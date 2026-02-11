@@ -31,6 +31,11 @@ import enumDictFiles, { type DictFileMetadata } from '@common/util/enum-dict-fil
 import ProviderContract from '../provider-contract'
 import type LogProvider from '../log'
 import type ConfigProvider from '@providers/config'
+import { DP_EVENTS } from 'source/types/common/documents'
+import type { DocumentsUpdateContext } from '../documents'
+import type DocumentManager from '../documents'
+import type { FSALEventPayload } from '../fsal'
+import type FSAL from '../fsal'
 
 export interface DictionaryRecord { word: string, affix?: string }
 
@@ -45,24 +50,32 @@ export default class DictionaryProvider extends ProviderContract {
   private readonly hunspell: Nodehun[]
   private readonly _loadedDicts: string[]
   private readonly _userDictionaryPath: string
+  private _workspaceDictionaryPath: string
   private readonly _emitter: EventEmitter
   private _userDictionary: DictionaryRecord[]
+  private _workspaceDictionary: DictionaryRecord[]
   private _fileLock: boolean
   private _unwrittenChanges: boolean
   private _cachedAutocorrect: string[]
   private _reloadWanted: boolean
   private _reloadLock: boolean
+  private _activeWorkspace: string|undefined
 
-  constructor (private readonly _logger: LogProvider, private readonly _config: ConfigProvider) {
+  constructor (private readonly _logger: LogProvider, private readonly _config: ConfigProvider, private readonly _doc: DocumentManager, private readonly _fsal: FSAL) {
     super()
     // Array containing all loaded Hunspell dictionaries
     this.hunspell = []
+
     // Array containing the language codes for which checking currently works
     this._loadedDicts = []
     // Path to the user dictionary
     this._userDictionaryPath = path.join(app.getPath('userData'), 'user.dic')
+    // Path to the workspace dictionary
+    this._workspaceDictionaryPath = path.join('.zettlr', 'user.dic')
+
     // The user dictionary
     this._userDictionary = [{ word: 'Zettlr' }]
+    this._workspaceDictionary = []
 
     this._cachedAutocorrect = []
 
@@ -76,11 +89,15 @@ export default class DictionaryProvider extends ProviderContract {
     this._fileLock = false
     this._unwrittenChanges = false
 
+    this._activeWorkspace = undefined
+
     ipcMain.handle('dictionary-provider', async (event, message) => {
       const terms: string[] = message.terms
       const { command } = message
       if (command === 'get-user-dictionary') {
         return this._userDictionary
+      } else if (command === 'get-ws-dictionary') {
+        return this._workspaceDictionary
       } else if (command === 'set-user-dictionary') {
         const dict = message.payload as DictionaryRecord[]
         if (!Array.isArray(dict) || !dict.every(d => 'word' in d)) {
@@ -100,6 +117,30 @@ export default class DictionaryProvider extends ProviderContract {
         return Promise.all(terms.map(t => this.remove(t)))
       } else if (command === 'open-dictionary-folder') {
         shell.showItemInFolder(path.join(app.getPath('userData'), '/dict'))
+      }
+    })
+
+    this._doc.on(DP_EVENTS.ACTIVE_ROOT, async (context: DocumentsUpdateContext) => {
+      const rootChanged = this._activeWorkspace !== context.filePath
+
+      if (rootChanged) {
+        this._activeWorkspace = context.filePath
+        await this.synchronizeHunspellDictionaries()
+      }
+    })
+
+    this._fsal.on('fsal-event', async (payload: FSALEventPayload) => {
+      let filePath
+      if (payload.event === 'unlink' || payload.event === 'unlinkDir') {
+        filePath = payload.path
+      } else if (payload.event === 'add' || payload.event === 'addDir' || payload.event === 'change') {
+        filePath = payload.descriptor?.path
+      }
+
+      if (this._activeWorkspace === undefined || filePath === undefined) { return }
+
+      if (path.join(this._activeWorkspace, this._workspaceDictionaryPath) === filePath) {
+        await this.synchronizeHunspellDictionaries()
       }
     })
 
@@ -236,7 +277,9 @@ export default class DictionaryProvider extends ProviderContract {
     let changeWanted = false
 
     const userDic = await this.loadUserDictionary()
-    if (userDic === undefined) {
+    const wsDic = await this.loadWorkspaceDictionary()
+
+    if (userDic === undefined || wsDic === undefined) {
       this._loadedDicts.splice(0)
       this.hunspell.splice(0)
       changeWanted = true
@@ -291,6 +334,9 @@ export default class DictionaryProvider extends ProviderContract {
         const hun = new Nodehun(aff, dic)
         if (userDic !== undefined) {
           await hun.addDictionary(userDic)
+        }
+        if (wsDic !== undefined) {
+          await hun.addDictionary(wsDic)
         }
 
         this.hunspell.push(hun)
@@ -351,6 +397,46 @@ export default class DictionaryProvider extends ProviderContract {
       return dic
     } catch (err: unknown) {
       this._logger.error(`[Dictionary Provider] Could not load the user dictionary: ${this._userDictionaryPath}`, err)
+      return
+    }
+  }
+
+  async loadWorkspaceDictionary (): Promise<Buffer<ArrayBufferLike>|undefined> {
+    const enableAssets: boolean = this._config.get('workspaces.enableAssets')
+    const loadDictionary: boolean = this._config.get('workspaces.loadDictionary')
+
+    if (this._activeWorkspace === undefined || !(enableAssets && loadDictionary)) {
+      this._workspaceDictionary = []
+      return
+    }
+
+    const dictionaryPath = path.join(this._activeWorkspace, this._workspaceDictionaryPath)
+
+    try {
+      const dic = await fs.readFile(dictionaryPath)
+
+      const fileContents = dic.toString('utf-8')
+        .split('\n')
+        .filter((elem, index) => index > 0 ? elem.trim() !== '' : !/\d/.test(elem))
+
+      const dictionary = new Set(fileContents)
+      const prevWsDic = new Set(this._workspaceDictionary.map(record => record.word + (record.affix ?? '')))
+
+      this._logger.info(`[Dictionary Provider] Loaded the user dictionary: ${this._userDictionaryPath}`)
+
+      // The dictionary did not change
+      if (dictionary.symmetricDifference(prevWsDic).size === 0) {
+        return
+      }
+
+      this._workspaceDictionary = this.sanitizeDictionary([...dictionary])
+
+      this._logger.info(`[Dictionary Provider] Loaded the dictionary for workspace: ${this._activeWorkspace}`)
+
+      return dic
+    } catch (err: unknown) {
+      this._workspaceDictionary = []
+      this._logger.warning(`[Dictionary Provider] Could not load dictionary for workspace: ${this._activeWorkspace}`)
       return
     }
   }

@@ -110,6 +110,7 @@ export interface ConfigOptions {
     lastUsedProfile: string
   }
   zkn: {
+    enableZkn: boolean
     idRE: string
     idGen: string
     linkAddFileTitle: boolean
@@ -319,6 +320,7 @@ export function getConfigTemplate (): ConfigOptions {
     },
     // Zettelkasten stuff (IDs, as well as link matchers)
     zkn: {
+      enableZkn: true,
       idRE: '(\\d{14})',
       idGen: '%Y%M%D%h%m%s',
       linkAddFileTitle: true,

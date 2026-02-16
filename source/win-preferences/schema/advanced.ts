@@ -338,6 +338,48 @@ export function getAdvancedFields (config: ConfigOptions): PreferencesFieldset[]
       ]
     },
     {
+      title: trans('Workspaces'),
+      infoString: trans('These settings enable loading assets from open workspace directories.'),
+      group: PreferencesGroups.Advanced,
+      titleField: {
+        type: 'switch',
+        model: 'workspaces.enableAssets'
+      },
+      help: undefined, // TODO
+      fields: [
+        {
+          type: 'style-group',
+          style: 'columns',
+          fields: [
+            {
+              type: 'checkbox',
+              label: trans('Load snippets'),
+              model: 'workspaces.loadSnippets',
+              disabled: !config.workspaces.enableAssets
+            },
+            {
+              type: 'checkbox',
+              label: trans('Load CSS'),
+              model: 'workspaces.loadCSS',
+              disabled: !config.workspaces.enableAssets
+            },
+            {
+              type: 'checkbox',
+              label: trans('Load export profiles'),
+              model: 'workspaces.loadExportProfiles',
+              disabled: !config.workspaces.enableAssets
+            },
+            {
+              type: 'checkbox',
+              label: trans('Load dictionary'),
+              model: 'workspaces.loadDictionary',
+              disabled: !config.workspaces.enableAssets
+            },
+          ]
+        },
+      ]
+    },
+    {
       title: trans('Debug mode'),
       group: PreferencesGroups.Advanced,
       help: undefined, // TODO

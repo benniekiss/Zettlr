@@ -106,7 +106,6 @@ export function defaultKeymap (): Extension {
     { key: 'Tab', run: maybeIndentList, shift: maybeUnindentList },
 
     // Overload Enter
-    { key: 'Enter', run: handleReplacement },
     { key: 'Enter', run: moveNextRow, shift: movePrevRow },
     // If no replacement can be handled, the default should be newlineAndIndent
     { key: 'Enter', run: insertNewlineContinueMarkup },
@@ -120,7 +119,6 @@ export function defaultKeymap (): Extension {
     { key: 'Backspace', run: handleBackspace },
 
     { key: 'Escape', run: abortSnippet },
-    { key: 'Space', run: handleReplacement },
 
     { key: 'Alt-ArrowUp', run: customMoveLineUp, shift: copyLineUp },
     { key: 'Alt-ArrowDown', run: customMoveLineDown, shift: copyLineDown },
@@ -245,5 +243,12 @@ export function defaultKeymap (): Extension {
     { key: 'Alt-ArrowDown', run: swapNextRow, shift: addRowAfter },
     { key: 'Alt-ArrowRight', run: swapNextCol, shift: addColAfter },
     { key: 'Alt-ArrowLeft', run: swapPrevCol, shift: addColBefore },
+  ])
+}
+
+export function autoCorrectKeymap (): Extension {
+  return keymap.of([
+    { key: 'Enter', run: handleReplacement },
+    { key: 'Space', run: handleReplacement },
   ])
 }

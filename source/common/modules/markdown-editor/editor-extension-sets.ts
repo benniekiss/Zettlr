@@ -72,7 +72,7 @@ import { highlightWhitespace } from './plugins/highlight-whitespace'
 import { showLineNumbers } from './plugins/line-numbers'
 import { tagClasses } from './plugins/tag-classes'
 import { autocompleteTriggerCharacter } from './autocomplete/snippets'
-import { defaultKeymap } from './keymaps/default'
+import { autoCorrectKeymap, defaultKeymap } from './keymaps/default'
 import { vimPlugin } from './plugins/vim-mode'
 import { projectInfoField } from './plugins/project-info-field'
 import { headingGutter } from './renderers/render-headings'
@@ -329,6 +329,7 @@ export function getMarkdownExtensions (options: CoreExtensionOptions): Extension
 
   return [
     ...getCoreExtensions(options),
+    autoCorrectKeymap(),
     // These handlers deal with Markdown specific stuff, for example, pasting
     // HTML should not add the verbatim HTML code, but rather convert it to
     // Markdown prior. Additionally, images should get preferential treatment.

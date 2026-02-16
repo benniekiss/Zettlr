@@ -706,7 +706,7 @@ function maybeHighlightSearchResults (): void {
   position: relative;
 
   .cm-scroller {
-    padding: 50px 50px 50px 5px;
+    padding: 50px 20px 50px 0px;
   }
 
   .cm-content {

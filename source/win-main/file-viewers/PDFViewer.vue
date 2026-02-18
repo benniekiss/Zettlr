@@ -30,11 +30,9 @@
  *                  PDF viewer. NOTE that due to the way iframes work, we have
  *                  to manually enable and disable pointer events. Were we not
  *                  doing this, the iframes could "swallow" drag events, making
- *                  resizing of the editor panes using the resizer bars
- *                  cumbersome. Right now, you "activate" iframes by clicking on
- *                  them, and disable them by focusing literally any other
- *                  element on the side. A faint outline/border indicates the
- *                  status.
+ *                  resizing of the editor panes using the resizer bars cumbersome.
+ *                  Currently, the pointer events are enabled or disabled based
+ *                  on `pointerenter` and `pointerleave` events.
  *
  * END HEADER
  */

@@ -41,6 +41,14 @@
             v-bind:window-id="windowId"
             v-bind:editor-commands="editorCommands"
           ></PDFViewer>
+          <HTMLViewer
+            v-else-if="hasHTMLExt(activeFileDescriptor.path)"
+            v-bind:file="activeFileDescriptor"
+            v-bind:leaf-id="leafId"
+            v-bind:active-file="activeFile"
+            v-bind:window-id="windowId"
+            v-bind:editor-commands="editorCommands"
+          ></HTMLViewer>
           <MainEditor
             v-else
             v-bind:file="activeFileDescriptor"
@@ -137,8 +145,9 @@ import DocumentTabs from './DocumentTabs.vue'
 import MainEditor from './MainEditor.vue'
 import { useDocumentTreeStore, useWindowStateStore } from 'source/pinia'
 import ImageViewer from './file-viewers/ImageViewer.vue'
-import { hasImageExt, hasPDFExt } from '@common/util/file-extention-checks'
+import { hasHTMLExt, hasImageExt, hasPDFExt } from '@common/util/file-extention-checks'
 import PDFViewer from './file-viewers/PDFViewer.vue'
+import HTMLViewer from './file-viewers/HTMLViewer.vue'
 import type { DocumentManagerIPCAPI } from 'source/app/service-providers/documents'
 import { type EditorViewPersistentState } from 'source/common/modules/markdown-editor'
 

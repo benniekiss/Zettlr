@@ -181,7 +181,8 @@ import {
   hasMSOfficeExt,
   hasOpenOfficeExt,
   hasPDFExt,
-  hasExt
+  hasHTMLExt,
+  hasExt,
 } from 'source/common/util/file-extention-checks'
 import { isDotFile } from 'source/common/util/ignore-path'
 import type { FSALEventPayload, FSALEventPayloadChange } from 'source/app/service-providers/fsal'
@@ -286,6 +287,8 @@ const primaryIcon = computed(() => {
       return 'file'
     } else if (hasOpenOfficeExt(props.item.path)) {
       return 'file'
+    } else if (hasHTMLExt(props.item.path)) {
+      return 'code'
     } else if (hasDataExt(props.item.path)) {
       return 'code'
     } else if (hasExt(props.item.path, attachmentExtensions)) {

@@ -21,6 +21,8 @@ const allowedCharsBefore = /^[ \t\n\(\{\[]$/
 // underscores, or hyphens
 const tagRE = /^##?[\p{L}\p{N}\p{Emoji}\uFE0F_-]+#?/u
 
+const subTagRe = /(?<sub>\/[\w_-]+)/gdu
+
 export const zknTagParser: InlineParser = {
   name: 'zkn-tags',
   parse: (ctx, next, pos) => {

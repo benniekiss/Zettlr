@@ -88,9 +88,7 @@ export const pandocLinkParser: InlineParser = {
     }
 
     let linkEnd = pos + 1
-    let linkContents = ctx.takeContent(opening)
-
-    ctx.addDelimiter(PandocLinkDelimiter, pos, pos + 1, false, true)
+    let linkContents = ctx.takeContent(opening - 1)
 
     const isLink = delim.to - delim.from === 1
     // Remove nested links, which are invalid

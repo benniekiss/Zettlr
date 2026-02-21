@@ -88,6 +88,10 @@ export const pandocLinkParser: InlineParser = {
     }
 
     let linkEnd = pos + 1
+    // For some reason, calling `takeContent` does not *include* the element
+    // at `opening`, so it will remain in the tree and cause issues if there are
+    // additional closing brackets after the currently detected one. We need to
+    // `opening - 1` so we take the content including the opening delimiter.
     let linkContents = ctx.takeContent(opening - 1)
 
     const isLink = delim.to - delim.from === 1

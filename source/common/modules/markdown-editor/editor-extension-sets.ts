@@ -76,6 +76,7 @@ import { vimPlugin } from './plugins/vim-mode'
 import { projectInfoField } from './plugins/project-info-field'
 import { headingGutter } from './renderers/render-headings'
 import { citationTooltips } from './tooltips/citations'
+import { customHighlighter } from './plugins/highlight-regex'
 
 /**
  * This interface describes the required properties which the extension sets
@@ -337,6 +338,7 @@ export function getMarkdownExtensions (options: CoreExtensionOptions): Extension
     backgroundLayers, // Add a background behind inline code and code blocks
     defaultContextMenu, // A default context menu
     softwrapVisualIndent, // Always indent visually
+    customHighlighter,
     tagClasses(), // Apply a custom class to each tag so that users can style them (#4589)
     EditorView.domEventHandlers(options.domEventsListeners)
   ]

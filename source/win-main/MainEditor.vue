@@ -294,7 +294,8 @@ const editorConfiguration = computed<EditorConfigOptions>(() => {
     countChars: editor.countChars,
     shortcuts: Object.entries(shortcuts.editor)
       .map(([ name, shortcut ]) => ({ name, shortcut }))
-      .filter((shortcut): shortcut is CustomEditorShortcut => shortcut.shortcut !== undefined)
+      .filter((shortcut): shortcut is CustomEditorShortcut => shortcut.shortcut !== undefined),
+    customHighlighter: editor.customHighlighter,
   } satisfies EditorConfigOptions
 })
 

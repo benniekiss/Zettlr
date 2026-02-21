@@ -88,6 +88,7 @@ export interface EditorConfiguration {
   showMarkdownLineNumbers: boolean
   countChars: boolean
   shortcuts: CustomEditorShortcut[]
+  customHighlighter: { pattern: string, style: string }[]
 }
 
 export function getDefaultConfig (): EditorConfiguration {
@@ -157,7 +158,8 @@ export function getDefaultConfig (): EditorConfiguration {
     highlightWhitespace: false,
     showMarkdownLineNumbers: false,
     countChars: false,
-    shortcuts: []
+    shortcuts: [],
+    customHighlighter: [],
   }
 }
 

@@ -76,6 +76,7 @@ import { vimPlugin } from './plugins/vim-mode'
 import { projectInfoField } from './plugins/project-info-field'
 import { headingGutter } from './renderers/render-headings'
 import { citationTooltips } from './tooltips/citations'
+import { jinja } from '@codemirror/lang-jinja'
 
 /**
  * This interface describes the required properties which the extension sets
@@ -92,6 +93,7 @@ export interface CoreExtensionOptions {
   }
   updateListener: (update: ViewUpdate) => void
   domEventsListeners: DOMEventHandlers<unknown>
+  useJinja?: boolean
 }
 
 /**
@@ -300,6 +302,15 @@ export function getMarkdownExtensions (options: CoreExtensionOptions): Extension
     )
   }
 
+  let parser = markdownParser({
+    zknLinkParserConfig: { format: options.initialConfig.zknLinkFormat }
+  })
+
+
+  if (options.useJinja === true) {
+    parser = jinja({ base: parser })
+  }
+
   return [
     ...getCoreExtensions(options),
     // These handlers deal with Markdown specific stuff, for example, pasting
@@ -308,9 +319,7 @@ export function getMarkdownExtensions (options: CoreExtensionOptions): Extension
     EditorView.domEventHandlers(mdPasteDropHandlers),
     // We need our custom keymaps first
     // The parser generates the AST for the document ...
-    markdownParser({
-      zknLinkParserConfig: { format: options.initialConfig.zknLinkFormat }
-    }),
+    parser,
     // ... which can then be styled with a highlighter
     markdownSyntaxHighlighter(),
     renderers(options.initialConfig),

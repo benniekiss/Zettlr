@@ -347,6 +347,10 @@ export default class MarkdownEditor extends EventEmitter {
       })
     }
 
+    if (/\.jinja\.?/.test(filePath)) {
+      options.useJinja = true
+    }
+
     switch (type) {
       case DocumentType.Markdown:
         return getMarkdownExtensions(options)

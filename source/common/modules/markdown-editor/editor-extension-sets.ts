@@ -80,6 +80,7 @@ import { shell } from '@codemirror/legacy-modes/mode/shell'
 import { css } from '@codemirror/lang-css'
 import { jinja } from '@codemirror/lang-jinja'
 import { customHighlighter } from './plugins/highlight-regex'
+import { autocorrectUpdateListener } from './commands/autocorrect'
 
 /**
  * This interface describes the required properties which the extension sets
@@ -374,6 +375,7 @@ export function getMarkdownExtensions (options: CoreExtensionOptions): Extension
     softwrapVisualIndent, // Always indent visually
     customHighlighter,
     tagClasses(), // Apply a custom class to each tag so that users can style them (#4589)
+    EditorView.updateListener.of(autocorrectUpdateListener),
     EditorView.domEventHandlers(options.domEventsListeners)
   ]
 }

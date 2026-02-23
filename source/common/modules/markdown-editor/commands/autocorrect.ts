@@ -15,9 +15,10 @@
 
 // The autocorrect plugin is basically just a keymap that listens to spaces and enters
 import { syntaxTree } from '@codemirror/language'
-import { EditorSelection, type ChangeSpec, type EditorState } from '@codemirror/state'
-import { type Command, type EditorView } from '@codemirror/view'
+import { EditorSelection, type StateCommand, type ChangeSpec, type EditorState } from '@codemirror/state'
+import type { ViewUpdate, Command, EditorView } from '@codemirror/view'
 import { configField } from '../util/configuration'
+import { isolateHistory } from '@codemirror/commands'
 
 // These characters can be directly followed by a starting magic quote
 const startChars = ' ([{-–—\n\r\t\v\f/\\'
@@ -40,7 +41,8 @@ function posInProtectedNode (state: EditorState, pos: number): boolean {
     'FencedCode', 'CodeText', // Code block
     'HorizontalRule', // --- and ***
     'YAMLFrontmatter',
-    'HTMLTag', 'HTMLBlock' // HTML elements
+    'HTMLTag', 'HTMLBlock', // HTML elements
+    'PandocAttribute',
   ]
 
   let node = syntaxTree(state).resolveInner(pos, -1)
@@ -57,18 +59,71 @@ function posInProtectedNode (state: EditorState, pos: number): boolean {
   return false
 }
 
+function normalizeLeadingDoubleCaps (line: string, pos: number): ChangeSpec | null {
+  const locale: string = window.config.get('appLang')
+  // Matches the last word of the string if it starts with two
+  // upper-case letters and is followed by all-lowercase letters.
+  const match = /\b(\p{Lu})(\p{Lu})[\p{Ll}\p{P}]+$/vd.exec(line)
+  if (!match?.indices) {
+    return null
+  }
+
+  const [ , [from], [ ,to ] ] = match.indices
+  const insert = match[1] + match[2].toLocaleLowerCase(locale)
+
+  return { from: pos + from, to: pos + to, insert }
+}
+
+function capitalizeStartofSentence (line: string, pos: number): ChangeSpec | null {
+  const locale: string = window.config.get('appLang')
+  const segmenter = new Intl.Segmenter(undefined, { granularity: 'sentence' })
+
+  const match = /\b(\p{Ll})([\p{L}\p{P}]+)$/vd.exec(line)
+  if (match?.indices) {
+    const [ from, to ] = match.indices[1]
+
+    const saneLine = line.slice(0, from) + match[1].toLocaleUpperCase(locale) + match[2]
+    const segments = [...segmenter.segment(saneLine)]
+
+    if (segments[segments.length - 1].index === from) {
+      return { from: pos + from, to: pos + to, insert: match[1].toLocaleUpperCase(locale) }
+    }
+  }
+
+  return null
+}
+
+
+function parseAutocorrectKey (key: string): string | RegExp {
+  // Must start with slash
+  if (key.length >= 2 && key.startsWith('/')) {
+    // There may be flags after the key
+    const lastSlash = key.lastIndexOf('/')
+
+    if (lastSlash > 0) {
+      const body = key.slice(1, lastSlash)
+      const flags = key.slice(lastSlash + 1)
+
+      // Validate flags
+      if (/^[gimsuy]*$/.test(flags)) {
+        try {
+          return new RegExp(body, flags)
+        } catch {}
+      }
+    }
+  }
+
+  return key
+}
 /**
  * If AutoCorrect is active, this handles a (potential) replacement on Space or
  * Enter.
  *
- * @param   {EditorView}  view  The editor's view
- *
- * @return  {boolean}           Always returns false to make Codemirror add the Space/Enter
  */
-export function handleReplacement (view: EditorView): boolean {
+export const handleReplacement: StateCommand = ({ state, dispatch }): boolean => {
   // The config field is only present in the main editor, not in the assets
   // manager code editors or elsewhere.
-  const config = view.state.field(configField, false)
+  const config = state.field(configField, false)
   if (config === undefined) {
     return false
   }
@@ -86,54 +141,107 @@ export function handleReplacement (view: EditorView): boolean {
   const maxKeyLength = replacements[0].key.length
   const changes: ChangeSpec[] = []
 
-  for (const range of view.state.selection.ranges) {
+  for (const range of state.selection.ranges) {
     // Ignore selections (only cursors)
     if (!range.empty) {
       continue
     }
 
+    // We subtrack one since this runs after the trigger was inserted.
+    let pos = range.from - 1
+
     // Ignore those cursors that are inside protected nodes
-    if (posInProtectedNode(view.state, range.from)) {
+    if (posInProtectedNode(state, pos)) {
       continue
     }
 
     // Leave --- and ... lines (YAML frontmatter as well as horizontal rules)
     // We have investigated finding these as protected nodes. However, '---' in
     // the first line is not parsed as any type.
-    const line = view.state.doc.lineAt(range.from)
+    const line = state.doc.lineAt(pos)
     if ([ '---', '...' ].includes(line.text)) {
       continue
     }
 
-    const from = Math.max(range.from - maxKeyLength, 0)
-    const slice = view.state.sliceDoc(from, range.from)
-    for (const { key, value } of replacements) {
-      if (slice.endsWith(key)) {
-        const startOfReplacement = range.from - key.length
-        if (posInProtectedNode(view.state, startOfReplacement)) {
-          break // `range.from` is not in a protected area, but start is.
+    const from = Math.max(pos - maxKeyLength, 0)
+    const slice = state.sliceDoc(from, pos)
+    for (let { key, value } of replacements) {
+      const re = parseAutocorrectKey(key)
+
+      let match
+      let start
+
+      if (typeof re === 'string') {
+        match = slice.endsWith(re)
+        if (!match) {
+          continue
         }
 
-        const charBefore = startOfReplacement === 0
-          ? ' ' // Assume a space which makes below's code simpler
-          : view.state.sliceDoc(startOfReplacement - 1, startOfReplacement)
-
-        if (autocorrect.matchWholeWords && !/\W/.test(charBefore)) {
-          // We should match whole words, but the replacement is
-          // not preceeded by a non-word character.
-          break
+        start = pos - re.length
+      } else {
+        value = slice.replace(re, value)
+        if (value === slice) {
+          continue
         }
 
-        changes.push({ from: startOfReplacement, to: range.from, insert: value })
-        break // Do not check the other possible replacements
+        start = pos - slice.length
+      }
+
+      if (posInProtectedNode(state, start)) {
+        break // `range.from` is not in a protected area, but start is.
+      }
+
+      const charBefore = start === 0
+        ? ' ' // Assume a space which makes below's code simpler
+        : state.sliceDoc(start - 1, start)
+
+      if (autocorrect.matchWholeWords && !/\W/.test(charBefore)) {
+        // We should match whole words, but the replacement is
+        // not preceeded by a non-word character.
+        break
+      }
+
+      changes.push({ from: start, to: pos, insert: value })
+      break // Do not check the other possible replacements
+
+    }
+
+    if (autocorrect.capitalization.doubleCaps) {
+      const doubleCaps = normalizeLeadingDoubleCaps(state.sliceDoc(line.from, pos), line.from)
+      if (doubleCaps) {
+        changes.push(doubleCaps)
+        break
+      }
+    }
+
+    if (autocorrect.capitalization.autoCapitalize) {
+      const autoCapitalize = capitalizeStartofSentence(state.sliceDoc(line.from, range.from), line.from)
+      if (autoCapitalize) {
+        changes.push(autoCapitalize)
+        break
       }
     }
   }
 
-  view.dispatch({ changes })
+  if (changes.length < 1) {
+    return false
+  }
 
+  dispatch(state.update({ changes, annotations: isolateHistory.of('before') }))
   // Indicate that we did not handle the key, making Codemirror add the key
-  return false
+  return true
+}
+
+export function autocorrectUpdateListener (update: ViewUpdate) {
+  for (const transaction of update.transactions) {
+    if (transaction.isUserEvent('input.type')) {
+      transaction.changes.iterChanges((_, __, ___, ____, inserted) => {
+        if (inserted.toString() === ' ' || inserted.toString() === '\n' ) {
+          handleReplacement(update.view)
+        }
+      })
+    }
+  }
 }
 
 /**

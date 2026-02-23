@@ -186,7 +186,6 @@ import {
 import { isDotFile } from 'source/common/util/ignore-path'
 import type { FSALEventPayload, FSALEventPayloadChange } from 'source/app/service-providers/fsal'
 import { getSorter } from 'source/common/util/directory-sorter'
-import type { WritingTarget } from 'source/app/service-providers/targets'
 
 const ipcRenderer = window.ipc
 

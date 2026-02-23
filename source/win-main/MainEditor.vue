@@ -233,6 +233,7 @@ const editorConfiguration = computed<EditorConfigOptions>(() => {
   return {
     indentUnit: editor.indentUnit,
     indentWithTabs: editor.indentWithTabs,
+    indentLine: editor.indentLine,
     autoCloseBrackets: editor.autoCloseBrackets,
     autocorrect: {
       active: editor.autoCorrect.active,
@@ -252,8 +253,6 @@ const editorConfiguration = computed<EditorConfigOptions>(() => {
     muteLines: configStore.config.muteLines,
     citeStyle: editor.citeStyle,
     readabilityAlgorithm: editor.readabilityAlgorithm,
-    idRE: zkn.idRE,
-    idGen: zkn.idGen,
     previewModeShowSyntaxWhenCursorIsAdjacent: display.previewModeShowSyntaxWhenCursorIsAdjacent,
     renderCitations: display.renderCitations,
     renderingMode: display.renderingMode,
@@ -267,6 +266,9 @@ const editorConfiguration = computed<EditorConfigOptions>(() => {
     renderEmphasis: display.renderEmphasis,
     renderPandoc: display.renderPandoc,
     renderHorizontalRules: display.renderHorizontalRules,
+    enableZkn: zkn.enableZkn,
+    idRE: zkn.idRE,
+    idGen: zkn.idGen,
     zknLinkFormat: zkn.linkFormat,
     zknAddFileTitle: zkn.linkAddFileTitle,
     linkWithIDIfPossible: zkn.linkWithIDIfPossible,

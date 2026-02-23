@@ -110,6 +110,7 @@ export interface ConfigOptions {
     lastUsedProfile: string
   }
   zkn: {
+    enableZkn: boolean
     idRE: string
     idGen: string
     linkAddFileTitle: boolean
@@ -132,6 +133,7 @@ export interface ConfigOptions {
     enableTableHelper: boolean
     indentUnit: number
     indentWithTabs: boolean
+    indentLine: boolean
     fontSize: number
     countChars: boolean
     inputMode: 'default'|'vim'|'emacs'
@@ -191,10 +193,11 @@ export interface ConfigOptions {
     // Built-in files cannot be shown in the sidebar, will always be shown in
     // the file manager, and will always be opened with Zettlr.
     builtin: FileTypeSettings<true, false, 'zettlr'>
-    // Images and PDFs can be entirely hidden or shown everywhere, and opened
+    // Images, PDFs, and HTML can be entirely hidden or shown everywhere, and opened
     // with the system default, or in Zettlr
     images: FileTypeSettings
     pdf: FileTypeSettings
+    html: FileTypeSettings
     // These file types can be shown anywhere, but are not open-able by Zettlr.
     msoffice: FileTypeSettings<boolean, boolean, 'system'>
     openOffice: FileTypeSettings<boolean, boolean, 'system'>
@@ -319,6 +322,7 @@ export function getConfigTemplate (): ConfigOptions {
     },
     // Zettelkasten stuff (IDs, as well as link matchers)
     zkn: {
+      enableZkn: true,
       idRE: '(\\d{14})',
       idGen: '%Y%M%D%h%m%s',
       linkAddFileTitle: true,
@@ -340,6 +344,7 @@ export function getConfigTemplate (): ConfigOptions {
       enableTableHelper: true, // Enable the table helper plugin
       indentUnit: 4, // The number of spaces to be added
       indentWithTabs: false,
+      indentLine: false, // Whether `Tab` always indents the current line
       fontSize: 18, // The editor's font size in pixels
       countChars: false, // Set to true to enable counting characters instead of words
       inputMode: 'default', // Can be default, vim, emacs
@@ -461,6 +466,7 @@ export function getConfigTemplate (): ConfigOptions {
       builtin: { showInFilemanager: true, showInSidebar: false, openWith: 'zettlr' },
       images: { showInFilemanager: false, showInSidebar: true, openWith: 'system' },
       pdf: { showInFilemanager: false, showInSidebar: true, openWith: 'system' },
+      html: { showInFilemanager: false, showInSidebar: true, openWith: 'system' },
       msoffice: { showInFilemanager: false, showInSidebar: true, openWith: 'system' },
       openOffice: { showInFilemanager: false, showInSidebar: true, openWith: 'system' },
       dataFiles: { showInFilemanager: false, showInSidebar: true, openWith: 'system' },

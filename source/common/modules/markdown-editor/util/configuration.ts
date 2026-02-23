@@ -47,10 +47,12 @@ export interface EditorConfiguration {
   renderHorizontalRules: boolean
   imagePreviewWidth: number
   imagePreviewHeight: number
+  enableZkn: boolean
   idRE: string
   idGen: string
   indentUnit: number
   indentWithTabs: boolean
+  indentLine: boolean
   linkPreference: 'always'|'never'|'withID'
   zknLinkFormat: 'link|title'|'title|link'
   zknAddFileTitle: boolean
@@ -110,10 +112,12 @@ export function getDefaultConfig (): EditorConfiguration {
     renderHorizontalRules: true,
     imagePreviewWidth: 100,
     imagePreviewHeight: 100,
+    enableZkn: true,
     idRE: '(\\d{14})',
     idGen: '',
     indentUnit: 4,
     indentWithTabs: false,
+    indentLine: false,
     linkPreference: 'always',
     zknLinkFormat: 'link|title',
     linkWithIDIfPossible: false,

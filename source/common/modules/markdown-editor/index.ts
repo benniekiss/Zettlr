@@ -58,7 +58,10 @@ import {
   getTexExtensions,
   getYAMLExtensions,
   inputModeCompartment,
-  getMainEditorThemes
+  getMainEditorThemes,
+  getLuaExtensions,
+  getShellExtensions,
+  getCSSExtensions
 } from './editor-extension-sets'
 
 import {
@@ -410,15 +413,25 @@ export default class MarkdownEditor extends EventEmitter {
       }
     }
 
+    if (/\.jinja\.?/.test(filePath)) {
+      options.useJinja = true
+    }
+
     switch (type) {
       case DocumentType.Markdown:
         return getMarkdownExtensions(options)
-      case DocumentType.JSON:
-        return getJSONExtensions(options)
-      case DocumentType.YAML:
-        return getYAMLExtensions(options)
       case DocumentType.LaTeX:
         return getTexExtensions(options)
+      case DocumentType.YAML:
+        return getYAMLExtensions(options)
+      case DocumentType.JSON:
+        return getJSONExtensions(options)
+      case DocumentType.CSS:
+        return getCSSExtensions(options)
+      case DocumentType.Lua:
+        return getLuaExtensions(options)
+      case DocumentType.Shell:
+        return getShellExtensions(options)
     }
   }
 

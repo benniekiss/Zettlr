@@ -25,9 +25,12 @@ export interface OpenDocument {
  */
 export enum DocumentType {
   Markdown = 1,
+  LaTeX,
   YAML,
   JSON,
-  LaTeX
+  CSS,
+  Lua,
+  Shell,
 }
 
 /**

@@ -20,7 +20,7 @@ import type { OtherFileDescriptor, AnyDescriptor } from 'source/types/common/fsa
 import { useDocumentTreeStore } from '.'
 import { isAbsolutePath, pathDirname, resolvePath } from 'source/common/util/renderer-path-polyfill'
 import { trans } from 'source/common/i18n-renderer'
-import { hasImageExt, hasDataExt, hasMSOfficeExt, hasOpenOfficeExt, hasPDFExt, hasExt } from 'source/common/util/file-extention-checks'
+import { hasImageExt, hasDataExt, hasMSOfficeExt, hasOpenOfficeExt, hasPDFExt, hasExt, hasHTMLExt } from 'source/common/util/file-extention-checks'
 import { isDotFile } from 'source/common/util/ignore-path'
 import type { FSALEventPayload } from 'source/app/service-providers/fsal'
 
@@ -235,6 +235,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const showOfficeFiles = files.msoffice.showInSidebar
     const showOpenOffice = files.openOffice.showInSidebar
     const showPDF = files.pdf.showInSidebar
+    const showHTMLFiles = files.html.showInSidebar
+
     const showDotFiles = files.dotFiles.showInSidebar
 
     // Quick helper function that tests whether the provided attachment should be
@@ -249,7 +251,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         (showDataFiles && hasDataExt(filePath)) ||
         (showOfficeFiles && hasMSOfficeExt(filePath)) ||
         (showOpenOffice && hasOpenOfficeExt(filePath)) ||
-        (showPDF && hasPDFExt(filePath)))
+        (showPDF && hasPDFExt(filePath))) ||
+        (showHTMLFiles && hasHTMLExt(filePath))
     }
 
     const children = await readDirectory(descriptor.path)

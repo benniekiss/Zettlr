@@ -19,11 +19,67 @@ import { displayDirContext } from './dir-item-context'
 import { useConfigStore, useDocumentTreeStore, useWindowStateStore } from 'source/pinia'
 import type { AnyDescriptor } from 'source/types/common/fsal'
 import { ref, computed, type Ref, watch, nextTick } from 'vue'
-import { hasImageExt, hasPDFExt } from 'source/common/util/file-extention-checks'
+import { hasHTMLExt, hasImageExt, hasPDFExt } from 'source/common/util/file-extention-checks'
 import makeValidUri from 'source/common/util/make-valid-uri'
 import type { DocumentManagerIPCAPI } from 'source/app/service-providers/documents'
+import type { LeafNodeJSON } from 'source/types/common/documents'
 
 const ipcRenderer = window.ipc
+
+export function closeFile (path: string, paneData: LeafNodeJSON[], windowId: string): void {
+  const openFiles = paneData
+    .flatMap(pane => {
+      return pane.openFiles
+        .filter(f => f.path === path)
+        .map(f => ({ leafId: pane.id, ...f }))
+    })
+
+  for (const file of openFiles) {
+    ipcRenderer.invoke('documents-provider', {
+      command: 'close-file',
+      payload: {
+        path: file.path,
+        leafId: file.leafId,
+        windowId: windowId,
+      }
+    } as DocumentManagerIPCAPI)
+      .catch(e => console.error(e))
+  }
+
+  ipcRenderer.invoke('application', {
+    command: 'root-close',
+    payload: path
+  })
+    .catch(err => console.error(err))
+
+}
+
+export function closeWorkspace (path: string, paneData: LeafNodeJSON[], windowId: string): void {
+  const openFiles = paneData
+    .flatMap(pane => {
+      return pane.openFiles
+        .filter(f => f.path.startsWith(path))
+        .map(f => ({ leafId: pane.id, ...f }))
+    })
+
+  for (const file of openFiles) {
+    ipcRenderer.invoke('documents-provider', {
+      command: 'close-file',
+      payload: {
+        path: file.path,
+        leafId: file.leafId,
+        windowId: windowId,
+      }
+    } as DocumentManagerIPCAPI)
+      .catch(e => console.error(e))
+  }
+
+  ipcRenderer.invoke('application', {
+    command: 'root-close',
+    payload: path
+  })
+    .catch(err => console.error(err))
+}
 
 export function useItemComposable (
   object: AnyDescriptor,
@@ -100,19 +156,34 @@ export function useItemComposable (
           newTab: middleClick || (alt && type === 'file') // Force a new tab in this case.
         }
       } as DocumentManagerIPCAPI)
+        .then(() => {
+          configStore.setConfigValue('openDirectory', obj.value.dir)
+          // Finally, since it's a directory, uncollapse it.
+          if (!windowStateStore.uncollapsedDirectories.includes(obj.value.dir)) {
+            windowStateStore.uncollapsedDirectories.push(obj.value.dir)
+          }
+        })
         .catch(e => console.error(e))
     } else if (type === 'other') {
       const { files } = configStore.config
       // Determine if we can open the file in Zettlr
       if (
         (hasImageExt(obj.value.path) && files.images.openWith === 'zettlr') ||
-        (hasPDFExt(obj.value.path) && files.pdf.openWith === 'zettlr')
+        (hasPDFExt(obj.value.path) && files.pdf.openWith === 'zettlr') ||
+        (hasHTMLExt(obj.value.path) && files.html.openWith === 'zettlr')
       ) {
         ipcRenderer.invoke('documents-provider', {
           command: 'open-file',
           // We leave leafId undefined
           payload: { path: obj.value.path, windowId }
         })
+          .then(() => {
+            configStore.setConfigValue('openDirectory', obj.value.dir)
+            // Finally, since it's a directory, uncollapse it.
+            if (!windowStateStore.uncollapsedDirectories.includes(obj.value.dir)) {
+              windowStateStore.uncollapsedDirectories.push(obj.value.dir)
+            }
+          })
           .catch(e => console.error(e))
       } else {
         // Open the file externally (again, NOTE, this only works because main
@@ -130,6 +201,7 @@ export function useItemComposable (
       }
     }
   }
+
   /**
    * Handles a context menu on a file or directory item.
    *
@@ -155,11 +227,7 @@ export function useItemComposable (
           })
             .catch(err => console.error(err))
         } else if (clickedID === 'menu.close_workspace') {
-          ipcRenderer.invoke('application', {
-            command: 'root-close',
-            payload: obj.value.path
-          })
-            .catch(err => console.error(err))
+          closeWorkspace(obj.value.path, documentTreeStore.paneData, windowId)
         } else if (clickedID === 'menu.project_build') {
           // We should trigger an export of this project.
           ipcRenderer.invoke('application', {
@@ -205,12 +273,7 @@ export function useItemComposable (
         } else if (clickedID === 'properties') {
           showPopover.value = true
         } else if (clickedID === 'menu.close_file') {
-          // The close_file item is only shown in the tree view on root files
-          ipcRenderer.invoke('application', {
-            command: 'root-close',
-            payload: obj.value.path
-          })
-            .catch(err => console.error(err))
+          closeFile(obj.value.path, documentTreeStore.paneData, windowId)
         }
       })
     }

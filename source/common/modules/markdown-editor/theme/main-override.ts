@@ -426,6 +426,12 @@ const mainStyleTheme = EditorView.baseTheme({
   '&.cm-focused > .cm-scroller > .cm-cursorLayer': {
     animation: 'cm-blink 1.2s infinite',
   },
+  '.page-border .cm-content': {
+    outlineColor: 'rgba(43, 43, 44, 0.5)'
+  },
+  '&dark .page-border .cm-content': {
+    outlineColor: 'rgba(255, 255, 255, 0.5)'
+  }
 })
 
 export const mainOverride = [

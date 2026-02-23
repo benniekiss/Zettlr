@@ -79,6 +79,7 @@ import { lua } from '@codemirror/legacy-modes/mode/lua'
 import { shell } from '@codemirror/legacy-modes/mode/shell'
 import { css } from '@codemirror/lang-css'
 import { jinja } from '@codemirror/lang-jinja'
+import { customHighlighter } from './plugins/highlight-regex'
 
 /**
  * This interface describes the required properties which the extension sets
@@ -371,6 +372,7 @@ export function getMarkdownExtensions (options: CoreExtensionOptions): Extension
     backgroundLayers, // Add a background behind inline code and code blocks
     defaultContextMenu, // A default context menu
     softwrapVisualIndent, // Always indent visually
+    customHighlighter,
     tagClasses(), // Apply a custom class to each tag so that users can style them (#4589)
     EditorView.domEventHandlers(options.domEventsListeners)
   ]

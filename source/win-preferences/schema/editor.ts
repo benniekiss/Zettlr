@@ -374,6 +374,19 @@ export function getEditorFields (config: ConfigOptions): PreferencesFieldset[] {
           type: 'checkbox',
           label: trans('Automatically close matching character pairs'),
           model: 'editor.autoCloseBrackets'
+        },
+        { type: 'separator' },
+        {
+          type: 'list',
+          valueType: 'record',
+          keyNames: [ 'pattern', 'style' ],
+          columnLabels: [ trans('Character pattern'), trans('Class') ],
+          model: 'editor.customHighlighter',
+          deletable: true,
+          searchable: true,
+          addable: true,
+          searchLabel: trans('Filter'),
+          editable: true // All columns may be edited
         }
       ]
     }

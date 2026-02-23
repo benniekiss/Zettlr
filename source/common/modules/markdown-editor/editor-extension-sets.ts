@@ -414,7 +414,6 @@ export function getYAMLExtensions (options: CoreExtensionOptions): Extension[] {
   ]
 }
 
-
 /**
  * This public function returns a set of extensions required to display JSON
  * documents in Zettlr editors. These include the core extensions, the generic
@@ -471,11 +470,11 @@ export function getLuaExtensions (options: CoreExtensionOptions): Extension[] {
  *
  * @param   {CoreExtensionOptions}  options  The default options
  *
- * @return  {Extension[]}                    An array of options for shell scripts
+ * @return  {Extension[]}                    An array of options for LaTeX files
  */
 export function getShellExtensions (options: CoreExtensionOptions): Extension[] {
   return [
     ...getGenericCodeExtensions(options),
-    StreamLanguage.define(shell),
+    StreamLanguage.define(shell)
   ]
 }

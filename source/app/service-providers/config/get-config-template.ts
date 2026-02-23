@@ -260,6 +260,13 @@ export interface ConfigOptions {
     showDocumentInfoText: boolean
     showPomodoroButton: boolean
   }
+  workspaces: {
+    enableAssets: boolean
+    loadSnippets: boolean
+    loadCSS: boolean
+    loadExportProfiles: boolean
+    loadDictionary: boolean
+  }
 }
 
 export function getConfigTemplate (): ConfigOptions {
@@ -539,6 +546,13 @@ export function getConfigTemplate (): ConfigOptions {
       showInsertFootnoteButton: true,
       showDocumentInfoText: true,
       showPomodoroButton: true
+    },
+    workspaces: {
+      enableAssets: false,
+      loadSnippets: true,
+      loadCSS: true,
+      loadExportProfiles: true,
+      loadDictionary: true,
     },
     uuid: uuid4() // The app's unique anonymous identifier
   }

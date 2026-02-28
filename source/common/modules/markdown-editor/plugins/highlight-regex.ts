@@ -46,9 +46,9 @@ function render (view: EditorView): MatchDecorator[] {
           // offset of the indices, we need the line position. The `from` and
           // `to` positions provided by the `decorate`  method refer to
           // document-relative positions of the entire matched string, while
-          // `match.indices` positions are string-relative. If we were to
-          // calculate the offset based on `from`, this would only work if the
-          // matched groups occured at the start of the line.
+          // `match.indices` positions are string-relative to the line. If we 
+          // were to  calculate the offset based on `from`, this would only work 
+          // if the  matched groups occured at the start of the line.
           const line = view.state.doc.lineAt(from)
           for (const [ mFrom, mTo ] of match.indices.slice(1)) {
             add(line.from + mFrom, line.from + mTo,  d)

@@ -15,6 +15,37 @@
 import { RangeSet } from '@codemirror/state'
 import { Decoration, type EditorView, MatchDecorator, ViewPlugin, type ViewUpdate } from '@codemirror/view'
 import { configField } from '../util/configuration'
+import _ from 'lodash'
+
+function parseAutocorrectKey (key: string): string | RegExp {
+  // Must start with slash
+  if (key.length >= 2 && key.startsWith('/')) {
+    // There may be flags after the key
+    const lastSlash = key.lastIndexOf('/')
+
+    if (lastSlash > 0) {
+      let body = key.slice(1, lastSlash)
+      let flags = key.slice(lastSlash + 1)
+
+      // Validate flags
+      if (/^[dgimsuy]*$/.test(flags)) {
+        if (!flags.includes('g')) {
+          flags += 'g'
+        }
+
+        if (!flags.includes('d')) {
+          flags += 'd'
+        }
+
+        try {
+          return new RegExp(body, flags)
+        } catch {}
+      }
+    }
+  }
+
+  return _.escapeRegExp(key)
+}
 
 function render (view: EditorView): MatchDecorator[] {
   const { customHighlighter: customDecos } = view.state.field(configField)
@@ -22,8 +53,11 @@ function render (view: EditorView): MatchDecorator[] {
   const decos = []
 
   for (const { pattern, style } of customDecos) {
+    const parsed = parseAutocorrectKey(pattern)
+
     try {
-      const regexp = new RegExp(pattern, 'dg')
+      const flags = typeof parsed === 'string' ? 'dg' : undefined
+      const regexp = new RegExp(parsed, flags)
 
       const matchDeco = new MatchDecorator({
         regexp: regexp,
@@ -46,8 +80,8 @@ function render (view: EditorView): MatchDecorator[] {
           // offset of the indices, we need the line position. The `from` and
           // `to` positions provided by the `decorate`  method refer to
           // document-relative positions of the entire matched string, while
-          // `match.indices` positions are string-relative to the line. If we 
-          // were to  calculate the offset based on `from`, this would only work 
+          // `match.indices` positions are string-relative to the line. If we
+          // were to  calculate the offset based on `from`, this would only work
           // if the  matched groups occured at the start of the line.
           const line = view.state.doc.lineAt(from)
           for (const [ mFrom, mTo ] of match.indices.slice(1)) {

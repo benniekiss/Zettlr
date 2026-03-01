@@ -35,7 +35,7 @@ import { markdownToAST } from '@common/modules/markdown-utils'
 import isFile from '@common/util/is-file'
 import { trans } from '@common/i18n-main'
 import type FSALWatchdog from '@providers/fsal/fsal-watchdog'
-import { hasImageExt, hasMdOrCodeExt, hasPDFExt } from 'source/common/util/file-extention-checks'
+import { getDocumentTypeForExtension, hasHTMLExt, hasImageExt, hasMdOrCodeExt, hasPDFExt } from 'source/common/util/file-extention-checks'
 import isDir from 'source/common/util/is-dir'
 
 type DocumentWindows = Record<string, DocumentTree>
@@ -624,8 +624,6 @@ export default class DocumentManager extends ProviderContract {
       }
     }
 
-    let type = DocumentType.Markdown
-
     // TODO: We also need to be able to load files not present in the file tree!
     const descriptor = await this._app.fsal.getDescriptorForAnySupportedFile(filePath)
     if (descriptor === undefined || descriptor.type === 'other') {
@@ -634,18 +632,12 @@ export default class DocumentManager extends ProviderContract {
 
     const content = await this._app.fsal.loadAnySupportedFile(filePath)
 
+    let type = DocumentType.Markdown
+
     if (descriptor.type === 'code') {
-      switch (descriptor.ext) {
-        case '.yaml':
-        case '.yml':
-          type = DocumentType.YAML
-          break
-        case '.json':
-          type = DocumentType.JSON
-          break
-        case '.tex':
-        case '.latex':
-          type = DocumentType.LaTeX
+      const codeDocumentType = getDocumentTypeForExtension(descriptor.path)
+      if (codeDocumentType !== undefined) {
+        type = codeDocumentType
       }
     }
 
@@ -830,6 +822,8 @@ current contents from the editor somewhere else, and restart the application.`
         shouldOpenExternally = false
       } else if (hasPDFExt(filePath) && files.pdf.openWith === 'zettlr') {
         shouldOpenExternally = false
+      } else if (hasHTMLExt(filePath) && files.html.openWith === 'zettlr') {
+        shouldOpenExternally = false
       }
 
       if (shouldOpenExternally) {
@@ -891,6 +885,7 @@ current contents from the editor somewhere else, and restart the application.`
       // leaf.tabMan.activeFile = filePath
       leaf.tabMan.openFile(filePath)
       this.broadcastEvent(DP_EVENTS.ACTIVE_FILE, { windowId, leafId, filePath })
+      this.broadcastEvent(DP_EVENTS.ACTIVE_ROOT, { filePath: this.getActiveRoot(leafId) ?? undefined })
       this.syncToConfig()
       return true
     }
@@ -914,6 +909,7 @@ current contents from the editor somewhere else, and restart the application.`
     }
 
     this.broadcastEvent(DP_EVENTS.ACTIVE_FILE, { windowId, leafId, filePath: leaf.tabMan.activeFile?.path })
+    this.broadcastEvent(DP_EVENTS.ACTIVE_ROOT, { filePath: this.getActiveRoot(leafId) ?? undefined })
     await this.synchronizeDatabases()
     this.syncToConfig()
     return ret
@@ -980,6 +976,7 @@ current contents from the editor somewhere else, and restart the application.`
       this.syncWatchedFilePaths()
       this.broadcastEvent(DP_EVENTS.CLOSE_FILE, { windowId, leafId, filePath })
       this.broadcastEvent(DP_EVENTS.ACTIVE_FILE, { windowId, leafId, filePath: leaf.tabMan.activeFile?.path })
+      this.broadcastEvent(DP_EVENTS.ACTIVE_ROOT, { filePath: this.getActiveRoot(leafId) ?? undefined })
       if (leaf.tabMan.openFiles.length === 0) {
         // Remove this leaf
         leaf.parent.removeNode(leaf)
@@ -1177,6 +1174,8 @@ current contents from the editor somewhere else, and restart the application.`
       // Ensure the renderer picks up the correct (new) active file path, if
       // that has changed (noop in othe cases; see #5574).
       this.broadcastEvent(DP_EVENTS.ACTIVE_FILE, { windowId, leafId })
+      this.broadcastEvent(DP_EVENTS.ACTIVE_ROOT, { filePath: this.getActiveRoot(leafId) ?? undefined })
+
     }
   }
 
@@ -1354,6 +1353,8 @@ current contents from the editor somewhere else, and restart the application.`
     if (success) {
       this.broadcastEvent(DP_EVENTS.OPEN_FILE, { windowId: targetWindow, leafId: targetLeaf, filePath })
       this.broadcastEvent(DP_EVENTS.ACTIVE_FILE, { windowId: targetWindow, leafId: targetLeaf })
+      this.broadcastEvent(DP_EVENTS.ACTIVE_ROOT, { filePath: this.getActiveRoot(targetLeaf) ?? undefined })
+
       this.syncToConfig()
     }
 
@@ -1372,6 +1373,8 @@ current contents from the editor somewhere else, and restart the application.`
 
       this.broadcastEvent(DP_EVENTS.CLOSE_FILE, { windowId: originWindow, leafId: originLeaf, filePath })
       this.broadcastEvent(DP_EVENTS.ACTIVE_FILE, { windowId: originWindow, leafId: originLeaf })
+      this.broadcastEvent(DP_EVENTS.ACTIVE_ROOT, { filePath: this.getActiveRoot(originLeaf) ?? undefined })
+
       this.syncToConfig()
     }
   }
@@ -1435,8 +1438,10 @@ current contents from the editor somewhere else, and restart the application.`
   }
 
   /**
-   * Returns the hash of the currently active file.
-   * @returns {number|null} The hash of the active file.
+   * Returns the path of the currently active file.
+   *
+   * @param   {string}        leafId
+   * @returns {string|null}           The path of the active file.
    */
   public getActiveFile (leafId: string): string|null {
     for (const windowId in this._windows) {
@@ -1446,6 +1451,20 @@ current contents from the editor somewhere else, and restart the application.`
       }
     }
     return null
+  }
+
+  /**
+   * Returns the path of the currently active workspace.
+   *
+   * @param   {string}        leafId
+   * @returns {string|null}           The path of the active workspace.
+   */
+  public getActiveRoot (leafId: string): string|null {
+    const { openWorkspaces } = this._app.config.get().app
+    const activeFile = this.getActiveFile(leafId)
+
+    const activeWorkspace = activeFile !== null ? openWorkspaces.find(p => activeFile.startsWith(p)) : null
+    return activeWorkspace ?? null
   }
 
   public isModified (filePath: string): boolean {
@@ -1507,6 +1526,8 @@ current contents from the editor somewhere else, and restart the application.`
     leaf.tabMan.forward()
     this.broadcastEvent(DP_EVENTS.OPEN_FILE, { windowId, leafId })
     this.broadcastEvent(DP_EVENTS.ACTIVE_FILE, { windowId, leafId })
+    this.broadcastEvent(DP_EVENTS.ACTIVE_ROOT, { filePath: this.getActiveRoot(leafId) ?? undefined })
+
   }
 
   public async navigateBack (windowId: string, leafId: string): Promise<void> {
@@ -1606,5 +1627,7 @@ current contents from the editor somewhere else, and restart the application.`
       leafId,
       filePath: this.getActiveFile(leafId) ?? undefined
     })
+
+    this.broadcastEvent(DP_EVENTS.ACTIVE_ROOT, { filePath: this.getActiveRoot(leafId) ?? undefined })
   }
 }

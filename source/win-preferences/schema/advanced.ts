@@ -193,6 +193,30 @@ export function getAdvancedFields (config: ConfigOptions): PreferencesFieldset[]
                 model: 'files.pdf.openWith'
               }
             ],
+            /* HTML files */
+            [
+              {
+                type: 'form-text',
+                display: 'plain',
+                contents: trans('HTML documents')
+              },
+              {
+                type: 'checkbox',
+                model: 'files.html.showInFilemanager'
+              },
+              {
+                type: 'checkbox',
+                model: 'files.html.showInSidebar'
+              },
+              {
+                type: 'select',
+                options: {
+                  'zettlr': 'Zettlr',
+                  'system': trans('System default')
+                },
+                model: 'files.html.openWith'
+              }
+            ],
             // Office documents
             [
               {
@@ -335,6 +359,48 @@ export function getAdvancedFields (config: ConfigOptions): PreferencesFieldset[]
           label: trans('Delete items irreversibly if moving them to trash fails'),
           model: 'system.deleteOnFail'
         }
+      ]
+    },
+    {
+      title: trans('Workspaces'),
+      infoString: trans('These settings enable loading assets from open workspace directories.'),
+      group: PreferencesGroups.Advanced,
+      titleField: {
+        type: 'switch',
+        model: 'workspaces.enableAssets'
+      },
+      help: undefined, // TODO
+      fields: [
+        {
+          type: 'style-group',
+          style: 'columns',
+          fields: [
+            {
+              type: 'checkbox',
+              label: trans('Load snippets'),
+              model: 'workspaces.loadSnippets',
+              disabled: !config.workspaces.enableAssets
+            },
+            {
+              type: 'checkbox',
+              label: trans('Load CSS'),
+              model: 'workspaces.loadCSS',
+              disabled: !config.workspaces.enableAssets
+            },
+            {
+              type: 'checkbox',
+              label: trans('Load export profiles'),
+              model: 'workspaces.loadExportProfiles',
+              disabled: !config.workspaces.enableAssets
+            },
+            {
+              type: 'checkbox',
+              label: trans('Load dictionary'),
+              model: 'workspaces.loadDictionary',
+              disabled: !config.workspaces.enableAssets
+            },
+          ]
+        },
       ]
     },
     {

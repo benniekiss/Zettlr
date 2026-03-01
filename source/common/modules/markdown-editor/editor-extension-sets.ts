@@ -16,7 +16,7 @@
  * END HEADER
  */
 
-import { closeBrackets } from '@codemirror/autocomplete'
+import { closeBrackets, autocompletion } from '@codemirror/autocomplete'
 import { type Update } from '@codemirror/collab'
 import { history } from '@codemirror/commands'
 import { bracketMatching, codeFolding, foldGutter, indentOnInput, indentUnit, StreamLanguage } from '@codemirror/language'
@@ -39,7 +39,9 @@ import { defaultContextMenu } from './plugins/default-context-menu'
 import { readabilityMode } from './plugins/readability'
 import { hookDocumentAuthority } from './plugins/remote-doc'
 import { lintGutter, linter } from '@codemirror/lint'
-import { spellcheck } from './linters/spellcheck'
+import { linterConfig } from './linters/utils'
+import { hunspell } from './linters/hunspell'
+import { languageTool } from './linters/language-tool'
 import { mdLint } from './linters/md-lint'
 import { countField, countPlugin } from './plugins/statistics-fields'
 import { tocField } from './plugins/toc-field'
@@ -53,7 +55,6 @@ import { softwrapVisualIndent } from './plugins/visual-indent'
 import { backgroundLayers } from './plugins/code-background'
 import { emacs } from '@replit/codemirror-emacs'
 import { distractionFree } from './plugins/distraction-free'
-import { languageTool } from './linters/language-tool'
 import { statusbar } from './statusbar'
 import { renderers } from './renderers'
 import { mdPasteDropHandlers } from './plugins/md-paste-drop-handlers'
@@ -74,7 +75,10 @@ import { defaultKeymap } from './keymaps/default'
 import { vimPlugin } from './plugins/vim-mode'
 import { projectInfoField } from './plugins/project-info-field'
 import { headingGutter } from './renderers/render-headings'
-import { codeTheme } from './renderers/render-code'
+import { lua } from '@codemirror/legacy-modes/mode/lua'
+import { shell } from '@codemirror/legacy-modes/mode/shell'
+import { css } from '@codemirror/lang-css'
+import { jinja } from '@codemirror/lang-jinja'
 import { customHighlighter } from './plugins/highlight-regex'
 
 /**
@@ -91,7 +95,8 @@ export interface CoreExtensionOptions {
     pushUpdates: (filePath: string, version: number, updates: Update[]) => Promise<boolean>
   }
   updateListener: (update: ViewUpdate) => void
-  domEventsListeners: DOMEventHandlers<any>
+  domEventsListeners: DOMEventHandlers<unknown>
+  useJinja?: boolean
 }
 
 /**
@@ -248,20 +253,8 @@ function getGenericCodeExtensions (options: CoreExtensionOptions): Extension[] {
     lineNumbers(),
     bracketMatching(),
     indentOnInput(),
+    autocompletion(),
     codeSyntaxHighlighter(),
-    // NOTE January 26, 2026: We have to include the `codeTheme` plugin, because
-    // it defines the colors (and fonts) for the code editors. Somehow I forgot
-    // to include it here for MONTHS, and it never appeared problematic because
-    // once a Markdown file was loaded, the corresponding styles were also
-    // applied, rendering code files correctly. This only breaks when the last
-    // file open before closing Zettlr is a code file (and, by implication, that
-    // the very first file Zettlr loads when you open the app is a code file).
-    // In that case, the code file would look wrong, because the styles were
-    // never loaded. Because, obviously, the "code syntax highlighter" above
-    // only defines class names, but not the theme… To see where the confusion
-    // came from, head into the theme/syntax.ts and tell me you wouldn't have
-    // made the mistake given how the *Highlighter* was called :roll_eyes:
-    codeTheme
   ]
 }
 
@@ -295,7 +288,8 @@ export function getMarkdownExtensions (options: CoreExtensionOptions): Extension
   // turned on and off with the dictionary settings, and the yamlFrontmatterNode
   // because if that thing has an error, that thing has an error.
   const mdLinterExtensions = [
-    spellcheck,
+    linterConfig,
+    hunspell,
     yamlFrontmatterLint
   ]
 
@@ -323,6 +317,15 @@ export function getMarkdownExtensions (options: CoreExtensionOptions): Extension
     )
   }
 
+  let parser = markdownParser({
+    zknLinkParserConfig: { format: options.initialConfig.zknLinkFormat },
+    enableZkn: options.initialConfig.enableZkn,
+  })
+
+  if (options.useJinja === true) {
+    parser = jinja({ base: parser })
+  }
+
   return [
     ...getCoreExtensions(options),
     // These handlers deal with Markdown specific stuff, for example, pasting
@@ -331,10 +334,7 @@ export function getMarkdownExtensions (options: CoreExtensionOptions): Extension
     EditorView.domEventHandlers(mdPasteDropHandlers),
     // We need our custom keymaps first
     // The parser generates the AST for the document ...
-    markdownParser({
-      zknLinkParserConfig: { format: options.initialConfig.zknLinkFormat },
-      enableZkn: options.initialConfig.enableZkn,
-    }),
+    parser,
     // ... which can then be styled with a highlighter
     markdownSyntaxHighlighter(),
     renderers(options.initialConfig),
@@ -367,19 +367,18 @@ export function getMarkdownExtensions (options: CoreExtensionOptions): Extension
 }
 
 /**
- * This public function returns a set of extensions required to display JSON
+ * This public function returns a set of extensions required to display LaTeX
  * documents in Zettlr editors. These include the core extensions, the generic
- * code extensions as well as the JSON syntax highlighter.
+ * code extensions as well as the LaTeX syntax highlighter.
  *
  * @param   {CoreExtensionOptions}  options  The default options
  *
- * @return  {Extension[]}                    An array of options for JSON files
+ * @return  {Extension[]}                    An array of options for LaTeX files
  */
-export function getJSONExtensions (options: CoreExtensionOptions): Extension[] {
+export function getTexExtensions (options: CoreExtensionOptions): Extension[] {
   return [
     ...getGenericCodeExtensions(options),
-    json(),
-    linter(jsonParseLinter())
+    StreamLanguage.define(stex)
   ]
 }
 
@@ -399,18 +398,68 @@ export function getYAMLExtensions (options: CoreExtensionOptions): Extension[] {
   ]
 }
 
+
 /**
- * This public function returns a set of extensions required to display LaTeX
+ * This public function returns a set of extensions required to display JSON
  * documents in Zettlr editors. These include the core extensions, the generic
- * code extensions as well as the LaTeX syntax highlighter.
+ * code extensions as well as the JSON syntax highlighter.
  *
  * @param   {CoreExtensionOptions}  options  The default options
  *
- * @return  {Extension[]}                    An array of options for LaTeX files
+ * @return  {Extension[]}                    An array of options for JSON files
  */
-export function getTexExtensions (options: CoreExtensionOptions): Extension[] {
+export function getJSONExtensions (options: CoreExtensionOptions): Extension[] {
   return [
     ...getGenericCodeExtensions(options),
-    StreamLanguage.define(stex)
+    json(),
+    linter(jsonParseLinter())
+  ]
+}
+
+/**
+ * This public function returns a set of extensions required to display CSS
+ * files in Zettlr editors. These include the core extensions, the generic
+ * code extensions as well as the CSS syntax highlighter.
+ *
+ * @param   {CoreExtensionOptions}  options  The default options
+ *
+ * @return  {Extension[]}                    An array of options for CSS scripts
+ */
+export function getCSSExtensions (options: CoreExtensionOptions): Extension[] {
+  return [
+    ...getGenericCodeExtensions(options),
+    css(),
+  ]
+}
+
+/**
+ * This public function returns a set of extensions required to display Lua
+ * scripts in Zettlr editors. These include the core extensions, the generic
+ * code extensions as well as the Lua syntax highlighter.
+ *
+ * @param   {CoreExtensionOptions}  options  The default options
+ *
+ * @return  {Extension[]}                    An array of options for Lua scripts
+ */
+export function getLuaExtensions (options: CoreExtensionOptions): Extension[] {
+  return [
+    ...getGenericCodeExtensions(options),
+    StreamLanguage.define(lua),
+  ]
+}
+
+/**
+ * This public function returns a set of extensions required to display shell
+ * scripts in Zettlr editors. These include the core extensions, the generic
+ * code extensions as well as the shell syntax highlighter.
+ *
+ * @param   {CoreExtensionOptions}  options  The default options
+ *
+ * @return  {Extension[]}                    An array of options for shell scripts
+ */
+export function getShellExtensions (options: CoreExtensionOptions): Extension[] {
+  return [
+    ...getGenericCodeExtensions(options),
+    StreamLanguage.define(shell),
   ]
 }

@@ -108,6 +108,7 @@ import {
   hasMSOfficeExt,
   hasOpenOfficeExt,
   hasPDFExt,
+  hasHTMLExt,
 } from 'source/common/util/file-extention-checks'
 import { isDotFile } from 'source/common/util/ignore-path'
 import type { DocumentManagerIPCAPI } from 'source/app/service-providers/documents'
@@ -198,6 +199,8 @@ const getDirectoryContents = computed<RecycleScrollerData[]>(() => {
         return files.images.showInFilemanager
       } else if (hasPDFExt(desc.path)) {
         return files.pdf.showInFilemanager
+      } else if (hasHTMLExt(desc.path)) {
+        return files.html.showInFilemanager
       } else if (hasMSOfficeExt(desc.path)) {
         return files.msoffice.showInFilemanager
       } else if (hasOpenOfficeExt(desc.path)) {

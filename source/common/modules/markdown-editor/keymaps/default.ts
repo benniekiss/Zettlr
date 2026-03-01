@@ -49,7 +49,7 @@ import {
 } from '@codemirror/lang-markdown'
 import { type Extension } from '@codemirror/state'
 
-import { nextSnippet, abortSnippet } from '../autocomplete/snippets'
+import { nextSnippet, abortSnippet, abortSnippetRemoveContent } from '../autocomplete/snippets'
 import {
   handleReplacement, handleBackspace, handleQuote
 } from '../commands/autocorrect'
@@ -121,7 +121,7 @@ export function defaultKeymap (): Extension {
     { key: 'Backspace', run: deleteBracketPair },
     { key: 'Backspace', run: handleBackspace },
 
-    { key: 'Escape', run: abortSnippet },
+    { key: 'Escape', run: abortSnippet, shift: abortSnippetRemoveContent },
     { key: 'Space', run: handleReplacement },
 
     { key: 'Alt-ArrowUp', run: customMoveLineUp, shift: copyLineUp },

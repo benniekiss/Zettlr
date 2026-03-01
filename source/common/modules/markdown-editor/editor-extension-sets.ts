@@ -59,7 +59,7 @@ import { renderers } from './renderers'
 import { mdPasteDropHandlers } from './plugins/md-paste-drop-handlers'
 import { footnoteGutter } from './plugins/footnote-gutter'
 import { yamlFrontmatterLint } from './linters/yaml-frontmatter-lint'
-import { darkMode } from './theme/dark-mode'
+import { darkMode, useDarkModeEditor } from './theme/dark-mode'
 import { themeBerlinLight, themeBerlinDark } from './theme/berlin'
 import { themeBielefeldLight, themeBielefeldDark } from './theme/bielefeld'
 import { themeBordeauxLight, themeBordeauxDark } from './theme/bordeaux'
@@ -75,6 +75,7 @@ import { vimPlugin } from './plugins/vim-mode'
 import { projectInfoField } from './plugins/project-info-field'
 import { headingGutter } from './renderers/render-headings'
 import { codeTheme } from './renderers/render-code'
+import { customHighlighter } from './plugins/highlight-regex'
 
 /**
  * This interface describes the required properties which the extension sets
@@ -169,10 +170,20 @@ function getCoreExtensions (options: CoreExtensionOptions): Extension[] {
     inputModeCompartment.of(inputMode),
     // Then, include the default keymap
     defaultKeymap(),
-    darkMode({ darkMode: options.initialConfig.darkMode, ...themes[options.initialConfig.theme] }),
+    darkMode({ darkMode: useDarkModeEditor(options.initialConfig.darkMode, options.initialConfig.darkModeEditor), ...themes[options.initialConfig.theme] }),
     // CODE FOLDING
     codeFolding(),
-    Prec.low(foldGutter()), // The fold gutter should appear next to the text content
+    Prec.low(foldGutter({
+      markerDOM: (open) => {
+        const elem = document.createElement('div')
+        if (open) {
+          elem.innerHTML = '<cds-icon shape="angle" direction="down"></cds-icon>'
+        } else {
+          elem.innerHTML = '<cds-icon shape="angle" direction="right"></cds-icon>'
+        }
+        return elem
+      }
+    })), // The fold gutter should appear next to the text content
     // HISTORY
     history(),
     // SELECTIONS
@@ -349,6 +360,7 @@ export function getMarkdownExtensions (options: CoreExtensionOptions): Extension
     backgroundLayers, // Add a background behind inline code and code blocks
     defaultContextMenu, // A default context menu
     softwrapVisualIndent, // Always indent visually
+    customHighlighter,
     tagClasses(), // Apply a custom class to each tag so that users can style them (#4589)
     EditorView.domEventHandlers(options.domEventsListeners)
   ]

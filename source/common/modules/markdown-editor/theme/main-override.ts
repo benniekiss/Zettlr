@@ -346,7 +346,7 @@ const mainTheme = EditorView.baseTheme({
   },
   '&dark .page-border .cm-content': {
     outlineColor: 'var(--grey-0)',
-  }
+  },
 })
 
 /* Code Theme

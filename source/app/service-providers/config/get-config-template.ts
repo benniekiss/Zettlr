@@ -60,6 +60,7 @@ export interface ConfigOptions {
   appLang: string
 
   darkMode: boolean
+  darkModeEditor: 'match'|'light'|'dark'
   autoDarkMode: 'off'|'system'|'schedule'
   autoDarkModeStart: string
   autoDarkModeEnd: string
@@ -135,11 +136,15 @@ export interface ConfigOptions {
     indentWithTabs: boolean
     alwaysIndentLineOnTab: boolean
     fontSize: number
+    pageCenter: boolean
+    pageBorder: boolean
+    pageSize: number
     countChars: boolean
     inputMode: 'default'|'vim'|'emacs'
     boldFormatting: '**'|'__'
     italicFormatting: '_'|'*'
     highlightFormatting: 'span'|'=='
+    customHighlighter: { pattern: string, style: string }[]
     readabilityAlgorithm: 'dale-chall'|'gunning-fog'|'coleman-liau'|'automated-readability'
     lint: {
       markdown: boolean
@@ -290,6 +295,7 @@ export function getConfigTemplate (): ConfigOptions {
     attachmentExtensions: [],
     // UI related options
     darkMode: nativeTheme.shouldUseDarkColors,
+    darkModeEditor: 'match', // Possible values: 'match', 'light', 'dark'
     alwaysReloadFiles: true, // Should Zettlr automatically load remote changes?
     autoDarkMode: 'system', // Possible values: 'off', 'system', 'schedule', 'auto'
     autoDarkModeStart: '21:00', // Switch into dark mode at this time
@@ -345,6 +351,9 @@ export function getConfigTemplate (): ConfigOptions {
       indentWithTabs: false,
       alwaysIndentLineOnTab: false, // Whether `Tab` always indents the current line
       fontSize: 18, // The editor's font size in pixels
+      pageCenter: true,
+      pageBorder: true,
+      pageSize: 0,
       countChars: false, // Set to true to enable counting characters instead of words
       inputMode: 'default', // Can be default, vim, emacs
       boldFormatting: '**', // Can be ** or __
@@ -353,6 +362,7 @@ export function getConfigTemplate (): ConfigOptions {
       readabilityAlgorithm: 'dale-chall', // The algorithm to use with readability mode.
       showStatusbar: true,
       showFormattingToolbar: true,
+      customHighlighter: [],
       lint: {
         markdown: true, // Should Markdown be linted?
         languageTool: {

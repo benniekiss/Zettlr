@@ -118,30 +118,35 @@ function capitalizeStartofSentence (text: string, pos: number, tree: Tree): Chan
  *
  * @returns {RegExp}        The newly created regex from `key`.
  */
-function parseAutocorrectKey (key: string, matchWholeWords: boolean): RegExp {
+function parseAutocorrectKey (key: string, matchWholeWords: boolean): RegExp|undefined {
   // Must start with slash
   const prefix = matchWholeWords ? '\b' : ''
+
+  let body = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  let flags = ''
 
   if (key.length >= 2 && key.startsWith('/')) {
     // There may be flags after the key
     const lastSlash = key.lastIndexOf('/')
 
     if (lastSlash > 0) {
-      const body = key.slice(1, lastSlash)
-      const flags = key.slice(lastSlash + 1)
+      body = key.slice(1, lastSlash)
+      flags = key.slice(lastSlash + 1)
 
       // Validate flags
-      if (/^[gimsuy]*$/.test(flags)) {
-        try {
-          return new RegExp(prefix + body, flags)
-        } catch {}
+      if (!/^[gimsuy]*$/.test(flags)) {
+        flags = ''
       }
     }
   }
 
-  // No regex was detected, so its a regular string replacement. We first
-  // escape the string, then append a line-ending assertion.
-  return new RegExp(prefix + _.escapeRegExp(key) + '$')
+  if (!body.endsWith('$')) {
+    body += '$'
+  }
+
+  try {
+    return new RegExp(prefix + body, flags)
+  } catch {}
 }
 
 // If Autocorrect is active, handles the potential text replacement
@@ -163,7 +168,6 @@ export const handleReplacement: Command = (target: EditorView): boolean => {
   const replacements = autocorrect.replacements.map(e => { return { ...e } })
   replacements.sort((a, b) => b.key.length - a.key.length)
 
-  const maxKeyLength = replacements[0].key.length
   const changes: ChangeSpec[] = []
 
   const tree = syntaxTree(target.state)
@@ -190,10 +194,14 @@ export const handleReplacement: Command = (target: EditorView): boolean => {
       continue
     }
 
-    const from = Math.max(pos - maxKeyLength, 0)
-    const slice = target.state.sliceDoc(from, pos)
+    const slice = line.text.slice(0, pos - line.from)
     for (let { key, value } of replacements) {
       const re = parseAutocorrectKey(key, autocorrect.matchWholeWords)
+
+      // The regex could not be parsed
+      if (!re) {
+        continue
+      }
 
       value = slice.replace(re, value)
 
@@ -202,12 +210,12 @@ export const handleReplacement: Command = (target: EditorView): boolean => {
         continue
       }
 
-      const start = pos - slice.length
+      const start = line.from + slice.search(re)
       if (nodeAtPos(start, tree, PROTECTED_NODES, -1) !== null) {
         break // `range.from` is not in a protected area, but start is.
       }
 
-      changes.push({ from: start, to: pos, insert: value })
+      changes.push({ from: line.from, to: pos, insert: value })
       break // Do not check the other possible replacements
     }
 

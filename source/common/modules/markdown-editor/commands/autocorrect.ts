@@ -231,8 +231,11 @@ export const handleReplacement: Command = (target: EditorView): boolean => {
   }
 
   if (changes.length > 0) {
+    // Isolate the transaction in the undo-history so that a user
+    // can override the replacement without removed the space/newline
     target.dispatch({ changes, annotations: isolateHistory.of('full') })
-    // Indicate that we did not handle the key, making Codemirror add the key
+
+    // Indicate a replacement happened
     return true
   }
 

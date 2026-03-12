@@ -289,7 +289,8 @@ const editorConfiguration = computed<EditorConfigOptions>(() => {
     theme: display.theme,
     highlightWhitespace: editor.showWhitespace,
     showMarkdownLineNumbers: editor.showMarkdownLineNumbers,
-    countChars: editor.countChars
+    countChars: editor.countChars,
+    customHighlighter: editor.customHighlighter,
   } satisfies EditorConfigOptions
 })
 

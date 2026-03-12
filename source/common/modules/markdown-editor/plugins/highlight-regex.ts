@@ -15,17 +15,19 @@
 import { RangeSet } from '@codemirror/state'
 import { Decoration, type EditorView, MatchDecorator, ViewPlugin, type ViewUpdate } from '@codemirror/view'
 import { configField } from '../util/configuration'
-import _ from 'lodash'
 
-function parseAutocorrectKey (key: string): string | RegExp {
+function parseAutocorrectKey (key: string): RegExp|undefined {
   // Must start with slash
+  let body = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  let flags = 'gd'
+
   if (key.length >= 2 && key.startsWith('/')) {
     // There may be flags after the key
     const lastSlash = key.lastIndexOf('/')
 
     if (lastSlash > 0) {
-      let body = key.slice(1, lastSlash)
-      let flags = key.slice(lastSlash + 1)
+      body = key.slice(1, lastSlash)
+      flags = key.slice(lastSlash + 1)
 
       // Validate flags
       if (/^[dgimsuy]*$/.test(flags)) {
@@ -36,31 +38,32 @@ function parseAutocorrectKey (key: string): string | RegExp {
         if (!flags.includes('d')) {
           flags += 'd'
         }
-
-        try {
-          return new RegExp(body, flags)
-        } catch {}
       }
     }
   }
 
-  return _.escapeRegExp(key)
+  try {
+    return new RegExp(body, flags)
+  } catch (err: unknown) {
+    console.info('[highlight-regex] Failed to parse string as `RegExp`: ', key, err instanceof Error ? err : 'unknown error')
+  }
 }
 
 function render (view: EditorView): MatchDecorator[] {
-  const { customHighlighter: customDecos } = view.state.field(configField)
+  const { customHighlighter } = view.state.field(configField)
 
   const decos = []
 
-  for (const { pattern, style } of customDecos) {
-    const parsed = parseAutocorrectKey(pattern)
+  for (const { pattern, style } of customHighlighter) {
+    const re = parseAutocorrectKey(pattern)
+
+    if (re === undefined) {
+      continue
+    }
 
     try {
-      const flags = typeof parsed === 'string' ? 'dg' : undefined
-      const regexp = new RegExp(parsed, flags)
-
       const matchDeco = new MatchDecorator({
-        regexp: regexp,
+        regexp: re,
         decorate: (add, from, to, match, view) => {
           if (!match.indices) {
             return

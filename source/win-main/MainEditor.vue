@@ -246,9 +246,18 @@ const editorConfiguration = computed<EditorConfigOptions>(() => {
       matchWholeWords: editor.autoCorrect.matchWholeWords,
       magicQuotes: {
         primary: editor.autoCorrect.magicQuotes.primary,
-        secondary: editor.autoCorrect.magicQuotes.secondary
+        secondary: editor.autoCorrect.magicQuotes.secondary,
       },
-      replacements: editor.autoCorrect.replacements
+      capitalization: {
+        autoCapitalize: editor.autoCorrect.capitalization.autoCapitalize,
+        doubleCaps: editor.autoCorrect.capitalization.doubleCaps,
+      },
+      suggestWords: {
+        active: editor.autoCorrect.suggestWords.active,
+        minLength: editor.autoCorrect.suggestWords.minLength,
+        numChars: editor.autoCorrect.suggestWords.numChars,
+      },
+      replacements: editor.autoCorrect.replacements,
     },
     autocompleteSuggestEmojis: editor.autocompleteSuggestEmojis,
     imagePreviewWidth: display.imageWidth,

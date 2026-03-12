@@ -171,6 +171,9 @@ export interface ConfigOptions {
         ignoredRules: LanguageToolIgnoredRuleEntry[]
         provider: 'official'|'custom'
         customServer: string
+        charsPerRequest: number
+        charsPerMinute: number
+        requestsPerMinute: number
         username: string
         apiKey: string
       }
@@ -217,10 +220,11 @@ export interface ConfigOptions {
     // Built-in files cannot be shown in the sidebar, will always be shown in
     // the file manager, and will always be opened with Zettlr.
     builtin: FileTypeSettings<true, false, 'zettlr'>
-    // Images and PDFs can be entirely hidden or shown everywhere, and opened
+    // Images, PDFs, and HTML can be entirely hidden or shown everywhere, and opened
     // with the system default, or in Zettlr
     images: FileTypeSettings
     pdf: FileTypeSettings
+    html: FileTypeSettings
     // These file types can be shown anywhere, but are not open-able by Zettlr.
     msoffice: FileTypeSettings<boolean, boolean, 'system'>
     openOffice: FileTypeSettings<boolean, boolean, 'system'>
@@ -260,10 +264,18 @@ export interface ConfigOptions {
     showMarkdownLinkButton: boolean
     showMarkdownImageButton: boolean
     showMarkdownMakeTaskListButton: boolean
+    showMarkdownLintButton: boolean
     showInsertTableButton: boolean
     showInsertFootnoteButton: boolean
     showDocumentInfoText: boolean
     showPomodoroButton: boolean
+  }
+  workspaces: {
+    enableAssets: boolean
+    loadSnippets: boolean
+    loadCSS: boolean
+    loadExportProfiles: boolean
+    loadDictionary: boolean
   }
 }
 
@@ -404,6 +416,9 @@ export function getConfigTemplate (): ConfigOptions {
           ignoredRules: [],
           provider: 'official',
           customServer: '',
+          charsPerRequest: 0, // 0 disables the limit
+          charsPerMinute: 0, // 0 disables the limit
+          requestsPerMinute: 0, // 0 disables the limit
           username: '',
           apiKey: ''
         }
@@ -507,6 +522,7 @@ export function getConfigTemplate (): ConfigOptions {
       builtin: { showInFilemanager: true, showInSidebar: false, openWith: 'zettlr' },
       images: { showInFilemanager: false, showInSidebar: true, openWith: 'system' },
       pdf: { showInFilemanager: false, showInSidebar: true, openWith: 'system' },
+      html: { showInFilemanager: false, showInSidebar: true, openWith: 'system' },
       msoffice: { showInFilemanager: false, showInSidebar: true, openWith: 'system' },
       openOffice: { showInFilemanager: false, showInSidebar: true, openWith: 'system' },
       dataFiles: { showInFilemanager: false, showInSidebar: true, openWith: 'system' },
@@ -539,10 +555,18 @@ export function getConfigTemplate (): ConfigOptions {
       showMarkdownLinkButton: true,
       showMarkdownImageButton: true,
       showMarkdownMakeTaskListButton: true,
+      showMarkdownLintButton: true,
       showInsertTableButton: true,
       showInsertFootnoteButton: true,
       showDocumentInfoText: true,
       showPomodoroButton: true
+    },
+    workspaces: {
+      enableAssets: false,
+      loadSnippets: true,
+      loadCSS: true,
+      loadExportProfiles: true,
+      loadDictionary: true,
     },
     uuid: uuid4() // The app's unique anonymous identifier
   }

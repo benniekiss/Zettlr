@@ -180,6 +180,7 @@ import {
   hasMSOfficeExt,
   hasOpenOfficeExt,
   hasPDFExt,
+  hasHTMLExt,
   hasExt,
   hasMdOrCodeExt
 } from 'source/common/util/file-extention-checks'
@@ -284,6 +285,8 @@ const primaryIcon = computed(() => {
       return 'file'
     } else if (hasOpenOfficeExt(props.item.path)) {
       return 'file'
+    } else if (hasHTMLExt(props.item.path)) {
+      return 'code'
     } else if (hasDataExt(props.item.path)) {
       return 'code'
     } else if (hasExt(props.item.path, attachmentExtensions)) {
@@ -390,6 +393,8 @@ const filteredChildren = computed(() => {
         return files.images.showInFilemanager
       } else if (hasPDFExt(child.path)) {
         return files.pdf.showInFilemanager
+      } else if (hasHTMLExt(child.path)) {
+        return files.html.showInFilemanager
       } else if (hasMSOfficeExt(child.path)) {
         return files.msoffice.showInFilemanager
       } else if (hasOpenOfficeExt(child.path)) {

@@ -14,49 +14,140 @@
  */
 
 // The autocorrect plugin is basically just a keymap that listens to spaces and enters
+import { EditorSelection, type ChangeSpec } from '@codemirror/state'
+import type { Command, EditorView } from '@codemirror/view'
 import { syntaxTree } from '@codemirror/language'
-import { EditorSelection, type ChangeSpec, type EditorState } from '@codemirror/state'
-import { type Command, type EditorView } from '@codemirror/view'
+import type { Tree } from '@lezer/common'
 import { configField } from '../util/configuration'
 import { insertNewlineAndIndent, isolateHistory } from '@codemirror/commands'
+import { posInNode } from '../util/node-in-selection'
 import { insertNewlineContinueMarkup } from '@codemirror/lang-markdown'
 
 // These characters can be directly followed by a starting magic quote
 const startChars = ' ([{-–—\n\r\t\v\f/\\'
 
+const PROTECTED_NODES = [
+  'InlineCode', // `code`
+  'Comment', 'CommentBlock', // <!-- comment -->
+  'FencedCode', 'CodeText', // Code block
+  'HorizontalRule', // --- and ***
+  'YAMLFrontmatter',
+  'HTMLTag', 'HTMLBlock', // HTML elements
+  'PandocAttribute',
+]
+
 /**
- * Given the editor state and a position, this function returns whether the
- * position sits within a node that is protected from autocorrect. In those
- * cases, no autocorrection will be applied, regardless of whether there is a
- * suitable candidate.
+ * Autocorrect words with two leading capital letters to title case.
  *
- * @param   {EditorState}  state  The state
- * @param   {number}       pos    The position to check
+ * @param   {string}    text    The text to correct. Will only affect the last word.
+ * @param   {number}    pos     The document-relative start position of `text`.
  *
- * @return  {boolean}             True if the position touches a protected node.
+ * @returns {ChangeSpec|null}   A ChangeSpec representing the replacement, or null
+ *                              if no replacement was made.
  */
-function posInProtectedNode (state: EditorState, pos: number): boolean {
-  const PROTECTED_NODES = [
-    'InlineCode', // `code`
-    'Comment', 'CommentBlock', // <!-- comment -->
-    'FencedCode', 'CodeText', // Code block
-    'HorizontalRule', // --- and ***
-    'YAMLFrontmatter',
-    'HTMLTag', 'HTMLBlock' // HTML elements
-  ]
-
-  let node = syntaxTree(state).resolveInner(pos, -1)
-
-  while (node.parent !== null) {
-    if (PROTECTED_NODES.includes(node.type.name)) {
-      return true
-    }
-
-    node = node.parent
+function normalizeLeadingDoubleCaps (text: string, pos: number, tree: Tree): ChangeSpec | null {
+  const locale: string = window.config.get('appLang')
+  // Matches the last word of the string if it starts with two
+  // upper-case letters and is followed by all-lowercase letters.
+  const match = /\b(\p{Lu})(\p{Lu})\p{Ll}+\p{P}*$/vd.exec(text)
+  if (!match?.indices) {
+    return null
   }
 
-  // Neither the node itself, nor any of its parents, are protected.
-  return false
+  const [ , [from], [ , to ] ] = match.indices
+
+  const isProtected = posInNode(pos + from, tree, PROTECTED_NODES, -1) ?? posInNode(pos + to, tree, PROTECTED_NODES, -1)
+  if (isProtected) {
+    return null
+  }
+
+  const insert = match[1] + match[2].toLocaleLowerCase(locale)
+
+  return { from: pos + from, to: pos + to, insert }
+}
+
+/**
+ * Autocapitalize words at the start of sentences.
+ *
+ * @param   {string}    text    The text to correct. Will only affect the last word.
+ * @param   {number}    pos     The document-relative start position of `text`.
+ *
+ * @returns {ChangeSpec|null}   A ChangeSpec representing the replacement, or null
+ *                              if no replacement was made.
+ */
+function capitalizeStartofSentence (text: string, pos: number, tree: Tree): ChangeSpec | null {
+  const locale: string = window.config.get('appLang')
+  const segmenter = new Intl.Segmenter(locale, { granularity: 'sentence' })
+
+  // Matches the last word of the string if it starts with a lowercase letter
+  const match = /\b(\p{Ll})\p{L}+\p{P}*$/vd.exec(text)
+  if (match?.indices) {
+    const [ from, to ] = match.indices[1]
+
+    const isProtected = posInNode(pos + from, tree, PROTECTED_NODES, -1) ?? posInNode(pos + to, tree, PROTECTED_NODES, -1)
+    if (isProtected) {
+      return null
+    }
+
+    // Capitalize the found word, then segment the text into sentences.
+    const saneLine = text.slice(0, from) + match[1].toLocaleUpperCase(locale) + text.slice(to)
+    const segments = [...segmenter.segment(saneLine)]
+
+    // If the last sentence starts at the position of the found word, then
+    // the replacement was correct because it fell at the sentence boundary.
+    // If the last sentence does not start at the position of the found word,
+    // then the replacement did not occur at the start of a sentence and is
+    // invalid.
+    if (segments[segments.length - 1].index === from) {
+      return { from: pos + from, to: pos + to, insert: match[1].toLocaleUpperCase(locale) }
+    }
+  }
+
+  return null
+}
+
+/**
+ * Parse a string into a RegExp. If the string is in the form  of
+ * `/pattern/flags`, then the returned RegExp will be created based on the
+ * provided pattern and flags. If it is a plain string, i.e., not contained
+ * within slashes (`/`), then the string is escaped and appended with a
+ * line-ending assertion and converted into a RegExp object.
+ *
+ * @param {string}    key   The string to parse
+ *
+ * @returns {RegExp}        The newly created regex from `key`.
+ */
+function parseAutocorrectKey (key: string, matchWholeWords: boolean): RegExp|undefined {
+  // Must start with slash
+  const prefix = matchWholeWords ? '\b' : ''
+
+  let body = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  let flags = ''
+
+  if (key.length >= 2 && key.startsWith('/')) {
+    // There may be flags after the key
+    const lastSlash = key.lastIndexOf('/')
+
+    if (lastSlash > 0) {
+      body = key.slice(1, lastSlash)
+      flags = key.slice(lastSlash + 1)
+
+      // Validate flags
+      if (!/^[gimsuy]*$/.test(flags)) {
+        flags = ''
+      }
+    }
+  }
+
+  if (!body.endsWith('$')) {
+    body += '$'
+  }
+
+  try {
+    return new RegExp(prefix + body, flags)
+  } catch (err: unknown) {
+    console.info('[autocorrect] Failed to parse string as `RegExp`: ', key, err instanceof Error ? err : 'unknown error')
+  }
 }
 
 // If Autocorrect is active, handles the potential text replacement
@@ -78,8 +169,9 @@ export const handleReplacement: Command = (target: EditorView): boolean => {
   const replacements = autocorrect.replacements.map(e => { return { ...e } })
   replacements.sort((a, b) => b.key.length - a.key.length)
 
-  const maxKeyLength = replacements[0].key.length
   const changes: ChangeSpec[] = []
+
+  const tree = syntaxTree(target.state)
 
   for (const range of target.state.selection.ranges) {
     // Ignore selections (only cursors)
@@ -92,7 +184,7 @@ export const handleReplacement: Command = (target: EditorView): boolean => {
     let pos = range.from - 1
 
     // Ignore those cursors that are inside protected nodes
-    if (posInProtectedNode(target.state, pos)) {
+    if (posInNode(pos, tree, PROTECTED_NODES, -1)) {
       continue
     }
 
@@ -104,28 +196,51 @@ export const handleReplacement: Command = (target: EditorView): boolean => {
       continue
     }
 
-    const from = Math.max(pos - maxKeyLength, 0)
-    const slice = target.state.sliceDoc(from, pos)
+    const endPos = pos - line.from
+    // Limit test strings to 200 characters. This is likely far outside
+    // of what a user would input as an autocorrect target.
+    const startPos = Math.max(0, endPos - 200)
 
-    for (const { key, value } of replacements) {
-      if (slice.endsWith(key)) {
-        const startOfReplacement = pos - key.length
-        if (posInProtectedNode(target.state, startOfReplacement)) {
-          break // `range.from` is not in a protected area, but start is.
-        }
+    const slice = line.text.slice(startPos, endPos)
+    for (let { key, value } of replacements) {
+      const re = parseAutocorrectKey(key, autocorrect.matchWholeWords)
 
-        const charBefore = startOfReplacement === 0
-          ? ' ' // Assume a space which makes below's code simpler
-          : target.state.sliceDoc(startOfReplacement - 1, startOfReplacement)
+      // The regex could not be parsed
+      if (!re) {
+        continue
+      }
 
-        if (autocorrect.matchWholeWords && !/\W/.test(charBefore)) {
-          // We should match whole words, but the replacement is
-          // not preceeded by a non-word character.
-          break
-        }
+      value = slice.replace(re, value)
 
-        changes.push({ from: startOfReplacement, to: pos, insert: value })
-        break // Do not check the other possible replacements
+      // Nothing was replaced since the value after replacement is the same.
+      if (value === slice) {
+        continue
+      }
+
+      const start = line.from + slice.search(re)
+      if (posInNode(start, tree, PROTECTED_NODES, -1)) {
+        break // `range.from` is not in a protected area, but start is.
+      }
+
+      changes.push({ from: line.from, to: pos, insert: value })
+      break // Do not check the other possible replacements
+    }
+
+    if (autocorrect.capitalization.doubleCaps) {
+      const doubleCaps = normalizeLeadingDoubleCaps(target.state.sliceDoc(line.from, pos), line.from, tree)
+
+      if (doubleCaps) {
+        changes.push(doubleCaps)
+        break
+      }
+    }
+
+    if (autocorrect.capitalization.autoCapitalize) {
+      const autoCapitalize = capitalizeStartofSentence(target.state.sliceDoc(line.from, pos), line.from, tree)
+
+      if (autoCapitalize) {
+        changes.push(autoCapitalize)
+        break
       }
     }
   }
@@ -246,12 +361,14 @@ export function handleQuote (quote: string): Command {
     const secondary = autocorrect.magicQuotes.secondary.split('…')
     const quotes = (quote === '"') ? primary : secondary
 
+    const tree = syntaxTree(view.state)
+
     const transaction = view.state.changeByRange((range) => {
       // NOTE we're running through the hassle of definitely inserting quotes as
       // otherwise the quote character would be swallowed, even in "protected"
       // areas of the document.
-      const isFromProtected = posInProtectedNode(view.state, range.from)
-      const isToProtected = posInProtectedNode(view.state, range.to)
+      const isFromProtected = posInNode(range.from, tree, PROTECTED_NODES, -1)
+      const isToProtected = posInNode(range.to, tree, PROTECTED_NODES, -1)
 
       if (range.empty) {
         // Check the character before and insert an appropriate quote

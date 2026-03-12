@@ -1,9 +1,9 @@
 <template>
   <div
-    ref="pdfViewerContainer"
-    class="pdf-viewer-container"
+    ref="htmlViewerContainer"
+    class="html-viewer-container"
     role="region"
-    v-bind:aria-label="`PDFViewer: Currently viewing file ${pathBasename(props.file.path)}`"
+    v-bind:aria-label="`HTMLViewer: Currently viewing file ${pathBasename(props.file.path)}`"
     v-on:pointerenter="acceptsClicks = true"
     v-on:pointerleave="acceptsClicks = false"
   >
@@ -20,14 +20,14 @@
  * @ignore
  * BEGIN HEADER
  *
- * Contains:        PDFViewer
+ * Contains:        HTMLViewer
  * CVM-Role:        View
  * Maintainer:      Hendrik Erz
  * License:         GNU GPL v3
  *
- * Description:     The PDF Viewer is a component that can be mounted into
- *                  editor panes to display PDF files, using Chromium's built-in
- *                  PDF viewer. NOTE that due to the way iframes work, we have
+ * Description:     The HTML Viewer is a component that can be mounted into
+ *                  editor panes to display HTML files, using Chromium's built-in
+ *                  HTML viewer. NOTE that due to the way iframes work, we have
  *                  to manually enable and disable pointer events. Were we not
  *                  doing this, the iframes could "swallow" drag events, making
  *                  resizing of the editor panes using the resizer bars cumbersome.
@@ -51,13 +51,13 @@ const props = defineProps<{
 }>()
 
 const iframe = ref<HTMLIFrameElement|null>(null)
-const pdfViewerContainer = ref<HTMLDivElement|null>(null)
+const htmlViewerContainer = ref<HTMLDivElement|null>(null)
 const acceptsClicks = ref(false)
 
 </script>
 
 <style lang="css" scoped>
-div.pdf-viewer-container {
+div.html-viewer-container {
   width: 100%;
   height: 100%;
   user-select: auto;

@@ -169,7 +169,7 @@ import {
 import glassFile from './assets/glass.wav'
 import alarmFile from './assets/digital_alarm.mp3'
 import chimeFile from './assets/chime.mp3'
-import { type LeafNodeJSON } from '@dts/common/documents'
+import { DocumentType, type LeafNodeJSON } from '@dts/common/documents'
 import { buildPipeMarkdownTable } from '@common/util/build-pipe-markdown-table'
 import { type UpdateState } from '@providers/updates'
 import { type ToolbarControl } from '@common/vue/window/WindowToolbar.vue'
@@ -486,6 +486,13 @@ const toolbarControls = computed<ToolbarControl[]>(() => {
       id: 'export',
       title: trans('Export current file'),
       icon: 'export'
+    },
+    {
+      type: 'button',
+      id: 'markdownLint',
+      title: trans('Check document for errors'),
+      icon: 'pencil',
+      visible: getToolbarButtonDisplay('showMarkdownLintButton')
     },
     {
       type: 'spacer',
@@ -857,7 +864,7 @@ function handleClick (clickedID?: string): void {
     ipcRenderer.invoke('application', { command: 'open-preferences' })
       .catch(e => console.error(e))
   } else if (clickedID === 'new-file') {
-    ipcRenderer.invoke('application', { command: 'file-new', payload: { type: 'md' } })
+    ipcRenderer.invoke('application', { command: 'file-new', payload: { type: DocumentType.Markdown } })
       .catch(e => console.error(e))
   } else if (clickedID === 'previous-file') {
     ipcRenderer.invoke('documents-provider', {

@@ -25,9 +25,12 @@ export interface OpenDocument {
  */
 export enum DocumentType {
   Markdown = 1,
+  LaTeX,
   YAML,
   JSON,
-  LaTeX
+  CSS,
+  Lua,
+  Shell,
 }
 
 /**
@@ -84,6 +87,7 @@ export enum DP_EVENTS {
   CHANGE_FILE_STATUS = 'file-status-changed',
   FILE_SAVED = 'file-saved',
   ACTIVE_FILE = 'active-file-changed',
+  ACTIVE_ROOT = 'active-root-changed',
   // Leafs (editor panes)
   NEW_LEAF = 'leaf-created',
   LEAF_CLOSED = 'leaf-deleted',

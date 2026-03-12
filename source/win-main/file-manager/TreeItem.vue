@@ -68,7 +68,7 @@
         }"
         role="button"
         v-bind:aria-label="`Select ${item.name}`"
-        v-bind:draggable="!isRoot"
+        v-bind:draggable="!isRoot && !nameEditing"
         v-bind:title="item.path"
         v-on:dragstart="beginDragging"
         v-on:drag="onDragHandler"
@@ -180,6 +180,7 @@ import {
   hasMSOfficeExt,
   hasOpenOfficeExt,
   hasPDFExt,
+  hasHTMLExt,
   hasExt,
   hasMdOrCodeExt
 } from 'source/common/util/file-extention-checks'
@@ -284,6 +285,8 @@ const primaryIcon = computed(() => {
       return 'file'
     } else if (hasOpenOfficeExt(props.item.path)) {
       return 'file'
+    } else if (hasHTMLExt(props.item.path)) {
+      return 'code'
     } else if (hasDataExt(props.item.path)) {
       return 'code'
     } else if (hasExt(props.item.path, attachmentExtensions)) {
@@ -390,6 +393,8 @@ const filteredChildren = computed(() => {
         return files.images.showInFilemanager
       } else if (hasPDFExt(child.path)) {
         return files.pdf.showInFilemanager
+      } else if (hasHTMLExt(child.path)) {
+        return files.html.showInFilemanager
       } else if (hasMSOfficeExt(child.path)) {
         return files.msoffice.showInFilemanager
       } else if (hasOpenOfficeExt(child.path)) {
@@ -473,6 +478,15 @@ const isSelected = computed(() => {
     return selectedDir.value === props.item.path
   } else {
     return selectedFile.value?.path === props.item.path
+  }
+})
+
+// We need to reset the scroll position when exiting editing mode
+// so that the filename is displayed within the element correctly.
+// It would otherwise be offset to the left edge of the container.
+watch(nameEditing, (isEditing) => {
+  if (!isEditing && displayText.value !== null) {
+    displayText.value.scrollLeft = 0
   }
 })
 
@@ -722,18 +736,6 @@ body {
   div.tree-item-container {
     font-size: 13px;
 
-    // These inputs should be more or less "invisible"
-    input.filename-input {
-      border: none;
-      color: inherit;
-      font-family: inherit;
-      font-size: inherit;
-      background-color: transparent;
-      width: auto;
-      field-sizing: content;
-      padding: 0;
-    }
-
     .tree-item {
       white-space: nowrap;
       display: flex;
@@ -757,11 +759,38 @@ body {
         flex-shrink: 0; // Prevent shrinking; only the display text should
       }
 
+      // These inputs should be more or less "invisible"
+      input.filename-input {
+        border: none;
+        border-radius: 0;
+        font-family: inherit;
+        font-size: inherit;
+        background-color: inherit;
+        width: auto;
+        field-sizing: content;
+        padding: 1px 3px;
+      }
+
       .display-text {
         padding: 3px 5px;
         overflow: hidden;
         text-overflow: ellipsis;
         margin-right: 8px;
+      }
+      // Here, the padding has to be reset in order for
+      // the padding around the input element to not change
+      // the overall size of the display element.
+      .display-text:has(input.filename-input) {
+        padding: 2px 2px;
+
+        // This enables selecting and dragging to scroll
+        overflow: auto;
+        text-overflow: unset;
+
+        // Disable scrollbars
+        &::-webkit-scrollbar {
+          display: none;
+        }
       }
 
       &.project {
@@ -800,6 +829,10 @@ body.darwin {
 
     // On macOS, non-standard icons are normally displayed in color
     clr-icon.special { color: var(--system-accent-color, --c-primary); }
+
+    input.filename-input {
+      border-radius: 4px;
+    }
 
     .display-text {
       border-radius: 4px;

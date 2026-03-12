@@ -57,7 +57,7 @@ function render (view: EditorView): MatchDecorator[] {
   for (const { pattern, style } of customHighlighter) {
     const re = parseAutocorrectKey(pattern)
 
-    if (re === undefined) {
+    if (!re) {
       continue
     }
 

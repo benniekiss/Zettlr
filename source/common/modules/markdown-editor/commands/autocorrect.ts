@@ -197,6 +197,8 @@ export const handleReplacement: Command = (target: EditorView): boolean => {
     }
 
     const endPos = pos - line.from
+    // Limit test strings to 200 characters. This is likely far outside
+    // of what a user would input as an autocorrect target.
     const startPos = Math.max(0, endPos - 200)
 
     const slice = line.text.slice(startPos, endPos)

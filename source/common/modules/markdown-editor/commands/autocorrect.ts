@@ -146,7 +146,9 @@ function parseAutocorrectKey (key: string, matchWholeWords: boolean): RegExp|und
 
   try {
     return new RegExp(prefix + body, flags)
-  } catch {}
+  } catch (err: unknown) {
+    console.info('[autocorrect] Failed to parse string as `RegExp`: ', key, err instanceof Error ? err : 'unknown error')
+  }
 }
 
 // If Autocorrect is active, handles the potential text replacement

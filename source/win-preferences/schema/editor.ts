@@ -307,6 +307,24 @@ export function getEditorFields (config: ConfigOptions): PreferencesFieldset[] {
         },
         { type: 'separator' },
         {
+          type: 'checkbox',
+          label: trans('Center page'),
+          model: 'editor.pageCenter'
+        },
+        {
+          type: 'checkbox',
+          label: trans('Page border'),
+          model: 'editor.pageBorder'
+        },
+        {
+          type: 'number',
+          label: trans('Page width'),
+          inline: true,
+          min: 0,
+          model: 'editor.pageSize'
+        },
+        { type: 'separator' },
+        {
           type: 'number',
           label: trans('Tab size (in number of spaces)'),
           inline: true,

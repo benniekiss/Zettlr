@@ -196,7 +196,10 @@ export const handleReplacement: Command = (target: EditorView): boolean => {
       continue
     }
 
-    const slice = line.text.slice(0, pos - line.from)
+    const endPos = pos - line.from
+    const startPos = Math.max(0, endPos - 200)
+
+    const slice = line.text.slice(startPos, endPos)
     for (let { key, value } of replacements) {
       const re = parseAutocorrectKey(key, autocorrect.matchWholeWords)
 

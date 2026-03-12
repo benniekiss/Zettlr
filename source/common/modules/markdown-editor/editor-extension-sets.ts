@@ -76,6 +76,7 @@ import { projectInfoField } from './plugins/project-info-field'
 import { headingGutter } from './renderers/render-headings'
 import { codeTheme } from './renderers/render-code'
 import { citationTooltips } from './tooltips/citations'
+import { customHighlighter } from './plugins/highlight-regex'
 import { jinja } from '@codemirror/lang-jinja'
 
 /**
@@ -370,6 +371,7 @@ export function getMarkdownExtensions (options: CoreExtensionOptions): Extension
     backgroundLayers, // Add a background behind inline code and code blocks
     defaultContextMenu, // A default context menu
     softwrapVisualIndent, // Always indent visually
+    customHighlighter,
     tagClasses(), // Apply a custom class to each tag so that users can style them (#4589)
     EditorView.domEventHandlers(options.domEventsListeners)
   ]

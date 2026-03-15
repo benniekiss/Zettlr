@@ -20,8 +20,8 @@ import { syntaxTree } from '@codemirror/language'
 import type { Tree } from '@lezer/common'
 import { configField } from '../util/configuration'
 import { insertNewlineAndIndent, isolateHistory } from '@codemirror/commands'
-import { posInNode } from '../util/node-in-selection'
 import { insertNewlineContinueMarkup } from '@codemirror/lang-markdown'
+import { posInNode } from '../util/node-in-selection'
 
 // These characters can be directly followed by a starting magic quote
 const startChars = ' ([{-–—\n\r\t\v\f/\\'
@@ -118,12 +118,18 @@ function capitalizeStartofSentence (text: string, pos: number, tree: Tree): Chan
  * @returns {RegExp}        The newly created regex from `key`.
  */
 function parseAutocorrectKey (key: string, matchWholeWords: boolean): RegExp|undefined {
-  // Must start with slash
-  const prefix = matchWholeWords ? '\b' : ''
+  // Using `\b` (word boundary) checks here would produce unexpected results for
+  // non-word character replacements, such as `-->` to `→`. In those instances,
+  // `matchWholeWords` would only match if the replacement is preceded by a word
+  // character. Instead, check for a preceding non-word character using a
+  // lookbehind to exclude the character from the match and assert the correct
+  // semantics for `matchWholeWords`
+  const prefix = matchWholeWords ? '(?<=\W)' : ''
 
   let body = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   let flags = ''
 
+  // Parse potential regex patterns, which are enclosed in forward slashes
   if (key.length >= 2 && key.startsWith('/')) {
     // There may be flags after the key
     const lastSlash = key.lastIndexOf('/')
@@ -143,8 +149,12 @@ function parseAutocorrectKey (key: string, matchWholeWords: boolean): RegExp|und
     body += '$'
   }
 
+  if (!body.startsWith(prefix)) {
+    body = prefix + body
+  }
+
   try {
-    return new RegExp(prefix + body, flags)
+    return new RegExp(body, flags)
   } catch (err: unknown) {
     console.info('[autocorrect] Failed to parse string as `RegExp`: ', key, err instanceof Error ? err : 'unknown error')
   }
@@ -217,12 +227,12 @@ export const handleReplacement: Command = (target: EditorView): boolean => {
         continue
       }
 
-      const start = line.from + slice.search(re)
+      const start = line.from + startPos + slice.search(re)
       if (posInNode(start, tree, PROTECTED_NODES, -1)) {
         break // `range.from` is not in a protected area, but start is.
       }
 
-      changes.push({ from: line.from, to: pos, insert: value })
+      changes.push({ from: line.from + startPos, to: pos, insert: value })
       break // Do not check the other possible replacements
     }
 

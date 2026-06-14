@@ -433,4 +433,7 @@ export const editorTheme = EditorView.baseTheme({
     font: 'var(--zettlr-editor-header-style) var(--zettlr-editor-header-6-size) var(--zettlr-editor-font)',
     '--zettlr-editor-code-style': 'var(--zettlr-editor-header-style)',
   },
+  '.page-border .cm-content': {
+    outlineColor: 'var(--zettlr-editor-primary-color)'
+  },
 })

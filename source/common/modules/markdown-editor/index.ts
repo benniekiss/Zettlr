@@ -36,7 +36,7 @@ import {
   type Extension,
   type SelectionRange
 } from '@codemirror/state'
-import { foldEffect, foldState, syntaxTree } from '@codemirror/language'
+import { foldEffect, foldState } from '@codemirror/language'
 
 // Keymaps/Input modes
 import { emacs } from '@replit/codemirror-emacs'

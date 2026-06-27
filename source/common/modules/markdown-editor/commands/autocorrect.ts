@@ -22,7 +22,6 @@ import { configField } from '../util/configuration'
 import { insertNewlineAndIndent, isolateHistory } from '@codemirror/commands'
 import { insertNewlineContinueMarkup } from '@codemirror/lang-markdown'
 import { nodeAtPos } from '../util/node-in-selection'
-import _ from 'lodash'
 
 // These characters can be directly followed by a starting magic quote
 const startChars = ' ([{-–—\n\r\t\v\f/\\'
@@ -51,11 +50,12 @@ function normalizeLeadingDoubleCaps (text: string, pos: number, tree: Tree): Cha
   // Matches the last word of the string if it starts with two
   // upper-case letters and is followed by all-lowercase letters.
   const match = /\b(\p{Lu})(\p{Lu})\p{Ll}+\p{P}*$/vd.exec(text)
-  if (!match?.indices) {
+  if (!match?.indices || match.indices[1] === undefined || match.indices[2] === undefined) {
     return null
   }
 
-  const [ , [from], [ , to ] ] = match.indices
+  const [from] = match.indices[1]
+  const [ , to ] = match.indices[2]
 
   const isProtected = nodeAtPos(pos + from, tree, PROTECTED_NODES, -1) ?? nodeAtPos(pos + to, tree, PROTECTED_NODES, -1)
   if (isProtected !== null) {
@@ -82,7 +82,7 @@ function capitalizeStartofSentence (text: string, pos: number, tree: Tree): Chan
 
   // Matches the last word of the string if it starts with a lowercase letter
   const match = /\b(\p{Ll})\p{L}+\p{P}*$/vd.exec(text)
-  if (match?.indices) {
+  if (match?.indices && match.indices[1] !== undefined) {
     const [ from, to ] = match.indices[1]
 
     const isProtected = nodeAtPos(pos + from, tree, PROTECTED_NODES, -1) ?? nodeAtPos(pos + to, tree, PROTECTED_NODES, -1)

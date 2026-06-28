@@ -320,7 +320,8 @@ export function getMarkdownExtensions (options: CoreExtensionOptions): Extension
   }
 
   let parser = markdownParser({
-    zknLinkParserConfig: { format: options.initialConfig.zknLinkFormat }
+    zknLinkParserConfig: { format: options.initialConfig.zknLinkFormat },
+    enableZkn: options.initialConfig.enableZkn,
   })
 
   if (options.useJinja === true) {

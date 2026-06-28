@@ -23,7 +23,7 @@ import { promises as fs } from 'fs'
 import isFile from '@common/util/is-file'
 
 // Exporters
-import type { DefaultsOverride, ExporterAPI, ExporterOptions, ExporterOutput, PandocRunnerOutput } from './types'
+import type { DefaultsOverride, ExporterAPI, ExporterOptions, ExporterOutput, PandocDefaults, PandocRunnerOutput } from './types'
 import { plugin as DefaultExporter } from './default-exporter'
 import { plugin as PDFExporter } from './pdf-exporter'
 import { plugin as TextbundleExporter } from './textbundle-exporter'
@@ -42,25 +42,28 @@ import { supportsExtension } from 'source/common/pandoc-util/pandoc-extensions'
  *
  * @return  {PandocProfileMetadata[]}The additional profiles
  */
-export function getCustomProfiles (): PandocProfileMetadata[] {
+export function getCustomProfiles(): PandocProfileMetadata[] {
   return [
     {
       name: 'Textbundle.yaml', // Fake name
       reader: 'markdown', // Not completely the truth
       writer: 'textbundle', // Not even supported by Pandoc
-      isInvalid: false // IT'S ALL FAKE!
+      isInvalid: false, // IT'S ALL FAKE!
+      outputFile: '',
     },
     {
       name: 'Textpack.yaml',
       reader: 'markdown',
       writer: 'textpack',
-      isInvalid: false
+      isInvalid: false,
+      outputFile: '',
     },
     {
       name: 'Simple PDF.yaml',
       reader: 'markdown',
       writer: 'simple-pdf',
-      isInvalid: false
+      isInvalid: false,
+      outputFile: '',
     }
   ]
 }
@@ -79,7 +82,7 @@ const PLUGINS = {
  *
  * @return  {Promise<ExporterOutput>}              Resolves with an info object.
  */
-export async function makeExport (
+export async function makeExport(
   options: ExporterOptions,
   logger: LogProvider,
   config: ConfigProvider,
@@ -90,11 +93,16 @@ export async function makeExport (
 
   // This is basically the "plugin API"
   const ctx: ExporterAPI = {
-    runPandoc: async (defaults: string) => {
+    runPandoc: async (defaults: PandocDefaults) => {
       return await runPandoc(logger, defaults, options.cwd)
     },
+<<<<<<< HEAD
     writeDefaults: async (filename: string, overrides: Record<string, unknown> = {}) => {
       return await writeDefaults(filename, overrides, config, logger, assets, options.defaultsOverride)
+=======
+    loadDefaults: async (filename: string, overrides: PandocDefaults = {}) => {
+      return await loadDefaults(filename, overrides, logger, config, assets, options.defaultsOverride)
+>>>>>>> faffe78bf (custom profile patches)
     },
     listDefaults: async () => {
       return await assets.listDefaults()
@@ -102,7 +110,7 @@ export async function makeExport (
   }
 
   // Search for the correct plugin to run, and run it. First the custom ones ...
-  if ([ 'textbundle', 'textpack' ].includes(options.profile.writer)) {
+  if (['textbundle', 'textpack'].includes(options.profile.writer)) {
     return await PLUGINS.textbundle(options, inputFiles, ctx)
   } else if (options.profile.writer === 'simple-pdf') {
     return await PLUGINS['simple-pdf'](options, inputFiles, ctx)
@@ -112,7 +120,10 @@ export async function makeExport (
   }
 }
 
-async function runPandoc (logger: LogProvider, defaultsFile: string, cwd?: string): Promise<PandocRunnerOutput> {
+async function runPandoc(logger: LogProvider, defaults: PandocDefaults, cwd?: string): Promise<PandocRunnerOutput> {
+  const defaultsFile = path.join(app.getPath('temp'), 'defaults.yml')
+  await fs.writeFile(defaultsFile, YAML.stringify(defaults), { encoding: 'utf8' })
+
   const output: PandocRunnerOutput = {
     code: 0,
     stdout: [],
@@ -120,7 +131,7 @@ async function runPandoc (logger: LogProvider, defaultsFile: string, cwd?: strin
   }
 
   await new Promise<void>((resolve, reject) => {
-    const pandocProcess = spawn('pandoc', [ '--defaults', `"${defaultsFile}"` ], {
+    const pandocProcess = spawn('pandoc', ['--defaults', `"${defaultsFile}"`], {
       // NOTE: This has to be true, because of reasons unbeknownst to me, Pandoc
       // is unable to open the defaultsFile if it is not run from within a shell
       shell: true,
@@ -153,7 +164,11 @@ async function runPandoc (logger: LogProvider, defaultsFile: string, cwd?: strin
   output.stdout = output.stdout.join('').split('\n').filter(line => line.trim() !== '')
 
   if (output.stdout.length > 0) {
-    logger.info('This Pandoc run produced additional output.', output.stdout)
+    logger.info('This Pandoc run produced additional output.', output.stdout.join('\n'))
+  }
+
+  if (output.stderr.length > 0) {
+    logger.warning('This Pandoc run produced additional output.', output.stderr.join('\n'))
   }
 
   return output
@@ -161,16 +176,16 @@ async function runPandoc (logger: LogProvider, defaultsFile: string, cwd?: strin
 
 // REFERENCE: Full defaults file here: https://pandoc.org/MANUAL.html#default-files
 
-async function writeDefaults (
+async function loadDefaults(
   filename: string, // The profile to use
-  properties: Record<string, unknown>, // Contains properties that will be written to the defaults
+  properties: PandocDefaults, // Contains properties that will be written to the defaults
+  logger: LogProvider,
   config: ConfigProvider,
   logger: LogProvider,
   assets: AssetsProvider,
   defaultsOverride?: DefaultsOverride
-): Promise<string> {
-  const defaultsFile = path.join(app.getPath('temp'), 'defaults.yml')
-  const defaults = await assets.getDefaultsFile(filename)
+): Promise<PandocDefaults> {
+  const defaults: PandocDefaults = await assets.getDefaultsFile(filename)
 
   const cfg = config.get()
   const { cslLibrary, cslStyle, stripTags, stripLinks, forceEnableExtensions } = cfg.export
@@ -179,7 +194,7 @@ async function writeDefaults (
   // First step: Reader treatment. Zettlr can modify the reader to align with
   // the user preferences.
   const parsedReader = parseReaderWriter(defaults.reader as string)
-  
+
   // The user can choose to use [[link|title]] or [[title|link]] syntax. In
   // order for the Lua filter to work properly and respect the link removal
   // setting upon export, we need to set the appropriate extension if it is not
@@ -216,7 +231,7 @@ async function writeDefaults (
   // respects a file-defined bibliography, this is our best shot.
   // const bibliography = global.citeproc.getSelectedDatabase()
   if (isFile(cslLibrary)) {
-    if ('bibliography' in defaults) {
+    if (defaults.bibliography !== undefined) {
       // Ensure the bibliography is an array, not a single string.
       if (!Array.isArray(defaults.bibliography)) {
         defaults.bibliography = [defaults.bibliography]
@@ -237,11 +252,11 @@ async function writeDefaults (
   // users can also add these manually to their files if they prefer. This way
   // any file's metadata will overwrite anything defined programmatically here
   // in the defaults.
-  if (!('metadata' in defaults)) {
+  if (defaults.metadata === undefined) {
     defaults.metadata = {}
   }
 
-  if (!('zettlr' in defaults.metadata)) {
+  if (defaults.metadata.zettlr === undefined) {
     defaults.metadata.zettlr = {}
   }
 
@@ -258,25 +273,35 @@ async function writeDefaults (
   }
 
   // Add all filters which are within the userData/lua-filter directory.
-  if (!('filters' in defaults)) {
+  if (defaults.filters === undefined) {
     defaults.filters = []
   }
 
   const filters = await assets.listFilters(true)
   defaults.filters = defaults.filters.concat(filters)
 
-  // After we have added our default keys, let the plugin add their keys, which
-  // enables them to override certain keys if necessary.
-  for (const key in properties) {
-    defaults[key] = properties[key]
-  }
+  // After we have added our default keys, let the plugin add keys, which
+  // may be overridden by the default file if already set.
+  const alwaysOverrideKeys = [
+    'input-files'
+  ]
 
-  const YAMLOptions = {
-    indent: 4,
-    simpleKeys: false
+  for (const key in properties) {
+    // Some keys should always be overridden by the plugin values to provide the
+    // expected functionality.
+    if (alwaysOverrideKeys.includes(key)) {
+      defaults[key] = properties[key]
+      logger.warning(`Overriding \`${key}\`: \`${properties[key]}\``)
+      logger.warning(`Ignoring default property \`${key}\`: \`${defaults[key]}\``)
+      // If the defaults file does not define a key, set it to the plugin value.
+    } else if (defaults[key] === undefined) {
+      defaults[key] = properties[key]
+    } else {
+      logger.info(`Default property \`${key}\` is already set: \`${YAML.stringify(defaults[key], { indent: 4, simpleKeys: false })}\``)
+      logger.info(`Ignoring plugin property \`${key}\`: \`${properties[key]}\``)
+    }
   }
-  await fs.writeFile(defaultsFile, YAML.stringify(defaults, YAMLOptions), { encoding: 'utf8' })
 
   // Return the path to the defaults file
-  return defaultsFile
+  return defaults
 }

@@ -8,16 +8,23 @@
         v-bind:label="formatLabel"
         v-bind:options="availableFormats"
       ></SelectControl>
+      <ZtrAdmonition v-if="outputFilename" type="info" class="outputfile-admonition">
+        {{ outputFileLabel }}: <strong>{{ outputFilename }}</strong>
+      </ZtrAdmonition>
       <!-- The choice of working directory vs. temporary applies to all exporters -->
       <hr>
       <RadioControl
         v-model="exportDirectory"
+        v-bind:disabled="outputFilenameIsAbsolute"
         v-bind:options="{
           'temp': tempDirLabel,
           'cwd': cwdLabel,
           'ask': askLabel
         }"
       ></RadioControl>
+      <ZtrAdmonition v-if="outputFilenameIsAbsolute" type="warning" class="disable-directory-admonition">
+        {{ outputFileIsAbsoluteLable }}
+      </ZtrAdmonition>
       <hr>
       <CheckboxControl
         v-model="autoOpenExport"
@@ -53,11 +60,12 @@ import PopoverWrapper from '@common/vue/PopoverWrapper.vue'
 import RadioControl from '@common/vue/form/elements/RadioControl.vue'
 import SelectControl from '@common/vue/form/elements/SelectControl.vue'
 import CheckboxControl from '@common/vue/form/elements/CheckboxControl.vue'
+import ZtrAdmonition from '@common/vue/ZtrAdmonition.vue'
 import { ref, computed, watch, onMounted } from 'vue'
 import type { AssetsProviderIPCAPI, PandocProfileMetadata } from '@providers/assets'
 import { SUPPORTED_READERS } from '@common/pandoc-util/pandoc-maps'
 import { trans } from '@common/i18n-renderer'
-import { pathBasename } from '@common/util/renderer-path-polyfill'
+import { pathBasename, isAbsolutePath } from '@common/util/renderer-path-polyfill'
 import { useConfigStore } from 'source/pinia'
 import { parseReaderWriter } from 'source/common/pandoc-util/parse-reader-writer'
 import type { CustomExportIPCAPI, ExportIPCAPI } from 'source/app/service-providers/commands/export'
@@ -69,6 +77,8 @@ const autoOpenLabel = trans('Open after export')
 const tempDirLabel = trans('Temporary directory')
 const cwdLabel = trans('Current directory')
 const askLabel = trans('Select directory')
+const outputFileLabel = trans('Output set by profile')
+const outputFileIsAbsoluteLable = trans('Directory selection is disabled because the output is an absolute path')
 
 // This is used to limit the number of selected
 // profile to filename mappings in the config
@@ -120,13 +130,18 @@ const lastUsedProfile = computed(() => configStore.config.export.lastUsedProfile
 
 const exportButtonLabel = computed(() => isExporting.value ? trans('Exporting…') : trans('Export'))
 const filename = computed(() => pathBasename(props.filePath))
+const outputFilename = ref('')
+const outputFilenameIsAbsolute = ref(false)
+
 const availableFormats = computed(() => {
   const selectOptions: Record<string, string> = {}
 
   profileMetadata.value
     // Remove files that cannot read any of Zettlr's internal formats ...
-    .filter(e => {
-      return SUPPORTED_READERS.includes(parseReaderWriter(e.reader).name)
+    .filter(prof => {
+      const reader = parseReaderWriter(prof.reader)
+
+      return reader.isCustom || SUPPORTED_READERS.includes(reader.name)
     })
     // ... and add the others to the available options
     .forEach(elem => { selectOptions[elem.name] = getDisplayText(elem) })
@@ -157,6 +172,9 @@ watch(format, function (value) {
 
   const profile: string  = prof?.name ?? cmd?.command ?? lastUsedProfile.value
   const filePath: string = props.filePath
+
+  outputFilename.value = prof?.outputFile ?? ''
+  outputFilenameIsAbsolute.value = isAbsolutePath(outputFilename.value)
 
   const newProfiles = selectedProfiles.value
     // Remove any previous items with the same path
@@ -235,6 +253,17 @@ body {
       select {
           margin-top: 5px;
         }
+    }
+
+    .outputfile-admonition {
+      margin: 5px;
+      font-size: 100%;
+      word-break: break-all;
+    }
+
+    .disable-directory-admonition {
+      margin: 5px;
+      font-size: 100%;
     }
 
     .radio-group-container {

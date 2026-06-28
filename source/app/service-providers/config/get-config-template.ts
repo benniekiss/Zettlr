@@ -207,10 +207,11 @@ export interface ConfigOptions {
     // Built-in files cannot be shown in the sidebar, will always be shown in
     // the file manager, and will always be opened with Zettlr.
     builtin: FileTypeSettings<true, false, 'zettlr'>
-    // Images and PDFs can be entirely hidden or shown everywhere, and opened
+    // Images, PDFs, and HTML can be entirely hidden or shown everywhere, and opened
     // with the system default, or in Zettlr
     images: FileTypeSettings
     pdf: FileTypeSettings
+    html: FileTypeSettings
     // These file types can be shown anywhere, but are not open-able by Zettlr.
     msoffice: FileTypeSettings<boolean, boolean, 'system'>
     openOffice: FileTypeSettings<boolean, boolean, 'system'>
@@ -490,6 +491,7 @@ export function getConfigTemplate (): ConfigOptions {
       builtin: { showInFilemanager: true, showInSidebar: false, openWith: 'zettlr' },
       images: { showInFilemanager: false, showInSidebar: true, openWith: 'system' },
       pdf: { showInFilemanager: false, showInSidebar: true, openWith: 'system' },
+      html: { showInFilemanager: false, showInSidebar: true, openWith: 'system' },
       msoffice: { showInFilemanager: false, showInSidebar: true, openWith: 'system' },
       openOffice: { showInFilemanager: false, showInSidebar: true, openWith: 'system' },
       dataFiles: { showInFilemanager: false, showInSidebar: true, openWith: 'system' },

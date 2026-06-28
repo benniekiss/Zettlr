@@ -89,6 +89,7 @@ import { getSnippetsFields } from './schema/snippets'
 import { useConfigStore } from 'source/pinia'
 import { PreferencesGroups } from './schema/_preferences-groups'
 import { getShortcutFields } from './schema/shortcuts'
+import type { DictionaryRecord } from 'source/app/service-providers/dictionary'
 
 export type PreferencesFieldset = Fieldset & { group: PreferencesGroups }
 
@@ -100,7 +101,7 @@ const hasVibrancy = computed(() => configStore.config.window.vibrancy && process
 const currentGroup = ref(0)
 const query = ref('')
 // Will be populated afterwards, contains the user dict
-const userDictionaryContents = ref<string[]>([])
+const userDictionaryContents = ref<DictionaryRecord[]>([])
 // Will be populated afterwards, contains all dictionaries
 const availableDictionaries = ref<Array<{ selected: boolean, value: string, key: string }>>([])
 // Will be populated afterwards, contains the available languages
@@ -324,7 +325,7 @@ function handleInput (prop: string, val: unknown): void {
     // The user dictionary is not handled by the config
     ipcRenderer.invoke('dictionary-provider', {
       command: 'set-user-dictionary',
-      payload: val
+      payload: JSON.parse(JSON.stringify(val))
     })
       .catch(err => console.error(err))
   } else if (prop === 'availableDictionaries') {

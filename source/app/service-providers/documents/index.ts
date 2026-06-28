@@ -35,7 +35,7 @@ import { markdownToAST } from '@common/modules/markdown-utils'
 import isFile from '@common/util/is-file'
 import { trans } from '@common/i18n-main'
 import type FSALWatchdog from '@providers/fsal/fsal-watchdog'
-import { getDocumentTypeForExtension, hasImageExt, hasMdOrCodeExt, hasPDFExt } from 'source/common/util/file-extention-checks'
+import { hasHTMLExt, getDocumentTypeForExtension, hasImageExt, hasMdOrCodeExt, hasPDFExt } from 'source/common/util/file-extention-checks'
 import isDir from 'source/common/util/is-dir'
 
 type DocumentWindows = Record<string, DocumentTree>
@@ -823,6 +823,8 @@ current contents from the editor somewhere else, and restart the application.`
       if (hasImageExt(filePath) && files.images.openWith === 'zettlr') {
         shouldOpenExternally = false
       } else if (hasPDFExt(filePath) && files.pdf.openWith === 'zettlr') {
+        shouldOpenExternally = false
+      } else if (hasHTMLExt(filePath) && files.html.openWith === 'zettlr') {
         shouldOpenExternally = false
       }
 

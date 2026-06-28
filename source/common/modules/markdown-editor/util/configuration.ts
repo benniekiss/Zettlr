@@ -86,6 +86,7 @@ export interface EditorConfiguration {
   highlightWhitespace: boolean
   showMarkdownLineNumbers: boolean
   countChars: boolean
+  customHighlighter: { pattern: string, style: string }[]
 }
 
 export function getDefaultConfig (): EditorConfiguration {
@@ -161,7 +162,8 @@ export function getDefaultConfig (): EditorConfiguration {
     margins: 'M',
     highlightWhitespace: false,
     showMarkdownLineNumbers: false,
-    countChars: false
+    countChars: false,
+    customHighlighter: [],
   }
 }
 

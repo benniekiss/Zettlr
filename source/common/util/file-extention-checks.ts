@@ -23,6 +23,7 @@ export const JSON_EXT = ['.json']
 export const CODE_EXT = [ ...LATEX_EXT, ...YAML_EXT, ...JSON_EXT, '.dic' ]
 export const IMG_EXT = [ '.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.bmp', '.tiff' ]
 export const PDF_EXT = ['.pdf']
+export const HTML_EXT = ['.html']
 export const MS_OFFICE_EXT = [ '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx' ]
 export const OPEN_OFFICE_EXT = [ '.odt', '.ods', '.odp' ]
 export const DATA_EXT = [ '.csv', '.tsv', '.sav', '.zsav' ]
@@ -32,6 +33,7 @@ const ALL_EXT = [
   ...CODE_EXT,
   ...IMG_EXT,
   ...PDF_EXT,
+  ...HTML_EXT,
   ...MS_OFFICE_EXT,
   ...OPEN_OFFICE_EXT,
   ...DATA_EXT,
@@ -103,6 +105,18 @@ export function hasImageExt (filePath: string): boolean {
  */
 export function hasPDFExt (filePath: string): boolean {
   return hasExt(filePath, PDF_EXT)
+}
+
+
+/**
+ * Has the given path a valid HTML file extension?
+ *
+ * @param   {string}   filePath  The path to check
+ *
+ * @return  {boolean}            True or false
+ */
+export function hasHTMLExt (filePath: string): boolean {
+  return hasExt(filePath, HTML_EXT)
 }
 
 /**

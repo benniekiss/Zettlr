@@ -193,6 +193,30 @@ export function getAdvancedFields (config: ConfigOptions): PreferencesFieldset[]
                 model: 'files.pdf.openWith'
               }
             ],
+            /* HTML files */
+            [
+              {
+                type: 'form-text',
+                display: 'plain',
+                contents: trans('HTML documents')
+              },
+              {
+                type: 'checkbox',
+                model: 'files.html.showInFilemanager'
+              },
+              {
+                type: 'checkbox',
+                model: 'files.html.showInSidebar'
+              },
+              {
+                type: 'select',
+                options: {
+                  'zettlr': 'Zettlr',
+                  'system': trans('System default')
+                },
+                model: 'files.html.openWith'
+              }
+            ],
             // Office documents
             [
               {

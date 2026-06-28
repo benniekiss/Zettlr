@@ -15,7 +15,7 @@
  * END HEADER
  */
 
-import { hasImageExt, hasPDFExt, hasMSOfficeExt, hasOpenOfficeExt, hasDataExt, hasMdOrCodeExt, hasExt } from 'source/common/util/file-extention-checks'
+import { hasImageExt, hasPDFExt, hasMSOfficeExt, hasOpenOfficeExt, hasDataExt, hasMdOrCodeExt, hasExt, hasHTMLExt } from 'source/common/util/file-extention-checks'
 import { isDotFile } from 'source/common/util/ignore-path'
 import { useConfigStore } from 'source/pinia'
 import type { AnyDescriptor } from 'source/types/common/fsal'
@@ -43,6 +43,8 @@ export function filterDescriptorChildren (): (item: AnyDescriptor) => boolean {
       return files.images.showInFilemanager
     } else if (hasPDFExt(child.path)) {
       return files.pdf.showInFilemanager
+    } else if (hasHTMLExt(child.path)) {
+      return files.html.showInFilemanager
     } else if (hasMSOfficeExt(child.path)) {
       return files.msoffice.showInFilemanager
     } else if (hasOpenOfficeExt(child.path)) {

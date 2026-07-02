@@ -154,10 +154,6 @@ function parseAutocorrectKey (key: string, matchWholeWords: boolean): RegExp|und
     body = prefix + body
   }
 
-  if (!body.startsWith(prefix)) {
-    body = prefix + body
-  }
-
   try {
     return new RegExp(body, flags)
   } catch (err: unknown) {

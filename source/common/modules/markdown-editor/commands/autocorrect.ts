@@ -125,7 +125,7 @@ function parseAutocorrectKey (key: string, matchWholeWords: boolean): RegExp|und
   // character. Instead, check for a preceding non-word character using a
   // lookbehind to exclude the character from the match and assert the correct
   // semantics for `matchWholeWords`
-  const prefix = matchWholeWords ? '(?<=\W)' : ''
+  const prefix = matchWholeWords ? '(?<=^|\\W)' : ''
 
   let body = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   let flags = ''

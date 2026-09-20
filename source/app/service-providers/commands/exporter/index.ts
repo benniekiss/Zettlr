@@ -42,7 +42,7 @@ import { supportsExtension } from 'source/common/pandoc-util/pandoc-extensions'
  *
  * @return  {PandocProfileMetadata[]}The additional profiles
  */
-export function getCustomProfiles(): PandocProfileMetadata[] {
+export function getCustomProfiles (): PandocProfileMetadata[] {
   return [
     {
       name: 'Textbundle.yaml', // Fake name
@@ -82,7 +82,7 @@ const PLUGINS = {
  *
  * @return  {Promise<ExporterOutput>}              Resolves with an info object.
  */
-export async function makeExport(
+export async function makeExport (
   options: ExporterOptions,
   logger: LogProvider,
   config: ConfigProvider,
@@ -96,13 +96,8 @@ export async function makeExport(
     runPandoc: async (defaults: PandocDefaults) => {
       return await runPandoc(logger, defaults, options.cwd)
     },
-<<<<<<< HEAD
-    writeDefaults: async (filename: string, overrides: Record<string, unknown> = {}) => {
-      return await writeDefaults(filename, overrides, config, logger, assets, options.defaultsOverride)
-=======
     loadDefaults: async (filename: string, overrides: PandocDefaults = {}) => {
-      return await loadDefaults(filename, overrides, logger, config, assets, options.defaultsOverride)
->>>>>>> faffe78bf (custom profile patches)
+      return await loadDefaults(filename, overrides, config, logger, assets, options.defaultsOverride)
     },
     listDefaults: async () => {
       return await assets.listDefaults()
@@ -110,7 +105,7 @@ export async function makeExport(
   }
 
   // Search for the correct plugin to run, and run it. First the custom ones ...
-  if (['textbundle', 'textpack'].includes(options.profile.writer)) {
+  if ([ 'textbundle', 'textpack' ].includes(options.profile.writer)) {
     return await PLUGINS.textbundle(options, inputFiles, ctx)
   } else if (options.profile.writer === 'simple-pdf') {
     return await PLUGINS['simple-pdf'](options, inputFiles, ctx)
@@ -120,7 +115,7 @@ export async function makeExport(
   }
 }
 
-async function runPandoc(logger: LogProvider, defaults: PandocDefaults, cwd?: string): Promise<PandocRunnerOutput> {
+async function runPandoc (logger: LogProvider, defaults: PandocDefaults, cwd?: string): Promise<PandocRunnerOutput> {
   const defaultsFile = path.join(app.getPath('temp'), 'defaults.yml')
   await fs.writeFile(defaultsFile, YAML.stringify(defaults), { encoding: 'utf8' })
 
@@ -131,7 +126,7 @@ async function runPandoc(logger: LogProvider, defaults: PandocDefaults, cwd?: st
   }
 
   await new Promise<void>((resolve, reject) => {
-    const pandocProcess = spawn('pandoc', ['--defaults', `"${defaultsFile}"`], {
+    const pandocProcess = spawn('pandoc', [ '--defaults', `"${defaultsFile}"` ], {
       // NOTE: This has to be true, because of reasons unbeknownst to me, Pandoc
       // is unable to open the defaultsFile if it is not run from within a shell
       shell: true,
@@ -176,10 +171,9 @@ async function runPandoc(logger: LogProvider, defaults: PandocDefaults, cwd?: st
 
 // REFERENCE: Full defaults file here: https://pandoc.org/MANUAL.html#default-files
 
-async function loadDefaults(
+async function loadDefaults (
   filename: string, // The profile to use
   properties: PandocDefaults, // Contains properties that will be written to the defaults
-  logger: LogProvider,
   config: ConfigProvider,
   logger: LogProvider,
   assets: AssetsProvider,

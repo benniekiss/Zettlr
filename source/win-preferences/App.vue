@@ -138,7 +138,7 @@ const fieldsets = computed<Fieldset[]>(() => {
   return [
     ...getAdvancedFields(configStore.config),
     ...getAppearanceFields(configStore.config),
-    ...getAutocorrectFields(),
+    ...getAutocorrectFields(configStore.config),
     ...getCitationFields(),
     ...getEditorFields(configStore.config),
     ...getFileManagerFields(configStore.config),

@@ -335,7 +335,10 @@ export function getMarkdownExtensions (options: CoreExtensionOptions): Extension
     EditorView.domEventHandlers(mdPasteDropHandlers),
     // We need our custom keymaps first
     // The parser generates the AST for the document ...
-    parser,
+    markdownParser({
+      zknLinkParserConfig: { format: options.initialConfig.zknLinkFormat },
+      enableZkn: options.initialConfig.enableZkn,
+    }),
     // ... which can then be styled with a highlighter
     markdownSyntaxHighlighter(),
     renderers(options.initialConfig),

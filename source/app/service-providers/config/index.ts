@@ -55,7 +55,8 @@ const guardOptions = {
   // The following options only require the editors to reload, since they are,
   // e.g., required by one of the extensions.
   reloadEditors: [
-    'zkn.linkFormat' // Requires a reload since required by the parser that has no access to the editor config
+    'zkn.enableZkn',
+    'zkn.linkFormat', // Requires a reload since required by the parser that has no access to the editor config
   ]
 }
 

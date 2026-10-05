@@ -320,7 +320,7 @@ export function getMarkdownExtensions (options: CoreExtensionOptions): Extension
   }
 
   let parser = markdownParser({
-    zknLinkParserConfig: { format: options.initialConfig.zknLinkFormat }
+    zknLinkParserConfig: { format: options.initialConfig.zknLinkFormat },      enableZkn: options.initialConfig.enableZkn,
   })
 
   if (options.useJinja === true) {
@@ -335,10 +335,7 @@ export function getMarkdownExtensions (options: CoreExtensionOptions): Extension
     EditorView.domEventHandlers(mdPasteDropHandlers),
     // We need our custom keymaps first
     // The parser generates the AST for the document ...
-    markdownParser({
-      zknLinkParserConfig: { format: options.initialConfig.zknLinkFormat },
-      enableZkn: options.initialConfig.enableZkn,
-    }),
+    parser, 
     // ... which can then be styled with a highlighter
     markdownSyntaxHighlighter(),
     renderers(options.initialConfig),

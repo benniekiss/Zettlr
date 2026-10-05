@@ -19,7 +19,7 @@ import getLanguageFile from '@common/util/get-language-file'
 import type { EditorShortcutName } from 'source/common/modules/markdown-editor/keymaps/shortcuts'
 import { type MenuShortcutName } from '../menu/shortcuts'
 
-export type MarkdownTheme = 'berlin'|'frankfurt'|'bielefeld'|'karl-marx-stadt'|'bordeaux'
+export type MarkdownTheme = 'berlin' | 'frankfurt' | 'bielefeld' | 'karl-marx-stadt' | 'bordeaux'
 
 // This is a handy interface to add groups of file types to the settings in
 // order to allow users to display them in filemanager and/or sidebar, and open
@@ -27,7 +27,7 @@ export type MarkdownTheme = 'berlin'|'frankfurt'|'bielefeld'|'karl-marx-stadt'|'
 // NOTE: The generics are meant so that you can restrict certain groupings.
 // E.g., FileTypeSettings<true, false, 'zettlr'> enforces these values for the
 // three properties.
-interface FileTypeSettings<F = boolean, S = boolean, O = 'zettlr'|'system'> {
+interface FileTypeSettings<F = boolean, S = boolean, O = 'zettlr' | 'system'> {
   showInFilemanager: F
   showInSidebar: S
   openWith: O
@@ -39,15 +39,15 @@ interface FileTypeSettings<F = boolean, S = boolean, O = 'zettlr'|'system'> {
 type Extends<T, U extends T> = U // Helper type to allow for autocomplete
 export type ConfigurableEditorShortcuts = Extends<
   EditorShortcutName,
-  'table-align'|'table-align-col-center'|'table-align-col-left'|
-  'table-align-col-right'|'tr-zap-gremlins'|'tr-emdash-add-spaces'|
-  'tr-double-quotes-to-single'|'tr-emdash-remove-spaces'|
-  'tr-ensure-double-quotes'|'tr-italics-to-quotes'|'tr-quotes-to-italics'|
-  'tr-quotes-to-magic'|'tr-remove-line-breaks'|'tr-sentence-case'|
-  'tr-single-quotes-to-double'|'tr-straighten-quotes'|
-  'tr-strip-duplicate-spaces'|'tr-title-case'
+  'table-align' | 'table-align-col-center' | 'table-align-col-left' |
+  'table-align-col-right' | 'tr-zap-gremlins' | 'tr-emdash-add-spaces' |
+  'tr-double-quotes-to-single' | 'tr-emdash-remove-spaces' |
+  'tr-ensure-double-quotes' | 'tr-italics-to-quotes' | 'tr-quotes-to-italics' |
+  'tr-quotes-to-magic' | 'tr-remove-line-breaks' | 'tr-sentence-case' |
+  'tr-single-quotes-to-double' | 'tr-straighten-quotes' |
+  'tr-strip-duplicate-spaces' | 'tr-title-case'
 >
-export type ConfigurableUIShortcuts = Extends<MenuShortcutName, 'previous-tab'|'next-tab'|'filter-files'>
+export type ConfigurableUIShortcuts = Extends<MenuShortcutName, 'previous-tab' | 'next-tab' | 'filter-files'>
 
 /**
  * This type describes an entry of the ignored rules array in the config. We
@@ -78,26 +78,26 @@ export interface ConfigOptions {
   appLang: string
 
   darkMode: boolean
-  darkModeEditor: 'match'|'light'|'dark'
-  autoDarkMode: 'off'|'system'|'schedule'
+  darkModeEditor: 'match' | 'light' | 'dark'
+  autoDarkMode: 'off' | 'system' | 'schedule'
   autoDarkModeStart: string
   autoDarkModeEnd: string
 
-  openDirectory: string|null
+  openDirectory: string | null
   attachmentExtensions: string[]
   alwaysReloadFiles: boolean
   muteLines: boolean
 
   // NOTE to everyone: These options (and possibly others) that pertain to the
   // file manager should slowly be migrated into the fileManager group below.
-  fileManagerMode: 'thin'|'combined'|'expanded'
+  fileManagerMode: 'thin' | 'combined' | 'expanded'
   fileManagerShowFiles: boolean
   fileManagerShowWorkspaces: boolean
   fileMeta: boolean
-  fileMetaTime: 'modtime'|'creationtime'
-  sorting: 'natural'|'ascii'
+  fileMetaTime: 'modtime' | 'creationtime'
+  sorting: 'natural' | 'ascii'
   sortFoldersFirst: boolean
-  fileNameDisplay: 'filename'|'title'|'heading'|'title+heading'
+  fileNameDisplay: 'filename' | 'title' | 'heading' | 'title+heading'
 
   // NOTE to everyone: The various filemanager options (see above) should over
   // time be migrated into this group.
@@ -125,10 +125,10 @@ export interface ConfigOptions {
     askLangFileDialog: string
   }
   export: {
-    dir: 'temp'|'cwd'|'ask'
+    dir: 'temp' | 'cwd' | 'ask'
     stripTags: boolean
     autoOpenExportedFiles: boolean
-    stripLinks: 'full'|'unlink'|'no'
+    stripLinks: 'full' | 'unlink' | 'no'
     cslLibrary: string
     cslStyle: string
     useBundledPandoc: boolean
@@ -146,7 +146,7 @@ export interface ConfigOptions {
     idGen: string
     linkAddFileTitle: boolean
     linkWithIDIfPossible: boolean
-    linkFormat: 'link|title'|'title|link'
+    linkFormat: 'link|title' | 'title|link'
     autoSearch: boolean
     customDirectory: string
   }
@@ -155,8 +155,8 @@ export interface ConfigOptions {
     snippetAutocompleteTriggerCharacter: ':'
     autocompleteWithEnter: boolean
     autocompleteWithTab: boolean
-    autoSave: 'off'|'immediately'|'delayed'
-    citeStyle: 'in-text'|'in-text-suffix'|'regular'
+    autoSave: 'off' | 'immediately' | 'delayed'
+    citeStyle: 'in-text' | 'in-text-suffix' | 'regular'
     autoCloseBrackets: boolean
     showLinkPreviews: boolean
     showStatusbar: boolean
@@ -170,16 +170,16 @@ export interface ConfigOptions {
     alwaysIndentLineOnTab: boolean
     fontSize: number
     countChars: boolean
-    inputMode: 'default'|'vim'|'emacs'
-    boldFormatting: '**'|'__'
-    italicFormatting: '_'|'*'
-    highlightFormatting: 'span'|'=='
-    readabilityAlgorithm: 'dale-chall'|'gunning-fog'|'coleman-liau'|'automated-readability'
+    inputMode: 'default' | 'vim' | 'emacs'
+    boldFormatting: '**' | '__'
+    italicFormatting: '_' | '*'
+    highlightFormatting: 'span' | '=='
+    readabilityAlgorithm: 'dale-chall' | 'gunning-fog' | 'coleman-liau' | 'automated-readability'
     lint: {
       markdown: boolean
       languageTool: {
         active: boolean
-        level: 'picky'|'default'
+        level: 'picky' | 'default'
         motherTongue: string // e.g., en-US, de-DE
         variants: {
           en: string
@@ -188,8 +188,11 @@ export interface ConfigOptions {
           ca: string
         }
         ignoredRules: LanguageToolIgnoredRuleEntry[]
-        provider: 'official'|'custom'
+        provider: 'official' | 'custom'
         customServer: string
+        charsPerRequest: number
+        charsPerMinute: number
+        requestsPerMinute: number
         username: string
         apiKey: string
       }
@@ -211,7 +214,7 @@ export interface ConfigOptions {
     previewModeShowSyntaxWhenCursorIsAdjacent: boolean
     imageWidth: number
     imageHeight: number
-    renderingMode: 'preview'|'raw'
+    renderingMode: 'preview' | 'raw'
     renderCitations: boolean
     renderIframes: boolean
     renderImages: boolean
@@ -228,10 +231,11 @@ export interface ConfigOptions {
     // Built-in files cannot be shown in the sidebar, will always be shown in
     // the file manager, and will always be opened with Zettlr.
     builtin: FileTypeSettings<true, false, 'zettlr'>
-    // Images and PDFs can be entirely hidden or shown everywhere, and opened
+    // Images, PDFs, and HTML can be entirely hidden or shown everywhere, and opened
     // with the system default, or in Zettlr
     images: FileTypeSettings
     pdf: FileTypeSettings
+    html: FileTypeSettings
     // These file types can be shown anywhere, but are not open-able by Zettlr.
     msoffice: FileTypeSettings<boolean, boolean, 'system'>
     openOffice: FileTypeSettings<boolean, boolean, 'system'>
@@ -247,7 +251,7 @@ export interface ConfigOptions {
     vibrancy: boolean
     sidebarVisible: boolean
     fileManagerVisible: boolean
-    currentSidebarTab: 'toc'|'references'|'relatedFiles'|'attachments'
+    currentSidebarTab: 'toc' | 'references' | 'relatedFiles' | 'attachments'
     recentGlobalSearches: string[]
   }
   ui: {
@@ -260,7 +264,7 @@ export interface ConfigOptions {
     avoidNewTabs: boolean
     iframeWhitelist: string[]
     checkForUpdates: boolean
-    zoomBehavior: 'gui'|'editor'
+    zoomBehavior: 'gui' | 'editor'
   }
   shortcuts: {
     editor: Record<ConfigurableEditorShortcuts, string>
@@ -276,10 +280,18 @@ export interface ConfigOptions {
     showMarkdownLinkButton: boolean
     showMarkdownImageButton: boolean
     showMarkdownMakeTaskListButton: boolean
+    showMarkdownLintButton: boolean
     showInsertTableButton: boolean
     showInsertFootnoteButton: boolean
     showDocumentInfoText: boolean
     showPomodoroButton: boolean
+  }
+  workspaces: {
+    enableAssets: boolean
+    loadSnippets: boolean
+    loadCSS: boolean
+    loadExportProfiles: boolean
+    loadDictionary: boolean
   }
 }
 
@@ -422,6 +434,9 @@ export function getConfigTemplate (): ConfigOptions {
           ignoredRules: [],
           provider: 'official',
           customServer: '',
+          charsPerRequest: 0, // 0 disables the limit
+          charsPerMinute: 0, // 0 disables the limit
+          requestsPerMinute: 0, // 0 disables the limit
           username: '',
           apiKey: ''
         }
@@ -517,6 +532,7 @@ export function getConfigTemplate (): ConfigOptions {
       builtin: { showInFilemanager: true, showInSidebar: false, openWith: 'zettlr' },
       images: { showInFilemanager: false, showInSidebar: true, openWith: 'system' },
       pdf: { showInFilemanager: false, showInSidebar: true, openWith: 'system' },
+      html: { showInFilemanager: false, showInSidebar: true, openWith: 'system' },
       msoffice: { showInFilemanager: false, showInSidebar: true, openWith: 'system' },
       openOffice: { showInFilemanager: false, showInSidebar: true, openWith: 'system' },
       dataFiles: { showInFilemanager: false, showInSidebar: true, openWith: 'system' },
@@ -549,6 +565,7 @@ export function getConfigTemplate (): ConfigOptions {
       showMarkdownLinkButton: true,
       showMarkdownImageButton: true,
       showMarkdownMakeTaskListButton: true,
+      showMarkdownLintButton: true,
       showInsertTableButton: true,
       showInsertFootnoteButton: true,
       showDocumentInfoText: true,
@@ -580,6 +597,13 @@ export function getConfigTemplate (): ConfigOptions {
         'tr-title-case': '',
         'tr-zap-gremlins': ''
       }
+    },
+    workspaces: {
+      enableAssets: false,
+      loadSnippets: true,
+      loadCSS: true,
+      loadExportProfiles: true,
+      loadDictionary: true,
     },
     uuid: uuid4() // The app's unique anonymous identifier
   }

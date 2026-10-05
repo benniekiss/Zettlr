@@ -85,7 +85,7 @@ function saveCSS (): void {
   savingStatus.value = trans('Saving …')
   ipcRenderer.invoke('css-provider', {
     command: 'set-custom-css',
-    css: editorContents.value
+    payload: { css: editorContents.value }
   })
     .then(() => {
       lastLoadedCSS.value = editorContents.value

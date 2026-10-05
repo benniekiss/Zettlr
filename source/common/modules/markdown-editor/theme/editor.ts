@@ -434,5 +434,8 @@ export const editorTheme = EditorView.baseTheme({
     '--zettlr-editor-code-style': 'var(--zettlr-editor-header-style)',
   },
   // Admonitions (generic styles)
-  '.cm-admonition-title': { fontWeight: 'bold' }
+  '.cm-admonition-title': { fontWeight: 'bold' },
+  '.page-border .cm-content': {
+    outlineColor: 'var(--zettlr-editor-primary-color)'
+  },
 })

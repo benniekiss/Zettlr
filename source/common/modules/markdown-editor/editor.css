@@ -155,6 +155,7 @@
     .cm-gutter.cm-foldGutter {
       opacity: 0;
       transition: 0.2s opacity ease;
+      padding-right: 10px;
     }
 
     /* NOTE: We listen to hover events on the gutter container itself so that
@@ -169,8 +170,8 @@
   .cm-gutter.cm-foldGutter .cm-gutterElement,
   .cm-gutter.cm-gutter-lint .cm-gutterElement {
     display: flex;
-    flex-direction: column;
     justify-content: center;
+    align-items: center;
   }
 
   /* Those warnings are too goddamn large */

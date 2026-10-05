@@ -29,9 +29,9 @@ import { autocompletion, closeBrackets } from '@codemirror/autocomplete'
 import { bracketMatching, codeFolding, foldGutter, indentOnInput, indentUnit, StreamLanguage } from '@codemirror/language'
 import { codeSyntaxHighlighter, markdownSyntaxHighlighter } from '@common/modules/markdown-editor/theme/syntax'
 import { yaml } from '@codemirror/lang-yaml'
+import { css } from '@codemirror/lang-css'
 import { lua } from '@codemirror/legacy-modes/mode/lua'
 import { EditorState, type Extension } from '@codemirror/state'
-import { css } from '@codemirror/lang-css'
 import markdownParser from '@common/modules/markdown-editor/parser/markdown-parser'
 import { yamlLint } from '@common/modules/markdown-editor/linters/yaml-lint'
 import { lintGutter } from '@codemirror/lint'
@@ -121,7 +121,12 @@ function getExtensions (mode: SupportedLanguage): Extension[] {
     case 'css':
       return [
         ...extensions,
-        css(),
+        css()
+      ]
+    case 'lua':
+      return [
+        ...extensions,
+        StreamLanguage.define(lua)
       ]
     case 'markdown-snippets':
       return [
@@ -136,11 +141,6 @@ function getExtensions (mode: SupportedLanguage): Extension[] {
           zknLinkParserConfig: { format: configStore.config.zkn.linkFormat }
         }), // Comes from the main editor
         markdownSyntaxHighlighter() // Comes from the main editor
-      ]
-    case 'lua':
-      return [
-        ...extensions,
-        StreamLanguage.define(lua)
       ]
   }
 }

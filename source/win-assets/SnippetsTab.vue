@@ -138,7 +138,10 @@ const offCallback = ipcRenderer.on('shortcut', (event, shortcut) => {
 onUnmounted(() => { offCallback() })
 
 function updateAvailableSnippets (selectAfterUpdate?: string): void {
-  ipcRenderer.invoke('assets-provider', { command: 'list-snippets' } as AssetsProviderIPCAPI)
+  ipcRenderer.invoke('assets-provider', {
+    command: 'list-snippets',
+    payload: { dir: undefined }
+  } as AssetsProviderIPCAPI)
     .then(data => {
       availableSnippets.value = data
       if (typeof selectAfterUpdate === 'string' && availableSnippets.value.includes(selectAfterUpdate)) {

@@ -13,14 +13,14 @@
  * END HEADER
  */
 
-import { defineStore, storeToRefs } from 'pinia'
+import { defineStore } from 'pinia'
 import { type Ref, ref, watch, computed } from 'vue'
 import { useConfigStore } from './config'
 import type { OtherFileDescriptor, AnyDescriptor } from 'source/types/common/fsal'
 import { useDocumentTreeStore } from '.'
 import { isAbsolutePath, pathDirname, resolvePath } from 'source/common/util/renderer-path-polyfill'
 import { trans } from 'source/common/i18n-renderer'
-import { hasImageExt, hasDataExt, hasMSOfficeExt, hasOpenOfficeExt, hasPDFExt, hasExt } from 'source/common/util/file-extention-checks'
+import { hasImageExt, hasDataExt, hasMSOfficeExt, hasOpenOfficeExt, hasPDFExt, hasExt, hasHTMLExt } from 'source/common/util/file-extention-checks'
 import { isDotFile } from 'source/common/util/ignore-path'
 import type { FSALEventPayload } from 'source/app/service-providers/fsal'
 
@@ -94,13 +94,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   // Dependent stores and watched variables
   const configStore = useConfigStore()
   const documentTreeStore = useDocumentTreeStore()
-  const { lastLeafActiveFile } = storeToRefs(documentTreeStore)
 
   // SECTION 1: WORKSPACES AND FILE DESCRIPTORS
+  const lastLeafActiveFile = ref(documentTreeStore.lastLeafActiveFile)
   const openFiles = configStore.config.app.openFiles
   const openWorkspaces = configStore.config.app.openWorkspaces
   const openPaths = ref(openFiles.concat(openWorkspaces))
-
+  const activeWorkspace = ref<AnyDescriptor|undefined>()
   const workspaceMap = ref<Map<string, string[]>>(new Map())
   const pathList = computed(() => ([...workspaceMap.value.values()].flat()))
   const descriptorMap = ref<Map<string, AnyDescriptor>>(new Map())
@@ -144,6 +144,10 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const openFiles = state.config.app.openFiles
     const openWorkspaces = state.config.app.openWorkspaces
     openPaths.value = openFiles.concat(openWorkspaces)
+  })
+
+  documentTreeStore.$subscribe((_mutation, state) => {
+    lastLeafActiveFile.value = state.lastLeafActiveFile
   })
 
   watch(openPaths, async (value) => {
@@ -224,9 +228,13 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   watch(lastLeafActiveFile, async () => {
     const activeFile = documentTreeStore.lastLeafActiveFile
     if (activeFile === undefined) {
+      activeWorkspace.value = undefined
       otherFiles.value = []
       return
     }
+
+    const root = [...workspaceMap.value.keys()].find(p => activeFile.path.startsWith(p))
+    activeWorkspace.value = root !== undefined ? descriptorMap.value.get(root) : undefined
 
     const descriptor = descriptorMap.value.get(pathDirname(activeFile.path))
     if (descriptor === undefined || descriptor.type !== 'directory') {
@@ -242,6 +250,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     const showOfficeFiles = files.msoffice.showInSidebar
     const showOpenOffice = files.openOffice.showInSidebar
     const showPDF = files.pdf.showInSidebar
+    const showHTMLFiles = files.html.showInSidebar
+
     const showDotFiles = files.dotFiles.showInSidebar
 
     // Quick helper function that tests whether the provided attachment should be
@@ -256,7 +266,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
         (showDataFiles && hasDataExt(filePath)) ||
         (showOfficeFiles && hasMSOfficeExt(filePath)) ||
         (showOpenOffice && hasOpenOfficeExt(filePath)) ||
-        (showPDF && hasPDFExt(filePath)))
+        (showPDF && hasPDFExt(filePath))) ||
+        (showHTMLFiles && hasHTMLExt(filePath))
     }
 
     const children = await readDirectory(descriptor.path)
@@ -282,5 +293,5 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     otherFiles.value = att
   })
 
-  return { workspaceMap, pathList, descriptorMap, rootDescriptors, otherFiles }
+  return { workspaceMap, pathList, descriptorMap, rootDescriptors, otherFiles, activeWorkspace }
 })

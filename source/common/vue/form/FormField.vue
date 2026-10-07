@@ -16,6 +16,7 @@
   </template>
   <Button
     v-if="props.field.type === 'button'"
+    v-bind:disabled="props.field.disabled"
     v-bind:label="props.field.label"
     v-bind:inline="true"
     v-on:click="props.field.onClick()"

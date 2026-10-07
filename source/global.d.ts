@@ -93,6 +93,8 @@ declare const ONBOARDING_PRELOAD_WEBPACK_ENTRY: string
 // Contains the git build number and date
 declare const __GIT_COMMIT_HASH__: string
 declare const __BUILD_DATE__: string
+declare const __PANDOC_WASM_URL__: string
+declare const __PANDOC_WASM_SHA256__: string
 declare const __UPDATES_DISABLED__: '1'|'0'
 
 declare interface Window {

@@ -177,6 +177,7 @@ interface FormText {
 interface FormButton {
   type: 'button'
   label: string
+  disabled?: boolean
   onClick: () => void
 }
 

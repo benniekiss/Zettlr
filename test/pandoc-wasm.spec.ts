@@ -3,9 +3,11 @@ import { randomUUID } from 'crypto'
 import path from 'path'
 import os from 'os'
 import { promises as fs } from 'fs'
+import { pathToFileURL } from 'url'
 import YAML from 'yaml'
 import { configurePandocWasm, runPandoc } from '../source/app/util/run-pandoc'
 import { validatePandocWasmRuntime } from '../source/app/util/pandoc-reactor'
+import { downloadPandocWasm } from '../source/app/util/download-pandoc-wasm'
 import { plugin as exportDocument } from '../source/app/service-providers/commands/exporter/default-exporter'
 
 // Run explicitly against a downloaded module, without network access in tests.
@@ -13,8 +15,16 @@ const integration = process.env.PANDOC_TEST_WASM === undefined ? describe.skip :
 integration('Pandoc WASM integration', function () {
   this.timeout(30000)
   let directory: string
-  before(function () {
-    configurePandocWasm(async () => path.resolve(process.env.PANDOC_TEST_WASM as string))
+  let cacheDirectory: string
+
+  before(async function () {
+    cacheDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'zettlr-pandoc-module-'))
+    const source = pathToFileURL(path.resolve(process.env.PANDOC_TEST_WASM as string)).href
+    configurePandocWasm(async () => await downloadPandocWasm(source, cacheDirectory))
+  })
+
+  after(async function () {
+    await fs.rm(cacheDirectory, { recursive: true, force: true })
   })
 
   beforeEach(async function () {

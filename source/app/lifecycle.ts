@@ -18,6 +18,8 @@ import registerCustomProtocols from './util/custom-protocols'
 import environmentCheck from './util/environment-check'
 import resolveTimespanMs from './util/resolve-timespan-ms'
 import { configurePandocWasm } from './util/run-pandoc'
+import { downloadPandocWasm, invalidatePandocWasm } from './util/download-pandoc-wasm'
+import { DEFAULT_PANDOC_WASM_URL } from '@common/pandoc-util/pandoc-wasm-url'
 import path from 'path'
 
 // Developer tools
@@ -73,7 +75,16 @@ export async function bootApplication (): Promise<AppServiceContainer> {
   // Now make the service container available for the rest of the main process.
   setAppServiceContainer(appServiceContainer)
 
-  configurePandocWasm(async () => path.join(app.getPath('userData'), 'pandoc.wasm'))
+  configurePandocWasm(async () => {
+    const exportConfig = appServiceContainer.config.get().export
+    const configuredUrl = exportConfig.pandocWasmUrl.trim()
+    return await downloadPandocWasm(
+      configuredUrl || DEFAULT_PANDOC_WASM_URL,
+      path.join(app.getPath('userData'), 'pandoc-wasm'),
+      undefined,
+      configuredUrl === '' ? undefined : exportConfig.pandocWasmSha256
+    )
+  }, invalidatePandocWasm)
 
   return appServiceContainer
 }

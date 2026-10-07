@@ -470,19 +470,82 @@ make sure this environment variable is *not* set, e.g., by running
 #### Pandoc WASM
 
 Pandoc runs as WebAssembly directly in an Electron utility process, using
-Node's native WASI runtime. Place a compatible `pandoc.wasm` module in Zettlr's
-user data directory to enable imports and exports. No native Pandoc installation
-is needed and no Pandoc binary is downloaded or bundled during the build.
+Node's native WASI runtime. The parent owns the private IO
+directory and waits for the helper process to exit before completing a job.
+This also closes native WASI descriptors when a timed-out conversion is killed.
+Every WASI import has a JavaScript wrapper to avoid a Node 22/V8 GC crash with
+direct native imports. Set **Pandoc WASM download URL**
+under **Preferences → Import/Export → Pandoc download** to select its source.
+The default points directly to the Pandoc 3.12 WASM release in `jgm/pandoc`.
+HTTPS and local `file:` URLs are supported, with either a raw `.wasm` module
+or a ZIP containing `pandoc.wasm`. A custom module is executable code; only
+configure sources you trust. The built-in release is additionally pinned by
+the SHA-256 hash of its extracted module.
+For a custom source, an optional SHA-256 preference can pin the extracted
+`pandoc.wasm` module; leave it blank to skip hash verification. A hash entered
+while the URL is blank is ignored.
 
-The parent owns each conversion's private IO directory and removes it after the
-helper exits. JavaScript wrappers around WASI imports avoid a Node 22/V8 GC crash.
+Zettlr downloads the module on first use and caches it in the user data
+directory for offline use. Changing the URL selects a separate cache entry
+on the next import or export; no restart is needed. On first use each app
+session, unpinned custom sources are checked for changes using ETag or
+Last-Modified headers. Servers without these headers keep using the cached
+module. Preferences → Import/Export → Check for updates bypasses the session
+check and redownloads when the server supplies no validators. Local file URLs
+use file modification time and size. A configured SHA-256 hash continues to pin
+the module. Failed automatic checks use the valid cached module; manual errors
+are shown in preferences. Replacements must compile, initialize, and return a
+valid Pandoc version before updating the cache. Failed automatic replacements,
+including cache-write failures, keep using the previously validated module.
+
+Filesystem access follows the OS account's permissions, like native Pandoc.
+Lua readers and filters can read resources and write side-effect files outside
+the working directory, including modifying source files. Reactor IO files stay
+private, and the WASI runtime receives a small environment-variable allowlist.
+The reactor reserves the guest root paths `/stdin`, `/stdout`, `/stderr`, and
+`/warnings`; files with these names in document directories remain ordinary
+resources.
+Downloads and extracted modules are limited to 512 MiB, including larger builds.
+
+No Pandoc binary is downloaded or bundled during the build, and no native
+Pandoc installation is needed.
+
+To customize a build's defaults, set `PANDOC_WASM_URL` and
+`PANDOC_WASM_SHA256` when running the build command. For example:
+
+```sh
+PANDOC_WASM_URL=https://example.org/pandoc.wasm.zip \
+PANDOC_WASM_SHA256='replace-with-the-extracted-module-sha256' yarn package
+```
+
+The URL must use HTTPS or `file:`. The hash pins the extracted `pandoc.wasm`,
+not the ZIP archive. An omitted variable keeps its checked-in default; a URL-only
+override therefore supports mirrors of the official module. To use a different
+module, provide its matching hash as well. Invalid hashes fail the build.
+These values are compiled into both the main and renderer bundles; setting them
+when launching an already built app has no effect. Preferences → Import/Export
+can still override the download source. No module is downloaded during the build.
+
+Set `PANDOC_WASM_URL=none` to build without a default download source or hash.
+Users must then configure a source in Preferences before using Pandoc.
+Set `PANDOC_WASM_SHA256=none` to omit the default integrity pin while retaining
+a default URL. An empty URL override still keeps the checked-in URL;
+an explicitly empty hash remains invalid. Existing saved preferences are kept.
+
+Developers
+can run the WASM conversion tests with an existing module by setting
+`PANDOC_TEST_WASM=/path/to/pandoc.wasm` when running `yarn test`; those tests
+are skipped when no module is supplied. Download/cache tests always run and
+do not require internet access.
+
 Import/export profiles, local resources, bibliographies, and Lua filters remain
 supported. External PDF engines and executable JSON filters are unsupported;
 use Simple PDF for PDF output. The WASM build cannot fetch remote resources or
 run commands from Lua filters.
 
-Developers can run the WASM conversion tests with an existing module by setting
-`PANDOC_TEST_WASM=/path/to/pandoc.wasm` when running `yarn test`.
+Lua filters that write buffered stdout with `io.stdout:write` should call
+`io.stdout:flush()` to include that output in the export log. The WASM reactor
+does not exit a process and therefore does not automatically flush that stream.
 
 ### Directory Structure
 

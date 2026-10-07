@@ -1,19 +1,29 @@
 import path from 'path'
-import { runPandocReactor, type ReactorOutput } from './pandoc-reactor'
+import { runPandocReactor, InvalidPandocModuleError, type ReactorOutput } from './pandoc-reactor'
 import type { PandocRunnerOutput } from '@providers/commands/exporter/types'
 
 let getWasmPath: (() => Promise<string>)|undefined
+let invalidateWasmPath: ((filename: string) => Promise<void>)|undefined
 
-/** Supply the module location used for each conversion. */
-export function configurePandocWasm (resolvePath: () => Promise<string>): void {
+/** Resolve the current preference on each run, so URL changes apply immediately. */
+export function configurePandocWasm (resolvePath: () => Promise<string>, invalidatePath?: (filename: string) => Promise<void>): void {
   getWasmPath = resolvePath
+  invalidateWasmPath = invalidatePath
 }
 
 async function runReactor (options: Record<string, unknown>, cwd?: string): Promise<ReactorOutput> {
   if (getWasmPath === undefined) {
     throw new Error('Pandoc WASM has not been configured.')
   }
-  return await runPandocReactor(await getWasmPath(), options, { cwd })
+  const wasmPath = await getWasmPath()
+  try {
+    return await runPandocReactor(wasmPath, options, { cwd })
+  } catch (error) {
+    if (error instanceof InvalidPandocModuleError && invalidateWasmPath !== undefined) {
+      try { await invalidateWasmPath(wasmPath) } catch { /* Preserve the conversion error. */ }
+    }
+    throw error
+  }
 }
 
 /** Runs parsed import/export defaults through the WASM reactor. */

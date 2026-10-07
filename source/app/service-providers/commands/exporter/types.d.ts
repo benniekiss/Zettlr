@@ -118,6 +118,8 @@ export interface PandocRunnerOutput {
  * This is the exporter API that the plugins will have access to.
  */
 export interface ExporterAPI {
+  /** Optional folder of additional fonts for the Typst WASM compiler. */
+  typstFontPath?: string
   /**
    * Runs Pandoc with the given defaults file
    *

@@ -2146,6 +2146,30 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@myriaddreamin/typst-ts-web-compiler@npm:0.7.0":
+  version: 0.7.0
+  resolution: "@myriaddreamin/typst-ts-web-compiler@npm:0.7.0"
+  checksum: 10/1b52ab775b1e1dd4adf98f02348c22618bb2c4d8649c93c58fe4b4d9d509ea9020cb8d2fa42f3b302fdb9cd49409b7234be4a496de6be27d4a027c14d881069c
+  languageName: node
+  linkType: hard
+
+"@myriaddreamin/typst.ts@npm:0.7.0":
+  version: 0.7.0
+  resolution: "@myriaddreamin/typst.ts@npm:0.7.0"
+  dependencies:
+    idb: "npm:^7.1.1"
+  peerDependencies:
+    "@myriaddreamin/typst-ts-renderer": ^0.7.0
+    "@myriaddreamin/typst-ts-web-compiler": ^0.7.0
+  peerDependenciesMeta:
+    "@myriaddreamin/typst-ts-renderer":
+      optional: true
+    "@myriaddreamin/typst-ts-web-compiler":
+      optional: true
+  checksum: 10/49cf39f51d153daee584eb58c4e0709877e612e95d783e1625304dae5d8da20b53d1e9dff8a3e599408058b411e76fd9a38b13fbc39614f857b69efa48cf7a65
+  languageName: node
+  linkType: hard
+
 "@noble/hashes@npm:1.4.0":
   version: 1.4.0
   resolution: "@noble/hashes@npm:1.4.0"
@@ -8492,6 +8516,13 @@ __metadata:
   peerDependencies:
     postcss: ^8.1.0
   checksum: 10/5c324d283552b1269cfc13a503aaaa172a280f914e5b81544f3803bc6f06a3b585fb79f66f7c771a2c052db7982c18bf92d001e3b47282e3abbbb4c4cc488d68
+  languageName: node
+  linkType: hard
+
+"idb@npm:^7.1.1":
+  version: 7.1.1
+  resolution: "idb@npm:7.1.1"
+  checksum: 10/8e33eaebf21055129864acb89932e0739b8c96788e559df24c253ce114d8c6deb977a3b30ea47a9bb8a2ae8a55964861c3df65f360d95745e341cee40d5c17f4
   languageName: node
   linkType: hard
 
@@ -15482,6 +15513,8 @@ __metadata:
     "@lezer/highlight": "npm:^1.2.3"
     "@lezer/lr": "npm:^1.4.10"
     "@lezer/markdown": "npm:^1.7.2"
+    "@myriaddreamin/typst-ts-web-compiler": "npm:0.7.0"
+    "@myriaddreamin/typst.ts": "npm:0.7.0"
     "@replit/codemirror-emacs": "npm:^6.1.0"
     "@replit/codemirror-lang-nix": "npm:^6.0.1"
     "@replit/codemirror-vim": "npm:^6.4.0"

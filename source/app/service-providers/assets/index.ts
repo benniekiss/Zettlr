@@ -538,7 +538,7 @@ export default class AssetsProvider extends ProviderContract {
         const writer = yaml.writer !== undefined ? parseReaderWriter(yaml.writer as string) : parseReaderWriter('')
         const reader = yaml.reader !== undefined ? parseReaderWriter(yaml.reader as string) : parseReaderWriter('')
 
-        const validWriter = writer.isCustom || PANDOC_WRITERS[writer.name] !== undefined
+        const validWriter = yaml.writer === 'typst-pdf' || writer.isCustom || PANDOC_WRITERS[writer.name] !== undefined
         const validReader = reader.isCustom || PANDOC_READERS[reader.name] !== undefined
 
         const outputFile = yaml['output-file'] ?? ''

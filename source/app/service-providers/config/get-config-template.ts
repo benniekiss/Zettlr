@@ -128,6 +128,7 @@ export interface ConfigOptions {
   export: {
     pandocWasmUrl: string
     pandocWasmSha256: string
+    typstFontPath: string
     dir: 'temp'|'cwd'|'ask'
     stripTags: boolean
     autoOpenExportedFiles: boolean
@@ -356,6 +357,7 @@ export function getConfigTemplate (): ConfigOptions {
     export: {
       pandocWasmUrl: DEFAULT_PANDOC_WASM_URL,
       pandocWasmSha256: '',
+      typstFontPath: '',
       dir: 'temp', // Can either be "temp", "cwd" (current working directory) or "ask"
       stripTags: false, // Strip tags a.k.a. #tag
       autoOpenExportedFiles: true,

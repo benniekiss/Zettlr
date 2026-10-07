@@ -13,11 +13,8 @@
  */
 
 // Modules
-import path from 'path'
-import { spawn } from 'child_process'
+import { runPandoc as runPandocWasm } from '../../../util/run-pandoc'
 import YAML from 'yaml'
-import { app } from 'electron'
-import { promises as fs } from 'fs'
 
 // Utilities
 import isFile from '@common/util/is-file'
@@ -116,54 +113,18 @@ export async function makeExport (
 }
 
 async function runPandoc (logger: LogProvider, defaults: PandocDefaults, cwd?: string): Promise<PandocRunnerOutput> {
-  const defaultsFile = path.join(app.getPath('temp'), 'defaults.yml')
-  await fs.writeFile(defaultsFile, YAML.stringify(defaults), { encoding: 'utf8' })
-
-  const output: PandocRunnerOutput = {
-    code: 0,
-    stdout: [],
-    stderr: []
-  }
-
-  await new Promise<void>((resolve, reject) => {
-    const pandocProcess = spawn('pandoc', [ '--defaults', `"${defaultsFile}"` ], {
-      // NOTE: This has to be true, because of reasons unbeknownst to me, Pandoc
-      // is unable to open the defaultsFile if it is not run from within a shell
-      shell: true,
-      cwd
-    })
-
-    pandocProcess.stdout.on('data', (data) => {
-      output.stdout.push(String(data))
-    })
-
-    pandocProcess.stderr.on('data', (data) => {
-      output.stderr.push(String(data))
-    })
-
-    pandocProcess.on('close', (code: number, _signal) => {
-      // Code should be 0. To check for errors, check that
-      output.code = code
-      resolve()
-    })
-
-    pandocProcess.on('error', (err) => {
-      reject(err)
-    })
-  })
-
-  // The data doesn't come in clean lines because it's a stream, but it will
-  // include linefeeds. In order to enable easy checks (stderr.length === 0,
-  // for example), clean up the output.
-  output.stderr = output.stderr.join('').split('\n').filter(line => line.trim() !== '')
-  output.stdout = output.stdout.join('').split('\n').filter(line => line.trim() !== '')
+  const output = await runPandocWasm(defaults, cwd)
 
   if (output.stdout.length > 0) {
     logger.info('This Pandoc run produced additional output.', output.stdout.join('\n'))
   }
 
   if (output.stderr.length > 0) {
-    logger.warning('This Pandoc run produced additional output.', output.stderr.join('\n'))
+    if (output.code === 0) {
+      logger.warning('This Pandoc run produced warnings.', output.stderr.join('\n'))
+    } else {
+      logger.error('This Pandoc run failed.', output.stderr.join('\n'))
+    }
   }
 
   return output

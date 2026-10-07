@@ -8,7 +8,7 @@ interface ReactorOutput {
   stdout: string
   stderr: string
   warnings: string
-  error?: string
+  failed: boolean
 }
 
 let getWasmPath: (() => Promise<string>)|undefined
@@ -28,9 +28,9 @@ async function runReactor (options: Record<string, unknown>, cwd?: string, query
       workerData: { options, cwd, query, wasmPath }
     })
     let received = false
-    worker.once('message', (result: ReactorOutput) => {
+    worker.once('message', (result: ReactorOutput|{ error: string }) => {
       received = true
-      if (result.error !== undefined) {
+      if ('error' in result) {
         reject(new Error(result.error))
       } else {
         resolve(result)
@@ -55,31 +55,32 @@ export async function getPandocVersion (): Promise<string> {
 
 /** Runs the existing defaults-file workflow through Pandoc's WASM reactor. */
 export async function runPandoc (defaultsFile: string, cwd?: string): Promise<PandocRunnerOutput> {
-  const options = YAML.parse(await fs.readFile(defaultsFile, 'utf8')) as Record<string, unknown>
-  const writer = options.writer ?? options.to
-  const output = options['output-file']
-  const filters = options.filters ?? []
-  const unsupported = writer === 'pdf' || (typeof output === 'string' && path.extname(output).toLowerCase() === '.pdf')
-    ? 'Pandoc WASM cannot run external PDF engines. Use the Simple PDF export profile instead.'
-    : Array.isArray(filters) && filters.some(filter => typeof filter === 'string'
-      ? !filter.endsWith('.lua')
-      : filter?.type === 'json')
-      ? 'Pandoc WASM cannot run executable JSON filters. Use Lua filters instead.'
-      : undefined
-  if (unsupported !== undefined) {
-    return { code: 1, stdout: [], stderr: [unsupported] }
-  }
-
   try {
-    const result = await runReactor(options, cwd)
+    const options: unknown = YAML.parse(await fs.readFile(defaultsFile, 'utf8'))
+    if (options === null || typeof options !== 'object' || Array.isArray(options)) {
+      throw new Error('Pandoc defaults must contain a YAML mapping of options.')
+    }
+    const defaults = options as Record<string, unknown>
+    const writer = defaults.writer ?? defaults.to
+    const output = defaults['output-file']
+    if (writer === 'pdf' || (typeof output === 'string' && path.extname(output).toLowerCase() === '.pdf')) {
+      throw new Error('Pandoc WASM cannot run external PDF engines. Use the Simple PDF export profile instead.')
+    }
+    const filters = defaults.filters
+    if (Array.isArray(filters) && filters.some(filter => typeof filter === 'string' ? !filter.endsWith('.lua') : filter?.type === 'json')) {
+      throw new Error('Pandoc WASM cannot run executable JSON filters. Use Lua filters instead.')
+    }
+    const result = await runReactor(defaults, cwd)
     const lines = (text: string): string[] => text.split('\n').filter(line => line.trim() !== '')
     const messages: Array<{ verbosity?: string, pretty?: string }> = result.warnings === '' ? [] : JSON.parse(result.warnings)
+    const informational = messages.filter(message => [ 'INFO', 'DEBUG' ].includes(message.verbosity ?? ''))
     const warnings = messages.filter(message => ![ 'INFO', 'DEBUG' ].includes(message.verbosity ?? ''))
-    const failed = result.stderr.startsWith('ERROR:') || (options['fail-if-warnings'] === true && warnings.length > 0)
+    const format = (message: { pretty?: string }): string => message.pretty ?? JSON.stringify(message)
+    const failed = result.failed || (defaults['fail-if-warnings'] === true && warnings.length > 0)
     return {
       code: failed ? 1 : 0,
-      stdout: lines(result.stdout),
-      stderr: [ ...lines(result.stderr), ...warnings.map(warning => warning.pretty ?? JSON.stringify(warning)) ]
+      stdout: [ ...lines(result.stdout), ...informational.map(format) ],
+      stderr: [ ...lines(result.stderr), ...warnings.map(format) ]
     }
   } catch (error: unknown) {
     return { code: 1, stdout: [], stderr: [error instanceof Error ? error.message : String(error)] }

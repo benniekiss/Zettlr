@@ -104,6 +104,27 @@ integration('Pandoc WASM integration', function () {
     assert.deepStrictEqual(await fs.readFile(path.join(mediaDirectory, media[0])), image)
   })
 
+  it('follows host symlink semantics when an input path contains ..', async function () {
+    const cwd = path.join(directory, 'work')
+    await fs.mkdir(cwd)
+    await fs.mkdir(path.join(directory, 'actual', 'inner'), { recursive: true })
+    await fs.symlink(path.join(directory, 'actual', 'inner'), path.join(cwd, 'link'), 'junction')
+    await fs.writeFile(path.join(directory, 'actual', 'input.md'), 'Physical target')
+    await fs.writeFile(path.join(cwd, 'input.md'), 'Lexical target')
+    const defaults = path.join(cwd, 'defaults.yml')
+    await fs.writeFile(defaults, YAML.stringify({
+      reader: 'markdown', writer: 'html',
+      'input-files': ['link/../input.md'], 'output-file': 'out.html'
+    }))
+    const result = await runPandoc(defaults, cwd)
+    assert.strictEqual(result.code, 0, result.stderr.join('\n'))
+    assert.match(await fs.readFile(path.join(cwd, 'out.html'), 'utf8'), /Physical target/)
+    await fs.rmdir(path.join(directory, 'actual', 'inner'))
+    const broken = await runPandoc(defaults, cwd)
+    assert.strictEqual(broken.code, 1)
+    assert.ok(broken.stderr.length > 0)
+  })
+
   it('reports conversion errors and unsupported engines and filters', async function () {
     for (const options of [
       { reader: 'markdown', writer: 'html', 'input-files': ['missing.md'] },
@@ -148,5 +169,43 @@ integration('Pandoc WASM integration', function () {
       return await fs.readFile(path.join(cwd, 'out.html'), 'utf8')
     }))
     assert.deepStrictEqual(results, ['<p>first</p>\n', '<p>second</p>\n'])
+  })
+
+  it('captures Lua stdout/stderr and preserves informational diagnostics', async function () {
+    await fs.writeFile(path.join(directory, 'input.md'), 'Body text')
+    await fs.writeFile(path.join(directory, 'log.lua'), `function Pandoc(doc)
+      print("Lua stdout marker")
+      io.stdout:write("Buffered marker")
+      io.stdout:flush()
+      io.stderr:write("ERROR: diagnostic only\\n")
+      pandoc.log.info("Info marker")
+      assert(pandoc.utils.stringify(doc.meta.literal) == [[C:\\Users\\literal]])
+      return doc
+    end`)
+    const result = await convert({
+      reader: 'markdown', writer: 'html', verbosity: 'INFO', 'fail-if-warnings': true,
+      filters: ['log.lua'], metadata: { literal: 'C:\\Users\\literal' },
+      'input-files': ['input.md'], 'output-file': 'out.html'
+    })
+    assert.strictEqual(result.code, 0, result.stderr.join('\n'))
+    assert.ok(result.stdout.includes('Lua stdout marker'))
+    assert.ok(result.stdout.includes('Buffered marker'))
+    assert.match(result.stdout.join('\n'), /Info marker/)
+    assert.ok(result.stderr.includes('ERROR: diagnostic only'))
+    assert.doesNotMatch(result.stderr.join('\n'), /Info marker/)
+    assert.match(await fs.readFile(path.join(directory, 'out.html'), 'utf8'), /Body text/)
+  })
+
+  it('reports Lua exit requests without losing earlier diagnostics', async function () {
+    await fs.writeFile(path.join(directory, 'input.md'), 'Body text')
+    await fs.writeFile(path.join(directory, 'exit.lua'), 'function Pandoc(doc) print("Before exit") io.stderr:write("Exit diagnostic\\n") os.exit(7) end')
+    const result = await convert({
+      reader: 'markdown', writer: 'html', filters: ['exit.lua'],
+      'input-files': ['input.md'], 'output-file': 'out.html'
+    })
+    assert.strictEqual(result.code, 1)
+    assert.ok(result.stdout.includes('Before exit'))
+    assert.match(result.stderr.join('\n'), /Exit diagnostic/)
+    assert.match(result.stderr.join('\n'), /exited with code 7/)
   })
 })

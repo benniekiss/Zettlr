@@ -495,6 +495,10 @@ supported. External PDF engines and executable JSON filters are unsupported;
 use Simple PDF for PDF output. The WASM build cannot fetch remote resources or
 run commands from Lua filters.
 
+Lua filters that write buffered stdout with `io.stdout:write` should call
+`io.stdout:flush()` to include that output in the export log. The WASM reactor
+does not exit a process and therefore does not automatically flush that stream.
+
 ### Directory Structure
 
 Zettlr is a mature app that has amassed hundreds of directories over the course

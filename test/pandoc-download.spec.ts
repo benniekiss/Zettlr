@@ -86,4 +86,17 @@ describe('Pandoc WASM download', function () {
     assert.notStrictEqual(result.code, 0)
     assert.match(result.stderr.join('\n'), /does not provide the Pandoc WASM API/)
   })
+
+  it('returns defaults-file errors through the normal failure result', async function () {
+    const defaults = path.join(directory, 'defaults.yml')
+    const missing = await runPandoc(defaults)
+    assert.strictEqual(missing.code, 1)
+    assert.match(missing.stderr.join('\n'), /ENOENT/)
+    for (const contents of ['', 'null', '- html', 'writer: [']) {
+      await fs.writeFile(defaults, contents)
+      const result = await runPandoc(defaults)
+      assert.strictEqual(result.code, 1)
+      assert.ok(result.stderr.length > 0)
+    }
+  })
 })

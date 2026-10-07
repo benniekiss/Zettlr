@@ -89,26 +89,31 @@ export async function makeExport (
   const inputFiles = options.sourceFiles.map(file => file.path)
 
   // This is basically the "plugin API"
+  const temporary = await fs.mkdtemp(path.join(app.getPath('temp'), 'zettlr-export-'))
   const ctx: ExporterAPI = {
     runPandoc: async (defaults: string) => {
       return await runPandoc(logger, defaults, options.cwd)
     },
     writeDefaults: async (filename: string, overrides: Record<string, unknown> = {}) => {
-      return await writeDefaults(filename, overrides, config, logger, assets, options.defaultsOverride)
+      return await writeDefaults(filename, overrides, config, logger, assets, path.join(temporary, 'defaults.yml'), options.defaultsOverride)
     },
     listDefaults: async () => {
       return await assets.listDefaults()
     }
   }
 
-  // Search for the correct plugin to run, and run it. First the custom ones ...
-  if ([ 'textbundle', 'textpack' ].includes(options.profile.writer)) {
-    return await PLUGINS.textbundle(options, inputFiles, ctx)
-  } else if (options.profile.writer === 'simple-pdf') {
-    return await PLUGINS['simple-pdf'](options, inputFiles, ctx)
-  } else {
-    // ... otherwise run the regular Pandoc exporter.
-    return await PLUGINS.pandoc(options, inputFiles, ctx)
+  try {
+    // Search for the correct plugin to run, and run it. First the custom ones ...
+    if ([ 'textbundle', 'textpack' ].includes(options.profile.writer)) {
+      return await PLUGINS.textbundle(options, inputFiles, ctx)
+    } else if (options.profile.writer === 'simple-pdf') {
+      return await PLUGINS['simple-pdf'](options, inputFiles, ctx)
+    } else {
+      // ... otherwise run the regular Pandoc exporter.
+      return await PLUGINS.pandoc(options, inputFiles, ctx)
+    }
+  } finally {
+    await fs.rm(temporary, { recursive: true, force: true })
   }
 }
 
@@ -117,6 +122,13 @@ async function runPandoc (logger: LogProvider, defaultsFile: string, cwd?: strin
 
   if (output.stdout.length > 0) {
     logger.info('This Pandoc run produced additional output.', output.stdout)
+  }
+  if (output.stderr.length > 0) {
+    if (output.code === 0) {
+      logger.warning('This Pandoc run produced warnings.', output.stderr)
+    } else {
+      logger.error('This Pandoc run failed.', output.stderr)
+    }
   }
 
   return output
@@ -130,9 +142,9 @@ async function writeDefaults (
   config: ConfigProvider,
   logger: LogProvider,
   assets: AssetsProvider,
+  defaultsFile: string,
   defaultsOverride?: DefaultsOverride
 ): Promise<string> {
-  const defaultsFile = path.join(app.getPath('temp'), 'defaults.yml')
   const defaults = await assets.getDefaultsFile(filename)
 
   const cfg = config.get()

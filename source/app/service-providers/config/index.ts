@@ -14,6 +14,7 @@
  */
 
 import path from 'path'
+import { parseLanguageServers } from '@common/lsp/config'
 import EventEmitter from 'events'
 import { ValidationRule, VALIDATE_RULES, VALIDATE_PROPERTIES } from './config-validation'
 import PersistentDataContainer from '@common/modules/persistent-data-container'
@@ -22,7 +23,6 @@ import safeAssign from '@common/util/safe-assign'
 import isDir from '@common/util/is-dir'
 import broadcastIpcMessage from '@common/util/broadcast-ipc-message'
 import { getConfigTemplate, type ConfigOptions } from './get-config-template'
-import enumDictFiles from '@common/util/enum-dict-files'
 import ProviderContract from '../provider-contract'
 import type LogProvider from '../log'
 import { loadData, trans } from '@common/i18n-main'
@@ -315,16 +315,7 @@ export default class ConfigProvider extends ProviderContract {
     // Now sort the paths.
     this.sortPaths()
 
-    const dicts = enumDictFiles().map(item => item.tag)
 
-    // We have to run over the spellchecking dictionaries and see whether or
-    // not they are still valid or if they have been deleted.
-    for (let i = 0; i < this.config.selectedDicts.length; i++) {
-      if (!dicts.includes(this.config.selectedDicts[i])) {
-        this.config.selectedDicts.splice(i, 1)
-        --i
-      }
-    }
   }
 
   /**
@@ -638,6 +629,17 @@ export default class ConfigProvider extends ProviderContract {
    * @return {Boolean}       False, if a given validation failed, otherwise true.
    */
   _validate (key: string, value: any): boolean {
+    if (key === 'languageServers') {
+      if (typeof value !== 'string') {
+        return false
+      }
+      try {
+        parseLanguageServers(value)
+        return true
+      } catch (err) {
+        return false
+      }
+    }
     let rule = this._rules.find(elem => elem.getKey() === key)
     // There is a rule for this key, so validate
     if (rule !== undefined) {

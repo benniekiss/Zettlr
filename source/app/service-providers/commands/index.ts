@@ -34,7 +34,6 @@ import FileFindAndReturnMetaData from './file-find-and-return-meta-data'
 import ImportLangFile from './import-lang-file'
 import ImportFiles from './import'
 import IncreasePomodoro from './increase-pomodoro'
-import LanguageTool from './language-tool'
 import OpenAttachment from './open-attachment'
 import OpenAuxWindow from './open-aux-window'
 import Print from './print'
@@ -44,13 +43,11 @@ import RootOpen from './root-open'
 import SaveImageFromClipboard from './save-image-from-clipboard'
 import TutorialOpen from './tutorial-open'
 import UpdateProjectProperties from './update-project-properties'
-import UpdateUserDictionary from './update-user-dictionary'
 import ProviderContract from '@providers/provider-contract'
 import { type AppServiceContainer } from 'source/app/app-service-container'
 import type ZettlrCommand from './zettlr-command'
 import { clipboard, ipcMain, nativeImage } from 'electron'
 import enumLangFiles from '@common/util/enum-lang-files'
-import enumDictFiles from '@common/util/enum-dict-files'
 import RenameTag from './rename-tag'
 import WorkspaceSort from './ws-sort'
 
@@ -76,7 +73,6 @@ export const commands = [
   ImportFiles,
   ImportLangFile,
   IncreasePomodoro,
-  LanguageTool,
   OpenAttachment,
   OpenAuxWindow,
   Print,
@@ -87,7 +83,6 @@ export const commands = [
   SaveImageFromClipboard,
   TutorialOpen,
   UpdateProjectProperties,
-  UpdateUserDictionary,
   WorkspaceSort
 ]
 
@@ -187,8 +182,6 @@ export default class CommandProvider extends ProviderContract {
         }
       } else if (command === 'get-available-languages') {
         return enumLangFiles().map(elem => elem.tag)
-      } else if (command === 'get-available-dictionaries') {
-        return enumDictFiles().map(elem => elem.tag)
       } else {
         this._app.log.warning(`[Application] Received a request to run command ${command}, but it's not registered.`)
       }

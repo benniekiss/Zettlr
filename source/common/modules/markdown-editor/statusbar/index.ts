@@ -18,7 +18,6 @@ import { configUpdateEffect } from '../util/configuration'
 import { magicQuotesStatus } from './magic-quotes'
 import { readabilityStatus } from '../renderers/readability'
 import { cursorStatus, wordcountStatus, charcountStatus, inputModeStatus } from './info-fields'
-import { languageToolStatus } from './language-tool'
 import { diagnosticsStatus } from './diagnostics'
 import { statusbarProjectInfo } from '../plugins/project-info-field'
 import { renderingModeToggle } from '../renderers'
@@ -81,7 +80,6 @@ function createStatusbar (_view: EditorView): Panel {
         wordcountStatus,
         charcountStatus,
         inputModeStatus,
-        languageToolStatus,
         diagnosticsStatus
       ]
 

@@ -25,7 +25,6 @@ module.exports = {
         // These are all static files that simply need to be bundled with the
         // application; we'll just copy them over from the static folder.
         { from: 'static/tutorial', to: 'tutorial' },
-        { from: 'static/dict', to: 'dict' },
         { from: 'static/lang', to: 'lang' },
         { from: 'static/csl-locales', to: 'assets/csl-locales' },
         { from: 'static/csl-styles', to: 'assets/csl-styles' },

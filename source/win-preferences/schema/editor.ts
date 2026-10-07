@@ -186,18 +186,6 @@ export function getEditorFields (config: ConfigOptions): PreferencesFieldset[] {
       ]
     },
     {
-      title: trans('Markdown Style'),
-      infoString: trans('Check your Markdown documents for style issues'),
-      group: PreferencesGroups.Editor,
-      fields: [
-        {
-          type: 'checkbox',
-          label: trans('Enable Markdown Linter'),
-          model: 'editor.lint.markdown'
-        }
-      ]
-    },
-    {
       title: trans('Table Editor'),
       group: PreferencesGroups.Editor,
       titleField: {

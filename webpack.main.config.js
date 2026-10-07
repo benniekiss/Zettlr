@@ -2,6 +2,7 @@ const CopyWebpackPlugin = require('copy-webpack-plugin')
 const { DefinePlugin } = require('webpack')
 const path = require('path')
 const rules = require('./webpack.rules')
+const { getPandocBuildDefines } = require('./scripts/pandoc-build-defines')
 
 const externals = {}
 
@@ -40,6 +41,7 @@ module.exports = {
       ]
     }),
     new DefinePlugin({
+      ...getPandocBuildDefines(),
       __GIT_COMMIT_HASH__: JSON.stringify(process.env.GIT_COMMIT_HASH),
       __BUILD_DATE__: JSON.stringify((new Date()).toISOString()),
       __UPDATES_DISABLED__: JSON.stringify(process.env.ZETTLR_DISABLE_UPDATE_CHECK !== undefined ? '1' : '0')

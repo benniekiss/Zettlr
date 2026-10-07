@@ -12,6 +12,7 @@
  * END HEADER
  */
 
+import { parseLanguageServers } from '@common/lsp/config'
 import { trans } from '@common/i18n-main'
 
 const RULES = {
@@ -57,6 +58,11 @@ export function validate (data: any): ValidationError[] {
   }
 
   const unvalidated: ValidationError[] = []
+  if ('languageServers' in data) {
+    try { parseLanguageServers(data.languageServers) } catch (err) {
+      unvalidated.push({ key: 'languageServers', reason: err instanceof Error ? err.message : String(err) })
+    }
+  }
   for (const key in data) {
     if (VALIDATE_PROPERTIES.includes(key)) {
       const rule = VALIDATE_RULES[VALIDATE_PROPERTIES.indexOf(key)]

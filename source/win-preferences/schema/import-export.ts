@@ -16,10 +16,25 @@ import { trans } from '@common/i18n-renderer'
 import { type PreferencesFieldset } from '../App.vue'
 import { PreferencesGroups } from './_preferences-groups'
 import { ProgrammaticallyOpenableWindows } from '@providers/commands/open-aux-window'
+import { DEFAULT_PANDOC_WASM_URL } from '@common/pandoc-util/pandoc-wasm-url'
 const ipcRenderer = window.ipc
 
 export function getImportExportFields (): PreferencesFieldset[] {
   return [
+    {
+      title: trans('Pandoc download'),
+      group: PreferencesGroups.ImportExport,
+      infoString: trans('Pandoc is downloaded once and cached for offline use. Changing the URL applies to the next import or export.'),
+      fields: [
+        {
+          type: 'text',
+          label: trans('Pandoc WASM download URL'),
+          model: 'export.pandocWasmUrl',
+          reset: DEFAULT_PANDOC_WASM_URL,
+          info: trans('Use a URL pointing to a .wasm file or a Pandoc release ZIP archive. Local file URLs are also supported.')
+        }
+      ]
+    },
     {
       title: trans('Import and export profiles'),
       group: PreferencesGroups.ImportExport,
@@ -60,11 +75,6 @@ export function getImportExportFields (): PreferencesFieldset[] {
       group: PreferencesGroups.ImportExport,
       help: undefined, // TODO
       fields: [
-        {
-          type: 'checkbox', // TODO: Must be radio; second option "Use system-wide Pandoc for exports"
-          label: trans('Use Zettlr\'s internal Pandoc for exports'),
-          model: 'export.useBundledPandoc'
-        },
         {
           type: 'checkbox',
           label: trans('Automatically open successfully exported files'),

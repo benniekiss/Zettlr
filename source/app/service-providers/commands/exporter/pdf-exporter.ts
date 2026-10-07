@@ -50,6 +50,10 @@ export const plugin: ExporterPlugin = async function (options: ExporterOptions, 
   // Run Pandoc
   const pandocOutput = await ctx.runPandoc(defaultsFile)
 
+  if (pandocOutput.code !== 0) {
+    return { ...pandocOutput, targetFile: pdfFilePath }
+  }
+
   // Without XeLaTeX, people can still export to PDF using Chromium's print
   // API. Chromium's PDF abilities are actually quite good.
   const printer = new BrowserWindow({

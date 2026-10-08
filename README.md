@@ -499,6 +499,22 @@ specific requirements for the Pandoc download script identified above.)
 > short: Only use this build flag if you know *exactly* what you're doing. Then,
 > all is good.
 
+#### `BUNDLE_LSP`, `BUNDLE_PANACHE`, `BUNDLE_CODEBOOK`, `BUNDLE_LTEX_PLUS`
+
+Language server distributions are downloaded, verified against pinned SHA-256
+checksums, and bundled by default for macOS, Linux, and Windows on x64 and ARM64.
+Versions and checksums are defined in `scripts/lsp-servers.json`. LTeX+ includes
+its Java runtime. Downloads and extracted distributions are cached under
+`resources/lsp/`; archive extraction requires `tar` for macOS and Linux targets.
+
+Set `BUNDLE_LSP=0` to disable all language server downloads and bundling, or set
+`BUNDLE_PANACHE=0`, `BUNDLE_CODEBOOK=0`, or `BUNDLE_LTEX_PLUS=0` to omit individual
+servers. These flags are independent of `BUNDLE_PANDOC`.
+
+Users can disable **Use bundled language servers** in Preferences → Language
+servers to use their installed versions. See [language server configuration](docs/language-servers.md)
+for command resolution and setup.
+
 ### Directory Structure
 
 Zettlr is a mature app that has amassed hundreds of directories over the course

@@ -4,6 +4,7 @@ const path = require('path')
 const { FusesPlugin } = require('@electron-forge/plugin-fuses')
 const { FuseV1Options, FuseVersion } = require('@electron/fuses')
 const { getGitHash } = require('./scripts/get-git-hash.js')
+const { configureLanguageServerResources } = require('./scripts/get-language-servers.js')
 
 /**
  * This function runs the get-pandoc script in order to download the requested
@@ -98,6 +99,9 @@ module.exports = {
       // This will be baked into the binary so that we know which commit this
       // build was based off on.
       process.env.GIT_COMMIT_HASH = await getGitHash()
+
+      // Language-server bundling is independent of the Pandoc build switch.
+      await configureLanguageServerResources(forgeConfig, targetPlatform, targetArch)
 
       // Second, we need to make sure we can bundle Pandoc.
       if (process.env.BUNDLE_PANDOC === '0') {
@@ -240,7 +244,7 @@ module.exports = {
       : false,
     // On macOS, we need to provide the app icon so that it gets copied into the
     // resources directory. After the `generateAssets` step, this will also
-    // include the Pandoc binary (this is why we cannot leave `extraResource`
+    // include Pandoc and language servers (this is why we cannot leave `extraResource`
     // undefined).
     extraResource: process.platform === 'darwin' ? [
       'resources/icons/icon.code.icns',

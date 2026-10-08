@@ -1,6 +1,16 @@
 const rules = require('./webpack.rules')
 const path = require('path')
 
+// TypeScript emits require(), while the ESM-only LSP client uses import.
+// Both must resolve to the same CodeMirror/Lezer instances: their extensions
+// and facets rely on object identity and cannot cross module copies.
+const editorAliases = Object.fromEntries([
+  '@codemirror/state', '@codemirror/view', '@codemirror/language',
+  '@codemirror/autocomplete', '@codemirror/lint', '@codemirror/commands',
+  '@codemirror/search', '@codemirror/collab',
+  '@lezer/common', '@lezer/highlight', '@lezer/lr', '@lezer/markdown'
+].map(name => [`${name}$`, require.resolve(name)]))
+
 const { VueLoaderPlugin } = require('vue-loader')
 const { DefinePlugin } = require('webpack')
 
@@ -50,6 +60,7 @@ module.exports = {
       '.css', '.less', '.vue'
     ],
     alias: {
+      ...editorAliases,
       source: [path.resolve(__dirname, 'source')],
       '@common': [path.resolve(__dirname, 'source/common')],
       '@providers': [path.resolve(__dirname, 'source/app/service-providers')],

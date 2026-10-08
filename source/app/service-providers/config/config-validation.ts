@@ -16,6 +16,7 @@ import { parseLanguageServers } from '@common/lsp/config'
 import { trans } from '@common/i18n-main'
 
 const RULES = {
+  useBundledLanguageServers: 'required|boolean|default:true',
   darkMode: 'required|boolean|default:false',
   darkModeEditor: 'required|string|in:match,light,dark|default:match',
   autoDarkMode: 'required|string|in:off,system,schedule,auto|default:off',

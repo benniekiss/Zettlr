@@ -1,6 +1,6 @@
 import assert from 'assert'
 import { EditorView } from '@codemirror/view'
-import { linter, forceLinting, diagnosticCount } from '@codemirror/lint'
+import { linter, forceLinting, diagnosticCount, forEachDiagnostic } from '@codemirror/lint'
 import { languageServers } from '../source/common/modules/markdown-editor/plugins/lsp'
 import { LSPMessageReader, frameLSPMessage } from '../source/common/lsp/framing'
 import { parseLanguageServers } from '../source/common/lsp/config'
@@ -144,6 +144,8 @@ describe('Multiple language servers', () => {
 
 describe('Editor LSP lifecycle', () => {
   it('synchronizes documents, preserves other lint sources, reconfigures, and cleans up', async () => {
+    window.Range.prototype.getClientRects = () => [] as any
+    window.Range.prototype.getBoundingClientRect = () => ({ left: 0, right: 0, top: 0, bottom: 0, width: 0, height: 0 }) as DOMRect
     window.requestAnimationFrame = global.requestAnimationFrame
     window.cancelAnimationFrame = global.cancelAnimationFrame
     const previousIPC = window.ipc
@@ -166,9 +168,12 @@ describe('Editor LSP lifecycle', () => {
         if (payload.command === 'start') return { id: String(++sessionID), uri: 'file:///test.md', rootUri: 'file:///' }
         if (payload.command === 'send') {
           const message = JSON.parse(payload.message)
+          if (message.method === 'textDocument/codeAction') queueMicrotask(() => emit('lsp-message', {
+            id: payload.id, message: JSON.stringify({ jsonrpc: '2.0', id: message.id, result: [{ title: 'Add word', command: { title: 'Add word', command: 'test.addWord' } }] })
+          }))
           if (message.method === 'initialize') queueMicrotask(() => emit('lsp-message', {
             id: payload.id,
-            message: JSON.stringify({ jsonrpc: '2.0', id: message.id, result: { capabilities: { textDocumentSync: 1 } } })
+            message: JSON.stringify({ jsonrpc: '2.0', id: message.id, result: { capabilities: { textDocumentSync: 1, codeActionProvider: true } } })
           }))
         }
       }
@@ -181,6 +186,7 @@ describe('Editor LSP lifecycle', () => {
     try {
       await settle()
       const sent = (): any[] => calls.filter(call => call.command === 'send').map(call => JSON.parse(call.message))
+      assert.strictEqual(sent().find(message => message.method === 'initialize').params.capabilities.window.workDoneProgress, false)
       assert.strictEqual(sent().find(message => message.method === 'textDocument/didOpen').params.textDocument.languageId, 'markdown')
       const doc = sent().find(message => message.method === 'textDocument/didOpen').params.textDocument
       emit('lsp-message', { id: '1', message: JSON.stringify({ jsonrpc: '2.0', method: 'textDocument/publishDiagnostics', params: {
@@ -189,19 +195,53 @@ describe('Editor LSP lifecycle', () => {
       forceLinting(view)
       await settle()
       assert.strictEqual(diagnosticCount(view.state), 2)
+      // Large diagnostic batches must not generate/cache thousands of fixes.
+      const batch = Array.from({ length: 2000 }, (_, index) => ({ range: { start: { line: 0, character: 1 }, end: { line: 0, character: 3 } }, severity: 2, message: `Warning ${index}` }))
+      emit('lsp-message', { id: '1', message: JSON.stringify({ jsonrpc: '2.0', method: 'textDocument/publishDiagnostics', params: { uri: doc.uri, version: doc.version, diagnostics: batch } }) })
+      forceLinting(view)
+      await settle()
+      let totalDiagnostics = 0
+      forEachDiagnostic(view.state, () => { totalDiagnostics++ })
+      assert.strictEqual(totalDiagnostics, 2001)
+      assert.strictEqual(sent().filter(message => message.method === 'textDocument/codeAction').length, 0)
+      forEachDiagnostic(view.state, (diagnostic, from, to) => {
+        if (diagnostic.message === 'Warning 0') diagnostic.actions![0].apply(view, from, to)
+      })
+      await settle()
+      assert.strictEqual(sent().filter(message => message.method === 'textDocument/codeAction').length, 1)
+      let loaded = false
+      forEachDiagnostic(view.state, diagnostic => { if (diagnostic.message === 'Warning 0') loaded = diagnostic.actions?.[0].name === 'Add word' })
+      assert(loaded)
+      forEachDiagnostic(view.state, (diagnostic, from, to) => {
+        if (diagnostic.message === 'Warning 1') diagnostic.actions![0].apply(view, from, to)
+      })
+      await settle()
+      assert.strictEqual(sent().filter(message => message.method === 'textDocument/codeAction').length, 2)
+      let expanded = 0
+      forEachDiagnostic(view.state, diagnostic => {
+        if (diagnostic.actions?.[0].name === 'Add word') expanded++
+        if (diagnostic.message === 'Warning 0') assert.strictEqual(diagnostic.actions?.[0].name, 'Show fixes')
+      })
+      assert.strictEqual(expanded, 1)
       view.dispatch({ changes: { from: 5, insert: '!' } })
       await new Promise(resolve => setTimeout(resolve, 600))
       assert.strictEqual(sent().find(message => message.method === 'textDocument/didChange').params.contentChanges[0].text, 'hello!')
+      window.config.set('useBundledLanguageServers', false)
+      emit('config-provider', { command: 'update' })
+      await settle()
+      assert.strictEqual(calls.filter(call => call.command === 'start').length, 2)
+      assert(calls.some(call => call.command === 'stop' && call.id === '1'))
       window.config.set('languageServers', '[]')
       emit('config-provider', { command: 'update' })
       await settle()
-      assert(calls.some(call => call.command === 'stop' && call.id === '1'))
+      assert(calls.some(call => call.command === 'stop' && call.id === '2'))
       forceLinting(view)
       await settle()
       assert.strictEqual(diagnosticCount(view.state), 1)
     } finally {
       view.destroy()
       window.config.set('languageServers', '[]')
+      window.config.set('useBundledLanguageServers', true)
       window.ipc = previousIPC
     }
     assert.strictEqual(listeners.get('lsp-message')!.size, 0)

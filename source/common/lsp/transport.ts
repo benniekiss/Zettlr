@@ -1,4 +1,5 @@
 import type { Transport } from '@codemirror/lsp-client'
+import type { Diagnostic, CodeAction, Command, WorkspaceEdit } from 'vscode-languageserver-types'
 
 interface Message {
   jsonrpc: string
@@ -44,7 +45,7 @@ export class MultiServerTransport implements Transport {
   private readonly pending = new Map<number, { peer: Peer, clientID: number|string|undefined, respond: (message: Message) => void, timer: ReturnType<typeof setTimeout> }>()
   private readonly serverRequests = new Map<string, { peer: Peer, id: number|string }>()
 
-  constructor (transports: Transport[]) {
+  constructor (transports: Transport[], private readonly applyEdit?: (params: { edit: WorkspaceEdit }) => { applied: boolean, failureReason?: string }) {
     for (const transport of transports) {
       const peer: Peer = { transport, capabilities: {}, diagnostics: new Map(), active: true, listener: message => this.receive(peer, JSON.parse(message)) }
       this.peers.push(peer)
@@ -70,6 +71,35 @@ export class MultiServerTransport implements Transport {
     try { peer.transport.send(JSON.stringify({ ...message, id })) } catch (err) {
       this.closePeer(peer.transport) 
     }
+  }
+
+  supportsCodeActions (server: number): boolean {
+    const peer = this.peers[server]
+    return peer !== undefined && peer.active && peer.capabilities.codeActionProvider !== undefined && peer.capabilities.codeActionProvider !== null && peer.capabilities.codeActionProvider !== false
+  }
+
+  private requestServer<T> (server: number, method: string, params: unknown): Promise<T> {
+    const peer = this.peers[server]
+    if (!(peer?.active)) {return Promise.reject(new Error('Language server disconnected'))}
+    return new Promise((resolve, reject) => this.request(peer, { jsonrpc: '2.0', method, params }, response => {
+      if (response.error !== undefined) {reject(new Error(response.error.message))} else {resolve(response.result)}
+    }))
+  }
+
+  requestCodeActions (server: number, uri: string, diagnostic: Diagnostic): Promise<Array<CodeAction|Command>|null> {
+    return this.requestServer(server, 'textDocument/codeAction', {
+      textDocument: { uri }, range: diagnostic.range,
+      context: { diagnostics: [diagnostic], triggerKind: 2 }
+    })
+  }
+
+  resolveCodeAction (server: number, action: CodeAction): Promise<CodeAction> {
+    if (this.peers[server]?.capabilities.codeActionProvider?.resolveProvider !== true) {return Promise.resolve(action)}
+    return this.requestServer(server, 'codeAction/resolve', action)
+  }
+
+  executeCommand (server: number, command: Command): Promise<unknown> {
+    return this.requestServer(server, 'workspace/executeCommand', { command: command.command, arguments: command.arguments })
   }
 
   send (json: string): void {
@@ -158,7 +188,13 @@ export class MultiServerTransport implements Transport {
     if (!peer.active) {
       return
     }
-    if (message.method === 'textDocument/publishDiagnostics') {
+    if (message.method === 'workspace/applyEdit' && message.id !== undefined && this.applyEdit !== undefined) {
+      let result: { applied: boolean, failureReason?: string }
+      try { result = this.applyEdit(message.params) } catch (err) {
+        result = { applied: false, failureReason: err instanceof Error ? err.message : String(err) }
+      }
+      peer.transport.send(JSON.stringify({ jsonrpc: '2.0', id: message.id, result }))
+    } else if (message.method === 'textDocument/publishDiagnostics') {
       const version = this.versions.get(message.params.uri)
       if (message.params.version !== undefined && message.params.version !== null && version !== undefined && message.params.version !== version) {
         return
@@ -183,8 +219,15 @@ export class MultiServerTransport implements Transport {
   }
 
   private publishDiagnostics (uri: string, version?: number): void {
-    const diagnostics = this.peers.flatMap(peer => peer.active ? peer.diagnostics.get(uri) ?? [] : [])
-    this.emit({ jsonrpc: '2.0', method: 'textDocument/publishDiagnostics', params: { uri, version: version ?? this.versions.get(uri), diagnostics } })
+    const diagnostics: Diagnostic[] = []
+    const zettlrServers: number[] = []
+    this.peers.forEach((peer, server) => {
+      for (const diagnostic of peer.active ? peer.diagnostics.get(uri) ?? [] : []) {
+        diagnostics.push(diagnostic)
+        zettlrServers.push(server)
+      }
+    })
+    this.emit({ jsonrpc: '2.0', method: 'textDocument/publishDiagnostics', params: { uri, version: version ?? this.versions.get(uri), diagnostics, zettlrServers } })
   }
 
   closePeer (transport: Transport): void {

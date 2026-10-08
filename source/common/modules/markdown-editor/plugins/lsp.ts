@@ -1,11 +1,13 @@
 import { Compartment, StateEffect, StateField, type Extension } from '@codemirror/state'
 import type { EditorView } from '@codemirror/view'
-import { ViewPlugin } from '@codemirror/view'
+import { ViewPlugin, keymap, type ViewUpdate } from '@codemirror/view'
 import { LSPClient, LSPPlugin, languageServerExtensions, type Transport } from '@codemirror/lsp-client'
-import { linter, forceLinting, type Diagnostic } from '@codemirror/lint'
+import { linter, forceLinting, type Diagnostic, lintKeymap, openLintPanel } from '@codemirror/lint'
 import DOMPurify from 'dompurify'
+import { trans } from '@common/i18n-renderer'
 import { parseLanguageServers } from '@common/lsp/config'
 import { MultiServerTransport } from '@common/lsp/transport'
+import { DiagnosticActions, applyWorkspaceEdit } from '@common/lsp/code-actions'
 
 const diagnosticsEffect = StateEffect.define<Diagnostic[]>()
 const diagnosticsField = StateField.define<Diagnostic[]>({
@@ -14,6 +16,7 @@ const diagnosticsField = StateField.define<Diagnostic[]>({
     if (transaction.docChanged) {
       diagnostics = diagnostics.map(diagnostic => ({
         ...diagnostic,
+        actions: undefined,
         from: transaction.changes.mapPos(diagnostic.from, 1),
         to: transaction.changes.mapPos(diagnostic.to, -1)
       })).filter(diagnostic => diagnostic.from <= diagnostic.to)
@@ -30,10 +33,11 @@ const diagnosticsField = StateField.define<Diagnostic[]>({
 /** Sessions belong to a view and are released on reconfiguration or destruction. */
 export function languageServers (path: string, language: string): Extension {
   const compartment = new Compartment()
-  return [ diagnosticsField, linter(view => view.state.field(diagnosticsField), {
+  return [ diagnosticsField, keymap.of(lintKeymap), linter(view => view.state.field(diagnosticsField), {
     needsRefresh: update => update.transactions.some(transaction => transaction.effects.some(effect => effect.is(diagnosticsEffect)))
   }), compartment.of([]), ViewPlugin.fromClass(class {
     private generation = 0
+    private codeActions: DiagnosticActions|undefined
     private client: LSPClient|undefined
     private transport: MultiServerTransport|undefined
     private readonly sessions = new Set<string>()
@@ -41,6 +45,7 @@ export function languageServers (path: string, language: string): Extension {
     private readonly stopMessages: () => void
     private readonly stopConfig: () => void
     private config = ''
+    private useBundled = true
     private destroyed = false
 
     constructor (private readonly view: EditorView) {
@@ -64,7 +69,13 @@ export function languageServers (path: string, language: string): Extension {
       this.configure()
     }
 
+    update (update: ViewUpdate): void {
+      if (update.docChanged) {this.codeActions?.clear()}
+    }
+
     private release (): void {
+      this.codeActions?.clear()
+      this.codeActions = undefined
       this.client?.disconnect()
       this.transport?.destroy()
       this.client = undefined
@@ -82,10 +93,12 @@ export function languageServers (path: string, language: string): Extension {
 
     private configure (): void {
       const config: string = window.config.get('languageServers') ?? '[]'
-      if (config === this.config || this.destroyed) {
+      const useBundled: boolean = window.config.get('useBundledLanguageServers') ?? true
+      if ((config === this.config && useBundled === this.useBundled) || this.destroyed) {
         return
       }
       this.config = config
+      this.useBundled = useBundled
       const generation = ++this.generation
       // Defer dispatch until CodeMirror has finished constructing/updating plugins.
       queueMicrotask(() => {
@@ -139,12 +152,23 @@ export function languageServers (path: string, language: string): Extension {
       if (this.destroyed || generation !== this.generation || transports.length === 0) {
         return
       }
-      const transport = this.transport = new MultiServerTransport(transports)
+      const transport = this.transport = new MultiServerTransport(transports, params => {
+        if (this.client === undefined) {return { applied: false, failureReason: 'Language server disconnected' }}
+        try {
+          applyWorkspaceEdit(this.client, params.edit)
+          return { applied: true }
+        } catch (err) {
+          return { applied: false, failureReason: err instanceof Error ? err.message : String(err) }
+        }
+      })
+      let actions: DiagnosticActions
+      let diagnosticsGeneration = 0
       const client = this.client = new LSPClient({
         rootUri,
         timeout: 30000,
         sanitizeHTML: html => DOMPurify.sanitize(html),
-        extensions: [{ clientCapabilities: { workspace: { configuration: true } } }, ...languageServerExtensions() ],
+        // LTeX+ dereferences this optional flag; explicitly disable progress UI.
+        extensions: [{ clientCapabilities: { window: { workDoneProgress: false }, workspace: { configuration: true, applyEdit: true }, textDocument: { codeAction: { codeActionLiteralSupport: { codeActionKind: { valueSet: ['quickfix'] } }, dataSupport: true, resolveSupport: { properties: [ 'edit', 'command' ] }, disabledSupport: true } } } }, ...languageServerExtensions() ],
         notificationHandlers: {
           'textDocument/publishDiagnostics': (client, params) => {
             const file = client.workspace.getFile(params.uri)
@@ -159,12 +183,42 @@ export function languageServers (path: string, language: string): Extension {
               source: item.source,
               message: item.message
             }))
+            const diagnosticGeneration = ++diagnosticsGeneration
+            const doc = this.view.state.doc
+            const current = (): boolean => !this.destroyed && generation === this.generation && diagnosticGeneration === diagnosticsGeneration && this.view.state.doc === doc
+            if (plugin.unsyncedChanges.empty) {
+              diagnostics.forEach((diagnostic, index) => {
+                const server = params.zettlrServers?.[index]
+                if (!transport.supportsCodeActions(server)) {return}
+                let loading = false
+                diagnostic.actions = [{
+                  name: trans('Show fixes'),
+                  apply: () => {
+                    if (loading || !current()) {return}
+                    loading = true
+                    // Only fetch the diagnostic the user chose. A server may
+                    // return large edits; never generate them for an entire file.
+                    actions.load(params.uri, [params.diagnostics[index]], [server], [diagnostic], current).then(updated => {
+                      if (!current()) {return}
+                      // Keep expanded actions for only the selected diagnostic.
+                      this.view.dispatch({ effects: diagnosticsEffect.of(diagnostics.map(item => item === diagnostic ? updated[0] : item)) })
+                      forceLinting(this.view)
+                      openLintPanel(this.view)
+                    }).catch(err => {
+                      loading = false
+                      plugin.reportError(trans('Could not load code actions'), err)
+                    })
+                  }
+                }]
+              })
+            }
             this.view.dispatch({ effects: diagnosticsEffect.of(diagnostics) })
             forceLinting(this.view)
             return true
           }
         }
       }).connect(transport)
+      actions = this.codeActions = new DiagnosticActions(client, transport, this.view)
       try {
         await client.initializing
         if (this.destroyed || generation !== this.generation) {

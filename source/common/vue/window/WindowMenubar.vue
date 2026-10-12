@@ -150,18 +150,24 @@ function showSubmenu (items: AnyMenuItem[], attachTo: string): void {
   align-items: center;
   gap: 6px;
   padding: 4px 0;
+  padding-left: env(titlebar-area-x, 0px);
+  padding-right: calc(100% - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100%));
+  box-sizing: border-box;
+  overflow: hidden;
 
   /* If the menubar is shown, this indicates there's no title bar, hence we
   need the menubar to be draggable. */
   -webkit-app-region: drag;
 
   img#app-logo {
+    flex-shrink: 0;
     height: 18px;
     margin-left: 8px;
     width: auto;
   }
 
   div.top-level-item {
+    flex-shrink: 0;
     padding: 0 10px;
     height: 100%;
     display: flex;

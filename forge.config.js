@@ -1,60 +1,8 @@
-const { spawn } = require('child_process')
 const fs = require('fs').promises
 const path = require('path')
 const { FusesPlugin } = require('@electron-forge/plugin-fuses')
 const { FuseV1Options, FuseVersion } = require('@electron/fuses')
 const { getGitHash } = require('./scripts/get-git-hash.js')
-
-/**
- * This function runs the get-pandoc script in order to download the requested
- * version of Pandoc. This way we can guarantee that the correct Pandoc version
- * will be present when packaging the application.
- *
- * @param   {string}  platform  The platform for which to download.
- * @param   {string}  arch      The architecture for which to download.
- */
-async function downloadPandoc (platform, arch) {
-  // Check we have a valid platform ...
-  if (![ 'darwin', 'linux', 'win32' ].includes(platform)) {
-    throw new Error(`Cannot download Pandoc: Platform ${platform} is not recognised!`)
-  }
-
-  // ... and a valid architecture.
-  if (![ 'x64', 'arm' ].includes(arch)) {
-    throw new Error(`Cannot download Pandoc: Architecture ${arch} is not supported!`)
-  }
-
-  // Now run the script and wait for it to finish.
-  await new Promise((resolve, reject) => {
-    const argWin = [ 'bash.exe', [ './scripts/get-pandoc.sh', platform, arch ] ]
-    const argUnix = [ './scripts/get-pandoc.sh', [ platform, arch ] ]
-    // Use the spread operator to spawn the process using the correct arguments.
-    const shellProcess = (process.platform === 'win32') ? spawn(...argWin) : spawn(...argUnix)
-
-    // To not mess with Electron forge's output, suppress this processes output.
-    // But we should reject if there's any error output.
-    let shouldReject = false
-    let stderrDetails = ""
-    shellProcess.stderr.on('data', (_data) => {
-      shouldReject = true
-      stderrDetails += _data
-    })
-
-    // Resolve or reject once the process has finished.
-    shellProcess.on('close', (code, _signal) => {
-      if (code !== 0 || shouldReject) {
-        reject(new Error(`Failed to download Pandoc: Process quit with code ${code}. If the code is 0, then there was error output. ${stderrDetails ? ("Error output: " + stderrDetails) : ""}`))
-      } else {
-        resolve()
-      }
-    })
-
-    // Reject on errors.
-    shellProcess.on('error', (err) => {
-      reject(err)
-    })
-  })
-}
 
 /**
  * Since all our renderers share the same static HTML file and the same preload
@@ -89,60 +37,13 @@ module.exports = {
         console.warn('Detected the environment variable ZETTLR_DISABLE_UPDATE_CHECK. This build of Zettlr WILL NOT HAVE UPDATES ENABLED. Please ensure this was intended!')
       }
     },
-    generateAssets: async (forgeConfig, targetPlatform, targetArch) => {
-      // Two steps need to be done here. First, we need to set an environment
-      // variable that is then accessible by the webpack process so that we can
-      // either include or not include fsevents for macOS platforms.
+    generateAssets: async (forgeConfig, targetPlatform) => {
+      // Tell Webpack whether to include fsevents for the target platform.
       process.env.BUNDLE_FSEVENTS = (targetPlatform === 'darwin') ? '1' : '0'
 
       // This will be baked into the binary so that we know which commit this
       // build was based off on.
       process.env.GIT_COMMIT_HASH = await getGitHash()
-
-      // Second, we need to make sure we can bundle Pandoc.
-      if (process.env.BUNDLE_PANDOC === '0') {
-        console.warn('Detected environment variable BUNDLE_PANDOC -- this build will not be bundled with Pandoc!')
-        return
-      }
-
-      const isMacOS = targetPlatform === 'darwin'
-      const isLinux = targetPlatform === 'linux'
-      const isWin32 = targetPlatform === 'win32'
-      const isArm64 = targetArch === 'arm64'
-      const is64Bit = targetArch === 'x64'
-
-      // macOS has Rosetta 2 built-in, so we can bundle Pandoc 64bit
-      const supportsPandoc = is64Bit || (isMacOS && isArm64) || (isLinux && isArm64)
-
-      if (supportsPandoc && isWin32) {
-        // Download Pandoc beforehand, if it's not yet there.
-        try {
-          await fs.lstat(path.join(__dirname, './resources/pandoc-win32-x64.exe'))
-        } catch (err) {
-          await downloadPandoc('win32', 'x64')
-        }
-
-        await fs.copyFile(path.join(__dirname, './resources/pandoc-win32-x64.exe'), path.join(__dirname, './resources/pandoc.exe'))
-
-        forgeConfig.packagerConfig.extraResource.push(path.join(__dirname, './resources/pandoc.exe'))
-      } else if (supportsPandoc && (isMacOS || isLinux)) {
-        // Download Pandoc either for macOS or Linux ...
-        const platform = isMacOS ? 'darwin' : 'linux'
-        // ... and the ARM or x64 version.
-        const arch = isArm64 ? 'arm' : 'x64'
-        try {
-          await fs.lstat(path.join(__dirname, `./resources/pandoc-${platform}-${arch}`))
-        } catch (err) {
-          await downloadPandoc(platform, arch)
-        }
-
-        await fs.copyFile(path.join(__dirname, `./resources/pandoc-${platform}-${arch}`), path.join(__dirname, './resources/pandoc'))
-
-        forgeConfig.packagerConfig.extraResource.push(path.join(__dirname, './resources/pandoc'))
-      } else {
-        // If someone is building this on an unsupported platform, drop a warning.
-        console.log(`\nBuilding for an unsupported platform/arch-combination ${targetPlatform}/${targetArch} - not bundling Pandoc.`)
-      }
     },
     postMake: async (forgeConfig, makeResults) => {
       const basePath = __dirname
@@ -314,7 +215,7 @@ module.exports = {
           // size: 500, // NOTE: Estimate, need to refine
           description: 'Your one-stop publication workbench.',
           productDescription: 'Your one-stop publication workbench.',
-          recommends: [ 'quarto', 'pandoc', 'texlive | texlive-base | texlive-full' ],
+          recommends: [ 'quarto' ],
           genericName: 'Markdown Editor',
           // Electron forge recommends 512px
           icon: './resources/icons/png/512x512.png',

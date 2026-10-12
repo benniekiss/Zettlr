@@ -188,9 +188,6 @@ developing, you'll need to have the following installed on your computer:
    which will make many of the next steps easier.
 4. A few command-line utilities that various scripts require for running the
    development builds:
-    * [`cURL`](https://curl.se/download.html) (required by the Pandoc download
-      script)
-    * `unzip` (required by the Pandoc download script)
     * [`jq`](https://jqlang.github.io/jq/) (required by the i18n script)
 5. An appropriate build toolchain for your operating system, since Zettlr
    requires a few native C++-modules that must be compiled before running the
@@ -498,34 +495,53 @@ make sure this environment variable is *not* set, e.g., by running
 > flag if you know *exactly* what you're doing, and, if something goes wrong,
 > communicate proactively. Then, all is good.
 
-#### `BUNDLE_PANDOC`
+#### Pandoc WASM
 
-If this environment variable is present during build, this will cause the build
-script to **not** bundle the correct Pandoc binary into the final application
-bundle. This is useful if you are repackaging the app for distribution through a
-package manager and ensure that Pandoc gets installed as a dependency of Zettlr.
-The build script will emit a warning that the binary will not be bundled with
-Pandoc.
+Pandoc runs as WebAssembly in a worker thread using Node's native WASI runtime.
+Every WASI import has a JavaScript wrapper to avoid a Node 22/V8 GC crash with
+direct native imports. Set **Pandoc WASM download URL**
+under **Preferences → Import/Export → Pandoc download** to select its source.
+The default points directly to the Pandoc 3.12 WASM release in `jgm/pandoc`.
+HTTPS and local `file:` URLs are supported, with either a raw `.wasm` module
+or a ZIP containing `pandoc.wasm`. A custom module is executable code; only
+configure sources you trust. The built-in release is additionally pinned by
+the SHA-256 hash of its extracted module.
+For a custom source, an optional SHA-256 preference can pin the extracted
+`pandoc.wasm` module; leave it blank to skip hash verification. A hash entered
+while the URL is blank is ignored.
 
-To disable bundling of Pandoc, you need to set the environment variable to `0`,
-e.g.: `export BUNDLE_PANDOC=0`. This will cause the build script to neither
-download nor bundle Pandoc. (This also absolves your build environment from the
-specific requirements for the Pandoc download script identified above.)
+Zettlr downloads the module on first use and caches it in the user data
+directory for offline use. Changing the URL selects a separate cache entry
+on the next import or export; no restart is needed. A URL is downloaded once,
+so use a new versioned URL to upgrade Pandoc. Failed or invalid downloads are
+reported without replacing another URL's cached module.
 
-> [!CAUTION]
-> Zettlr users expect Pandoc to be present, since otherwise they will not be
-> able to import or export files. Every version of Zettlr that is publicly
-> distributed must therefore either come bundled with Pandoc, or ensure through
-> another mechanism that Pandoc is installed on the computer. If you use this
-> build flag while repackaging the app and distribute it via some package
-> manager, you are **required** to ensure that Pandoc will be installed
-> alongside Zettlr via some other means (e.g., by marking Pandoc as a dependency
-> of Zettlr). We do not want users to start complaining that some Zettlr version
-> has non-functioning exports or imports.
-> **Failure to comply with these added requirements will result in our immediate termination of the implicit consent for you to distribute modified Zettlr versions.**
-> Thus, you will forfeit your allowance to distribute Zettlr indefinitely. In
-> short: Only use this build flag if you know *exactly* what you're doing. Then,
-> all is good.
+Filesystem access follows the OS account's permissions, like native Pandoc.
+Lua readers and filters can read resources and write side-effect files outside
+the working directory, including modifying source files. Reactor IO files stay
+private, and the worker still receives a small environment-variable allowlist.
+Downloads and extracted modules are limited to 512 MiB, including larger builds.
+
+The filesystem policy lives in `source/app/util/pandoc-filesystem-policy.cjs`.
+Its `roots` and `allows({ path, access, operation, target })` hooks are separate
+from WASI path translation, so a future restricted policy can replace the
+permissive default. No restricted mode is currently exposed in preferences.
+
+No Pandoc binary is downloaded or bundled during the build, and no native
+Pandoc installation is needed. `BUNDLE_PANDOC` no longer applies. Developers
+can run the WASM conversion tests with an existing module by setting
+`PANDOC_TEST_WASM=/path/to/pandoc.wasm` when running `yarn test`; those tests
+are skipped when no module is supplied. Download/cache tests always run and
+do not require internet access.
+
+Import/export profiles, local resources, bibliographies, and Lua filters remain
+supported. External PDF engines and executable JSON filters are unsupported;
+use Simple PDF for PDF output. The WASM build cannot fetch remote resources or
+run commands from Lua filters.
+
+Lua filters that write buffered stdout with `io.stdout:write` should call
+`io.stdout:flush()` to include that output in the export log. The WASM reactor
+does not exit a process and therefore does not automatically flush that stream.
 
 ### Directory Structure
 

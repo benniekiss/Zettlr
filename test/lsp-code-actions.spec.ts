@@ -3,14 +3,14 @@ import { EditorView } from '@codemirror/view'
 import { history, undo } from '@codemirror/commands'
 import { LSPClient, LSPPlugin, type Transport } from '@codemirror/lsp-client'
 import { openLintPanel, setDiagnostics } from '@codemirror/lint'
-import type { CodeAction, Diagnostic, WorkspaceEdit } from 'vscode-languageserver-types'
+import type { CodeAction, Command, Diagnostic, WorkspaceEdit } from 'vscode-languageserver-types'
 import { MultiServerTransport } from '../source/common/lsp/transport'
 import { DiagnosticActions, applyWorkspaceEdit } from '../source/common/lsp/code-actions'
 
 class Server implements Transport {
   handlers = new Set<(message: string) => void>()
   sent: any[] = []
-  actions: CodeAction[] = []
+  actions: Array<CodeAction|Command> = []
   resolve: ((action: CodeAction) => CodeAction)|undefined
   send (raw: string): void {
     const message = JSON.parse(raw)
@@ -64,12 +64,12 @@ describe('LSP native diagnostic actions', () => {
 
   it('shows native lint-panel buttons, applies replacements, and supports undo', async () => {
     second.actions = [{ title: "Replace with 'spelling'", edit: replacement }, { title: 'Disabled', disabled: { reason: 'Unavailable' } }]
-    const loaded = await actions.load(uri, [diagnostic], [1], [editorDiagnostic], () => true)
-    assert.strictEqual(loaded[0].actions?.length, 1)
+    const loaded = await actions.load(uri, diagnostic, 1, () => true)
+    assert.strictEqual(loaded.length, 1)
     const request = second.sent.find(message => message.method === 'textDocument/codeAction')
     assert.deepStrictEqual(request.params.context.diagnostics, [diagnostic])
     assert(!first.sent.some(message => message.method === 'textDocument/codeAction'))
-    view.dispatch(setDiagnostics(view.state, loaded))
+    view.dispatch(setDiagnostics(view.state, [{ ...editorDiagnostic, actions: loaded }]))
     openLintPanel(view)
     const button = view.dom.querySelector<HTMLButtonElement>('.cm-diagnosticAction')!
     assert.strictEqual(button.textContent, "Replace with 'spelling'")
@@ -84,8 +84,8 @@ describe('LSP native diagnostic actions', () => {
     const data = { word: 'speling', token: 12 }
     second.actions = [{ title: 'Add to dictionary', data }]
     second.resolve = action => ({ ...action, command: { title: action.title, command: 'codebook.addWord', arguments: ['speling'] } })
-    const loaded = await actions.load(uri, [diagnostic], [1], [editorDiagnostic], () => true)
-    loaded[0].actions![0].apply(view, 0, 7)
+    const loaded = await actions.load(uri, diagnostic, 1, () => true)
+    loaded[0].apply(view, 0, 7)
     await settle()
     assert.deepStrictEqual(second.sent.find(message => message.method === 'codeAction/resolve').params.data, data)
     assert.deepStrictEqual(second.sent.find(message => message.method === 'workspace/executeCommand').params, { command: 'codebook.addWord', arguments: ['speling'] })
@@ -94,32 +94,61 @@ describe('LSP native diagnostic actions', () => {
 
   it('supports command-only responses and deduplicates action requests for unchanged diagnostics', async () => {
     second.actions = [{ title: 'Ignore', command: { title: 'Ignore', command: 'codebook.ignoreFile', arguments: [uri] } }]
-    await actions.load(uri, [diagnostic], [1], [editorDiagnostic], () => true)
-    const loaded = await actions.load(uri, [diagnostic], [1], [editorDiagnostic], () => true)
+    await actions.load(uri, diagnostic, 1, () => true)
+    const loaded = await actions.load(uri, diagnostic, 1, () => true)
     assert.strictEqual(second.sent.filter(message => message.method === 'textDocument/codeAction').length, 1)
     // A plain LSP Command is also a valid code-action response.
-    second.actions = [{ title: 'Ignore', command: 'codebook.ignoreFile', arguments: [uri] } as any]
+    second.actions = [{ title: 'Ignore', command: 'codebook.ignoreFile', arguments: [uri] }]
     view.dispatch({ changes: { from: 7, insert: '!' } })
-    const fresh = await actions.load(uri, [diagnostic], [1], [editorDiagnostic], () => true)
-    fresh[0].actions![0].apply(view, 0, 7)
+    client.sync()
+    const fresh = await actions.load(uri, diagnostic, 1, () => true)
+    fresh[0].apply(view, 0, 7)
     await settle()
     assert(second.sent.some(message => message.method === 'workspace/executeCommand'))
-    assert.strictEqual(loaded[0].actions?.length, 1)
+    assert.strictEqual(loaded.length, 1)
   })
 
   it('rejects stale actions after editing, including edits during asynchronous resolution', async () => {
     second.actions = [{ title: 'Fix', edit: replacement }]
-    const loaded = await actions.load(uri, [diagnostic], [1], [editorDiagnostic], () => true)
+    const loaded = await actions.load(uri, diagnostic, 1, () => true)
     let errors = 0
     LSPPlugin.get(view)!.reportError = () => { errors++ }
-    loaded[0].actions![0].apply(view, 0, 7)
+    loaded[0].apply(view, 0, 7)
     view.dispatch({ changes: { from: 7, insert: '!' } })
     await settle()
     assert.strictEqual(view.state.doc.toString(), 'speling!')
     assert.strictEqual(errors, 1)
-    loaded[0].actions![0].apply(view, 0, 7)
+    loaded[0].apply(view, 0, 7)
     await settle()
     assert.strictEqual(errors, 2)
+  })
+
+  it('hides unsupported LTeX client commands while preserving ordinary fixes', async () => {
+    second.actions = [
+      { title: 'Correct spelling', edit: replacement },
+      { title: 'Add word', command: { title: 'Add word', command: '_ltex.addToDictionary' } },
+      { title: 'Hide match', command: '_ltex.hideFalsePositives' },
+      { title: 'Disable rule', command: { title: 'Disable rule', command: '_ltex.disableRules' } }
+    ]
+    const loaded = await actions.load(uri, diagnostic, 1, () => true)
+    assert.deepStrictEqual(loaded.map(action => action.name), ['Correct spelling'])
+    loaded[0].apply(view, 0, 7)
+    await settle()
+    assert.strictEqual(view.state.doc.toString(), 'spelling')
+    assert(!second.sent.some(message => message.method === 'workspace/executeCommand'))
+  })
+
+  it('rejects unsupported commands discovered during resolution before applying any edits', async () => {
+    second.actions = [{ title: 'Resolve me', data: { word: 'speling' } }]
+    second.resolve = action => ({ ...action, edit: replacement, command: { title: 'Add word', command: '_ltex.addToDictionary' } })
+    const loaded = await actions.load(uri, diagnostic, 1, () => true)
+    let errors = 0
+    LSPPlugin.get(view)!.reportError = () => { errors++ }
+    loaded[0].apply(view, 0, 7)
+    await settle()
+    assert.strictEqual(errors, 1)
+    assert.strictEqual(view.state.doc.toString(), 'speling')
+    assert(!second.sent.some(message => message.method === 'workspace/executeCommand'))
   })
 
   it('answers server applyEdit requests and rejects unsupported edits without partial changes', () => {
@@ -137,19 +166,19 @@ describe('LSP native diagnostic actions', () => {
 
   it('bounds cached action responses and drops them when the document is cleared', async () => {
     for (let index = 0; index < 9; index++) {
-      await actions.load(uri, [{ ...diagnostic, message: String(index) }], [1], [editorDiagnostic], () => true)
+      await actions.load(uri, { ...diagnostic, message: String(index) }, 1, () => true)
     }
-    await actions.load(uri, [{ ...diagnostic, message: '0' }], [1], [editorDiagnostic], () => true)
+    await actions.load(uri, { ...diagnostic, message: '0' }, 1, () => true)
     assert.strictEqual(second.sent.filter(message => message.method === 'textDocument/codeAction').length, 10)
     actions.clear()
-    await actions.load(uri, [{ ...diagnostic, message: '0' }], [1], [editorDiagnostic], () => true)
+    await actions.load(uri, { ...diagnostic, message: '0' }, 1, () => true)
     assert.strictEqual(second.sent.filter(message => message.method === 'textDocument/codeAction').length, 11)
   })
 
   it('does not cache oversized edits', async () => {
     second.actions = [{ title: 'Large edit', edit: { changes: { [uri]: [{ range: diagnostic.range, newText: 'x'.repeat(600000) }] } } }]
-    await actions.load(uri, [diagnostic], [1], [editorDiagnostic], () => true)
-    await actions.load(uri, [diagnostic], [1], [editorDiagnostic], () => true)
+    await actions.load(uri, diagnostic, 1, () => true)
+    await actions.load(uri, diagnostic, 1, () => true)
     assert.strictEqual(second.sent.filter(message => message.method === 'textDocument/codeAction').length, 2)
   })
 
@@ -161,9 +190,10 @@ describe('LSP native diagnostic actions', () => {
       if (message.method === 'textDocument/codeAction') requests.push(message)
       else original(raw)
     }
-    const loads = Array.from({ length: 4 }, (_, index) => actions.load(uri, [{ ...diagnostic, message: String(index) }], [1], [editorDiagnostic], () => true))
+    const loads = Array.from({ length: 4 }, (_, index) => actions.load(uri, { ...diagnostic, message: String(index) }, 1, () => true))
+    await Promise.resolve()
     assert.strictEqual(requests.length, 4)
-    await assert.rejects(actions.load(uri, [{ ...diagnostic, message: 'overflow' }], [1], [editorDiagnostic], () => true), /still loading/)
+    await assert.rejects(actions.load(uri, { ...diagnostic, message: 'overflow' }, 1, () => true), /still loading/)
     for (const request of requests) second.receive({ id: request.id, result: [] })
     await Promise.all(loads)
   })

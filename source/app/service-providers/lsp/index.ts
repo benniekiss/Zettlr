@@ -1,7 +1,7 @@
 import { app, ipcMain, type WebContents } from 'electron'
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process'
 import { randomUUID } from 'crypto'
-import { dirname, join } from 'path'
+import { join } from 'path'
 import { pathToFileURL } from 'url'
 import ProviderContract from '../provider-contract'
 import type ConfigProvider from '../config'
@@ -9,6 +9,7 @@ import type LogProvider from '../log'
 import { parseLanguageServers, type LanguageServerConfig } from '@common/lsp/config'
 import { frameLSPMessage, LSPMessageReader } from '@common/lsp/framing'
 import { resolveLanguageServerCommand } from './bundled-servers'
+import { languageServerRoot } from './workspace-root'
 
 interface Session {
   process: ChildProcessWithoutNullStreams
@@ -24,13 +25,18 @@ export default class LSPProvider extends ProviderContract {
   constructor (private readonly logger: LogProvider, private readonly config: ConfigProvider) {
     super()
     ipcMain.handle('lsp-provider', async (event, payload) => {
+      const workspaces = this.config.get('app.openWorkspaces')
+      if (payload.command === 'resolve') {
+        const root = languageServerRoot(payload.path, Array.isArray(workspaces) ? workspaces : [])
+        return { uri: pathToFileURL(payload.path).href, rootUri: pathToFileURL(root).href }
+      }
       if (payload.command === 'start') {
         const servers = parseLanguageServers(this.config.get('languageServers'))
         const server = servers.find(server => server.name === payload.name && server.enabled !== false)
         if (server === undefined) {
           throw new Error('Language server is not configured or enabled')
         }
-        const cwd = server.cwd ?? dirname(payload.path)
+        const cwd = server.cwd ?? languageServerRoot(payload.path, Array.isArray(workspaces) ? workspaces : [])
         const roots = [join(global.process.resourcesPath, 'language-servers')]
         if (!app.isPackaged) {
           roots.push(join(__dirname, '../../resources/lsp', `${global.process.platform}-${global.process.arch}`, 'language-servers'))

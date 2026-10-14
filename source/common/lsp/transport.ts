@@ -1,4 +1,4 @@
-import type { Transport } from '@codemirror/lsp-client'
+import type { LSPClient, Transport } from '@codemirror/lsp-client'
 import type { Diagnostic, CodeAction, Command, WorkspaceEdit } from 'vscode-languageserver-types'
 
 interface Message {
@@ -16,6 +16,8 @@ interface Peer {
   diagnostics: Map<string, any[]>
   listener: (message: string) => void
   active: boolean
+  languages?: readonly string[]
+  documents: Set<string>
 }
 
 const providers: Record<string, string> = {
@@ -42,12 +44,12 @@ export class MultiServerTransport implements Transport {
   private readonly handlers = new Set<(message: string) => void>()
   private nextID = 1
   private readonly versions = new Map<string, number>()
-  private readonly pending = new Map<number, { peer: Peer, clientID: number|string|undefined, respond: (message: Message) => void, timer: ReturnType<typeof setTimeout> }>()
+  private readonly initializations = new Map<number|string, { peer: Peer, respond: (message: Message) => void, timer: ReturnType<typeof setTimeout> }>()
   private readonly serverRequests = new Map<string, { peer: Peer, id: number|string }>()
 
-  constructor (transports: Transport[], private readonly applyEdit?: (params: { edit: WorkspaceEdit }) => { applied: boolean, failureReason?: string }) {
-    for (const transport of transports) {
-      const peer: Peer = { transport, capabilities: {}, diagnostics: new Map(), active: true, listener: message => this.receive(peer, JSON.parse(message)) }
+  constructor (transports: Transport[], private readonly applyEdit?: (params: { edit: WorkspaceEdit }) => { applied: boolean, failureReason?: string }, private readonly onClose?: (transport: Transport) => void, languages?: readonly (readonly string[])[]) {
+    for (const [ index, transport ] of transports.entries()) {
+      const peer: Peer = { transport, capabilities: {}, diagnostics: new Map(), active: true, languages: languages?.[index], documents: new Set(), listener: message => this.receive(peer, JSON.parse(message)) }
       this.peers.push(peer)
       transport.subscribe(peer.listener)
     }
@@ -61,13 +63,13 @@ export class MultiServerTransport implements Transport {
     }
   }
 
-  private request (peer: Peer, message: Message, respond: (message: Message) => void): void {
-    const id = this.nextID++
+  private initializePeer (peer: Peer, message: Message, respond: (message: Message) => void): void {
+    const id = `initialize-${this.nextID++}`
     const timer = setTimeout(() => {
-      this.pending.delete(id)
+      this.initializations.delete(id)
       respond({ jsonrpc: '2.0', error: { code: -32000, message: 'Language server request timed out' } })
     }, 20000)
-    this.pending.set(id, { peer, clientID: message.id, respond, timer })
+    this.initializations.set(id, { peer, respond, timer })
     try { peer.transport.send(JSON.stringify({ ...message, id })) } catch (err) {
       this.closePeer(peer.transport) 
     }
@@ -78,32 +80,41 @@ export class MultiServerTransport implements Transport {
     return peer !== undefined && peer.active && peer.capabilities.codeActionProvider !== undefined && peer.capabilities.codeActionProvider !== null && peer.capabilities.codeActionProvider !== false
   }
 
-  private requestServer<T> (server: number, method: string, params: unknown): Promise<T> {
-    const peer = this.peers[server]
-    if (!(peer?.active)) {return Promise.reject(new Error('Language server disconnected'))}
-    return new Promise((resolve, reject) => this.request(peer, { jsonrpc: '2.0', method, params }, response => {
-      if (response.error !== undefined) {reject(new Error(response.error.message))} else {resolve(response.result)}
-    }))
+  private requestServer<T> (client: LSPClient, server: number, method: string, params: unknown): Promise<T> {
+    return client.request('zettlr/request', { server, method, params })
   }
 
-  requestCodeActions (server: number, uri: string, diagnostic: Diagnostic): Promise<Array<CodeAction|Command>|null> {
-    return this.requestServer(server, 'textDocument/codeAction', {
+  requestCodeActions (client: LSPClient, server: number, uri: string, diagnostic: Diagnostic): Promise<Array<CodeAction|Command>|null> {
+    return this.requestServer(client, server, 'textDocument/codeAction', {
       textDocument: { uri }, range: diagnostic.range,
       context: { diagnostics: [diagnostic], triggerKind: 2 }
     })
   }
 
-  resolveCodeAction (server: number, action: CodeAction): Promise<CodeAction> {
+  resolveCodeAction (client: LSPClient, server: number, action: CodeAction): Promise<CodeAction> {
     if (this.peers[server]?.capabilities.codeActionProvider?.resolveProvider !== true) {return Promise.resolve(action)}
-    return this.requestServer(server, 'codeAction/resolve', action)
+    return this.requestServer(client, server, 'codeAction/resolve', action)
   }
 
-  executeCommand (server: number, command: Command): Promise<unknown> {
-    return this.requestServer(server, 'workspace/executeCommand', { command: command.command, arguments: command.arguments })
+  executeCommand (client: LSPClient, server: number, command: Command): Promise<unknown> {
+    return this.requestServer(client, server, 'workspace/executeCommand', { command: command.command, arguments: command.arguments })
   }
 
   send (json: string): void {
-    const message: Message = JSON.parse(json)
+    let message: Message = JSON.parse(json)
+    let target: Peer|undefined
+    let targeted = false
+    if (message.method === 'zettlr/request') {
+      targeted = true
+      target = this.peers[message.params.server]
+      message = { ...message, method: message.params.method, params: message.params.params }
+    } else if (message.method === 'completionItem/resolve' && message.params?.zettlrServer !== undefined) {
+      targeted = true
+      target = this.peers[message.params.zettlrServer]
+      const params = { ...message.params }
+      delete params.zettlrServer
+      message = { ...message, params }
+    }
     if (message.method === undefined) {
       const request = this.serverRequests.get(String(message.id))
       if (request !== undefined) {
@@ -111,12 +122,6 @@ export class MultiServerTransport implements Transport {
         request.peer.transport.send(JSON.stringify({ ...message, id: request.id }))
       }
     } else if (message.id === undefined) {
-      if (message.method === '$/cancelRequest') {
-        for (const [ id, pending ] of this.pending) {
-          if (pending.clientID === message.params.id) {pending.peer.transport.send(JSON.stringify({ ...message, params: { id } }))}
-        }
-        return
-      }
       if (message.method === 'textDocument/didOpen' || message.method === 'textDocument/didChange') {
         const { uri, version } = message.params.textDocument
         this.versions.set(uri, version)
@@ -134,6 +139,12 @@ export class MultiServerTransport implements Transport {
         }
       }
       for (const peer of this.peers.filter(peer => peer.active)) {
+        const uri = message.params?.textDocument?.uri
+        if (message.method === 'textDocument/didOpen') {
+          if (peer.languages !== undefined && !peer.languages.includes(message.params.textDocument.languageId)) {continue}
+          peer.documents.add(uri)
+        } else if (uri !== undefined && peer.languages !== undefined && !peer.documents.has(uri)) {continue}
+        if (message.method === 'textDocument/didClose') {peer.documents.delete(uri)}
         try { peer.transport.send(json) } catch (err) {
           this.closePeer(peer.transport) 
         }
@@ -161,7 +172,7 @@ export class MultiServerTransport implements Transport {
         done()
       }
       for (const peer of peers) {
-        this.request(peer, message, response => {
+        this.initializePeer(peer, message, response => {
           if (response.error === undefined) {
             peer.capabilities = response.result?.capabilities ?? {}
             successes++
@@ -174,12 +185,21 @@ export class MultiServerTransport implements Transport {
         })
       }
     } else {
-      const provider = providers[message.method]
-      const peer = this.peers.find(peer => peer.active && (provider === undefined || peer.capabilities[provider] !== undefined && peer.capabilities[provider] !== null && peer.capabilities[provider] !== false))
-      if (peer === undefined) {
-        this.emit({ jsonrpc: '2.0', id: message.id, result: null })
+      const provider = providers[message.method!]
+      const uri = message.params?.textDocument?.uri
+      const peer = targeted ? target : this.peers.find(peer => peer.active &&
+        (uri === undefined || peer.languages === undefined || peer.documents.has(uri)) &&
+        (provider === undefined || peer.capabilities[provider] !== undefined && peer.capabilities[provider] !== null && peer.capabilities[provider] !== false))
+      if (peer?.active !== true) {
+        this.emit(targeted
+          ? { jsonrpc: '2.0', id: message.id, error: { code: -32000, message: 'Language server disconnected' } }
+          : { jsonrpc: '2.0', id: message.id, result: null })
       } else {
-        this.request(peer, message, response => this.emit({ ...response, id: message.id }))
+        // The native client owns request IDs, deadlines, and cancellation.
+        try { peer.transport.send(JSON.stringify(message)) } catch {
+          this.emit({ jsonrpc: '2.0', id: message.id, error: { code: -32000, message: 'Language server disconnected' } })
+          this.closePeer(peer.transport)
+        }
       }
     }
   }
@@ -195,6 +215,7 @@ export class MultiServerTransport implements Transport {
       }
       peer.transport.send(JSON.stringify({ jsonrpc: '2.0', id: message.id, result }))
     } else if (message.method === 'textDocument/publishDiagnostics') {
+      if (peer.languages !== undefined && !peer.documents.has(message.params.uri)) {return}
       const version = this.versions.get(message.params.uri)
       if (message.params.version !== undefined && message.params.version !== null && version !== undefined && message.params.version !== version) {
         return
@@ -206,13 +227,18 @@ export class MultiServerTransport implements Transport {
       this.serverRequests.set(id, { peer, id: message.id })
       this.emit({ ...message, id })
     } else if (message.id !== undefined) {
-      const pending = this.pending.get(Number(message.id))
-      if (pending === undefined || pending.peer !== peer) {
-        return
+      const pending = this.initializations.get(message.id)
+      if (pending !== undefined) {
+        if (pending.peer !== peer) {return}
+        clearTimeout(pending.timer)
+        this.initializations.delete(message.id)
+        pending.respond(message)
+      } else if (typeof message.id === 'number') {
+        // Preserve completion provenance for its later native resolve request.
+        const tag = (item: object): object => ({ ...item, zettlrServer: this.peers.indexOf(peer) })
+        if (Array.isArray(message.result)) {message.result = message.result.map(item => typeof item === 'object' && item !== null && 'label' in item ? tag(item) : item)} else if (Array.isArray(message.result?.items)) {message.result = { ...message.result, items: message.result.items.map(tag) }}
+        this.emit(message)
       }
-      clearTimeout(pending.timer)
-      this.pending.delete(Number(message.id))
-      pending.respond(message)
     } else {
       this.emit(message)
     }
@@ -240,18 +266,19 @@ export class MultiServerTransport implements Transport {
       if (request.peer === peer) {this.serverRequests.delete(id)}
     }
     peer.transport.unsubscribe(peer.listener)
-    for (const [ id, pending ] of this.pending) {
+    for (const [ id, pending ] of this.initializations) {
       if (pending.peer !== peer) {
         continue
       }
       clearTimeout(pending.timer)
-      this.pending.delete(id)
+      this.initializations.delete(id)
       pending.respond({ jsonrpc: '2.0', error: { code: -32000, message: 'Language server disconnected' } })
     }
     for (const uri of new Set([ ...this.versions.keys(), ...peer.diagnostics.keys() ])) {
       this.publishDiagnostics(uri)
     }
     peer.diagnostics.clear()
+    this.onClose?.(transport)
   }
 
   destroy (): void {

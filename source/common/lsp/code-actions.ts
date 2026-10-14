@@ -1,7 +1,7 @@
 import { ChangeSet, Transaction, type Text } from '@codemirror/state'
 import { isolateHistory } from '@codemirror/commands'
 import { LSPPlugin, type LSPClient } from '@codemirror/lsp-client'
-import type { Diagnostic as EditorDiagnostic, Action } from '@codemirror/lint'
+import type { Action } from '@codemirror/lint'
 import type { EditorView } from '@codemirror/view'
 import type { CodeAction, Command, Diagnostic, Position, TextEdit, AnnotatedTextEdit, WorkspaceEdit } from 'vscode-languageserver-types'
 import type { MultiServerTransport } from './transport'
@@ -23,6 +23,7 @@ export function applyWorkspaceEdit (client: LSPClient, edit: WorkspaceEdit): voi
     const file = client.workspace.getFile(uri)
     const view = file?.getView()
     if (view === undefined || view === null) {throw new Error('Code actions can only edit documents open in this editor')}
+    if (!view.state.doc.eq(file!.doc)) {throw new Error('The document changed; request a new code action')}
     const position = (pos: Position): number => {
       if (!Number.isInteger(pos.line) || !Number.isInteger(pos.character) || pos.line < 0 || pos.line >= view.state.doc.lines || pos.character < 0) {throw new Error('Invalid code action range')}
       const line = view.state.doc.line(pos.line + 1)
@@ -59,75 +60,63 @@ export class DiagnosticActions {
     this.cache.clear()
   }
 
-  async load (
-    uri: string,
-    diagnostics: Diagnostic[],
-    servers: number[],
-    editorDiagnostics: EditorDiagnostic[],
-    current: () => boolean
-  ): Promise<EditorDiagnostic[]> {
+  async load (uri: string, diagnostic: Diagnostic, server: number, current: () => boolean): Promise<Action[]> {
+    if (!current() || !this.transport.supportsCodeActions(server)) {return []}
     const doc = this.view.state.doc
     if (doc !== this.doc) {
       this.doc = doc
       this.cache.clear()
     }
-    const result = editorDiagnostics.slice()
-    let next = 0
-    const worker = async (): Promise<void> => {
-      while (next < diagnostics.length && current()) {
-        const index = next++
-        const server = servers[index]
-        if (!this.transport.supportsCodeActions(server)) {continue}
-        const diagnostic = diagnostics[index]
-        const key = JSON.stringify([ server, uri, diagnostic ])
-        let pending = this.cache.get(key)
-        if (pending === undefined) {
-          if (this.pending >= 4) {throw new Error('Code actions are still loading; try again shortly')}
-          this.pending++
-          pending = this.transport.requestCodeActions(server, uri, diagnostic).then(result => {
-            const actions = result ?? []
-            // Do not cache oversized responses, even when few diagnostics exist.
-            if (JSON.stringify(actions).length > 512 * 1024 && this.cache.get(key) === pending) {this.cache.delete(key)}
-            return actions
-          }).finally(() => { this.pending-- })
-          // On-demand requests must not retain an unbounded number of edits.
-          if (this.cache.size >= 8) {this.cache.delete(this.cache.keys().next().value!)}
-          this.cache.set(key, pending)
-        }
-        try {
-          const actions = await pending
-          if (!current()) {return}
-          result[index] = { ...result[index], actions: actions
-            .filter(action => !('disabled' in action && action.disabled !== undefined))
-            .map(action => this.action(server, action, doc)) }
-        } catch (err) {
-          if (this.cache.get(key) === pending) {this.cache.delete(key)}
-          throw err
-        }
-      }
+    const version = this.client.workspace.getFile(uri)?.version
+    const key = JSON.stringify([ server, uri, version, diagnostic ])
+    let pending = this.cache.get(key)
+    if (pending === undefined) {
+      if (this.pending >= 4) {throw new Error('Code actions are still loading; try again shortly')}
+      this.pending++
+      pending = this.transport.requestCodeActions(this.client, server, uri, diagnostic).then(result => {
+        const actions = result ?? []
+        if (JSON.stringify(actions).length > 512 * 1024 && this.cache.get(key) === pending) {this.cache.delete(key)}
+        return actions
+      }).finally(() => { this.pending-- })
+      if (this.cache.size >= 8) {this.cache.delete(this.cache.keys().next().value!)}
+      this.cache.set(key, pending)
     }
-    await Promise.all(Array.from({ length: Math.min(4, diagnostics.length) }, worker))
-    return result
+    try {
+      const actions = await pending
+      return current() ? actions.filter(supportedAction).map(action => this.action(server, action, doc, version)) : []
+    } catch (err) {
+      if (this.cache.get(key) === pending) {this.cache.delete(key)}
+      throw err
+    }
   }
 
-  private action (server: number, action: CodeAction|Command, doc: Text): Action {
+  private action (server: number, action: CodeAction|Command, doc: Text, version: number|undefined): Action {
     return {
       name: action.title,
       apply: view => {
         const execute = async (): Promise<void> => {
-          const current = (): boolean => this.client.serverCapabilities !== null && LSPPlugin.get(view)?.client === this.client && this.transport.supportsCodeActions(server) && view.state.doc === doc
+          const current = (): boolean => this.client.serverCapabilities !== null && LSPPlugin.get(view)?.client === this.client && this.transport.supportsCodeActions(server) && view.state.doc === doc && this.client.workspace.getFile(LSPPlugin.get(view)!.uri)?.version === version
           if (!current()) {throw new Error('The document changed; request a new code action')}
           this.client.sync()
-          const resolved = typeof action.command === 'string' ? action : await this.transport.resolveCodeAction(server, action as CodeAction)
+          if (!current()) {throw new Error('The document changed; request a new code action')}
+          const resolved = typeof action.command === 'string' ? action : await this.transport.resolveCodeAction(this.client, server, action as CodeAction)
           if (!current()) {throw new Error('The document changed; request a new code action')}
           if ('disabled' in resolved && resolved.disabled !== undefined) {throw new Error(resolved.disabled.reason)}
+          if (!supportedAction(resolved)) {throw new Error('This code action requires an unsupported client command')}
           if ('edit' in resolved && resolved.edit !== undefined) {applyWorkspaceEdit(this.client, resolved.edit)}
           const command = typeof resolved.command === 'string' ? resolved as Command : resolved.command
-          if (command !== undefined) {await this.transport.executeCommand(server, command)}
+          if (command !== undefined) {await this.transport.executeCommand(this.client, server, command)}
           view.focus()
         }
         execute().catch(err => LSPPlugin.get(view)?.reportError('Could not apply code action', err))
       }
     }
   }
+}
+
+/** LTeX's private commands must be handled by a client, not sent to the server. */
+function supportedAction (action: CodeAction|Command): boolean {
+  if ('disabled' in action && action.disabled !== undefined) {return false}
+  const command = typeof action.command === 'string' ? action.command : action.command?.command
+  return command === undefined || !command.startsWith('_ltex.')
 }

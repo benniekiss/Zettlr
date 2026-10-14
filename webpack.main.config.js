@@ -25,6 +25,19 @@ module.exports = {
         // These are all static files that simply need to be bundled with the
         // application; we'll just copy them over from the static folder.
         { from: 'static/tutorial', to: 'tutorial' },
+        // Keep workers beside main, matching source/app's directory layout.
+        { from: 'source/app/workers/pandoc-worker.cjs', to: '../workers/pandoc-worker.cjs' },
+        { from: 'source/app/workers/pandoc-process.cjs', to: '../workers/pandoc-process.cjs' },
+        { from: 'source/app/workers/typst-process.cjs', to: '../workers/typst-process.cjs' },
+        { from: 'source/app/workers/typst-fonts.cjs', to: '../workers/typst-fonts.cjs' },
+        { from: 'static/typst', to: 'assets/typst' },
+        { from: 'node_modules/@myriaddreamin/typst.ts/LICENSE', to: 'assets/typst/driver/LICENSE' },
+        { from: 'node_modules/@myriaddreamin/typst-ts-web-compiler/pkg', to: 'assets/typst/compiler' },
+        ...[ 'compiler', 'init', 'internal.types', 'options.init', 'wasm' ].map(name => ({
+          from: `node_modules/@myriaddreamin/typst.ts/dist/cjs/${name}.cjs`, to: `assets/typst/driver/${name}.cjs`
+        })),
+        { from: 'source/app/workers/pandoc-filesystem-policy.cjs', to: '../workers/pandoc-filesystem-policy.cjs' },
+        { from: 'static/dict', to: 'dict' },
         { from: 'static/lang', to: 'lang' },
         { from: 'static/csl-locales', to: 'assets/csl-locales' },
         { from: 'static/csl-styles', to: 'assets/csl-styles' },

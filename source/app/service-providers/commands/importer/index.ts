@@ -14,7 +14,7 @@
 
 import { promises as fs } from 'fs'
 import path from 'path'
-import { spawn } from 'child_process'
+import { runPandoc } from '../../../util/run-pandoc'
 import YAML from 'yaml'
 
 // Module utilities
@@ -37,9 +37,7 @@ export default async function makeImport (
   const files = await checkImportIntegrity(fileList)
   const failedFiles: string[] = []
 
-  // This for loop will initiate all pandoc instances at once. The return of
-  // these processes will come in asynchronously, so we can let chokidar handle
-  // the detection.
+  // Import files sequentially, preserving per-file callbacks.
   for (const file of files) {
     if ([ '.textbundle', '.textpack' ].includes(path.extname(file.path))) {
       // We need to import using a special importer.
@@ -124,24 +122,12 @@ export default async function makeImport (
       // ... write to disk ...
       await fs.writeFile(defaultsFile, YAML.stringify(defaults, YAMLOptions), { encoding: 'utf8' })
 
-      // ... and finally run pandoc, providing the file.
-      const pandocProcess = spawn('pandoc', [ '--defaults', `"${defaultsFile}"` ], { shell: true })
-
+      // ... and finally run the WASM conversion with the same defaults.
       try {
-        await new Promise<void>((resolve, reject) => {
-          pandocProcess.on('message', (message, _handle) => {
-            console.log(message)
-          })
-          pandocProcess.on('close', (code, _signal) => {
-            if (code === 0) {
-              resolve()
-            } else {
-              reject(new Error(`Could not import file: Pandoc exited with code ${String(code)}`))
-            }
-          })
-
-          pandocProcess.on('error', (err) => { reject(err) })
-        })
+        const result = await runPandoc(defaultsFile)
+        if (result.code !== 0) {
+          throw new Error(`Could not import file: ${result.stderr.join('\n')}`)
+        }
         if (successCallback !== null) {
           successCallback(file.path)
         }

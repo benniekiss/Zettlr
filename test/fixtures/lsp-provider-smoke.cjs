@@ -99,6 +99,7 @@ async function main () {
     owner.destroyed = true
     owner.emit('destroyed')
     await assert.rejects(invoke({ sender: owner }, { command: 'send', id: another.id, message: '{}' }), /Unknown LSP session/)
+    await assert.rejects(start(), /window closed during startup/)
   } finally {
     await provider.shutdown()
   }

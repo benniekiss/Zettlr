@@ -42,12 +42,13 @@ export default class LSPProvider extends ProviderContract {
           roots.push(join(__dirname, '../../resources/lsp', `${global.process.platform}-${global.process.arch}`, 'language-servers'))
         }
         const launcher = await resolveLanguageServerCommand(server, this.config.get('useBundledLanguageServers') === true, roots)
+        const owner = event.sender
+        if (owner.isDestroyed()) {throw new Error('Language server window closed during startup')}
         this.logger.verbose(`[LSP ${server.name}] Starting ${launcher.bundled ? 'bundled' : 'configured'} server: ${launcher.command}`)
         const process = spawn(launcher.command, launcher.args, {
           cwd, env: { ...global.process.env, ...server.env }, windowsHide: true, shell: false
         })
         const id = randomUUID()
-        const owner = event.sender
         this.sessions.set(id, { process, owner, config: server, rootUri: pathToFileURL(cwd).href })
         const send = (message: string): void => {
           if (!owner.isDestroyed()) {owner.send('lsp-message', { id, message })}

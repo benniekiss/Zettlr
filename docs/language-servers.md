@@ -64,7 +64,8 @@ Each server accepts these fields:
 | `initializationOptions` | Object sent with the LSP `initialize` request. |
 | `settings` | Object sent through `workspace/didChangeConfiguration` and returned for `workspace/configuration` requests. Use nested objects for section names. |
 
-Diagnostics from all matching servers appear together in the editor and lint panel.
+Push diagnostics from all matching servers appear together in the editor and lint panel.
+Servers that require pull diagnostics are not currently supported.
 Interactive requests use the first matching server that advertises the feature;
 place the preferred formatter/completion provider first. The client enables
 completion, hover, signature help, formatting (Shift-Alt-F), rename (F2),

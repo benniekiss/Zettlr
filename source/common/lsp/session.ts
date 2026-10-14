@@ -139,7 +139,9 @@ export class EditorSession {
       }
     }, closed => {
       for (const [ id, receiver ] of this.receivers) {if (receiver.transport === closed) {this.stop(id)}}
-      if (this.receivers.size === 0) {this.destroy()}
+      // The router must finish reporting failed initialization before teardown
+      // removes the native response listener.
+      if (this.receivers.size === 0) {queueMicrotask(() => this.destroy())}
     }, languages)
     this.client = new LSPClient({
       rootUri, timeout: 30000,
@@ -172,8 +174,12 @@ export class EditorSession {
     clearTimeout(this.syncTimer)
     for (const consumer of this.consumers.values()) {consumer.diagnostics?.destroy()}
     this.consumers.clear()
-    this.client?.disconnect()
     this.transport?.destroy()
+    // Closing peers rejects the native initialization request. Let its promise
+    // settle before disconnect() replaces it, including interrupted startup.
+    if (this.client !== undefined) {
+      void this.client.initializing.then(() => this.client.disconnect(), () => this.client.disconnect())
+    }
     for (const id of this.receivers.keys()) {this.stop(id)}
     this.stopMessages()
     this.diagnostics.clear()

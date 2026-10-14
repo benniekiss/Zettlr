@@ -22,7 +22,6 @@ interface Peer {
 
 const providers: Record<string, string> = {
   'textDocument/completion': 'completionProvider',
-  'completionItem/resolve': 'completionProvider',
   'textDocument/hover': 'hoverProvider',
   'textDocument/signatureHelp': 'signatureHelpProvider',
   'textDocument/formatting': 'documentFormattingProvider',
@@ -108,12 +107,6 @@ export class MultiServerTransport implements Transport {
       targeted = true
       target = this.peers[message.params.server]
       message = { ...message, method: message.params.method, params: message.params.params }
-    } else if (message.method === 'completionItem/resolve' && message.params?.zettlrServer !== undefined) {
-      targeted = true
-      target = this.peers[message.params.zettlrServer]
-      const params = { ...message.params }
-      delete params.zettlrServer
-      message = { ...message, params }
     }
     if (message.method === undefined) {
       const request = this.serverRequests.get(String(message.id))
@@ -150,6 +143,11 @@ export class MultiServerTransport implements Transport {
         }
       }
     } else if (message.method === 'initialize') {
+      // CodeMirror 6.3 advertises pull diagnostics but only handles push reports.
+      // Avoid making custom servers select a protocol the client never requests.
+      const textDocument = { ...message.params?.capabilities?.textDocument }
+      delete textDocument.diagnostic
+      message = { ...message, params: { ...message.params, capabilities: { ...message.params?.capabilities, textDocument } } }
       const peers = this.peers.filter(peer => peer.active)
       let remaining = peers.length
       const capabilities: Record<string, any> = { textDocumentSync: { openClose: true, change: 1 } }
@@ -234,9 +232,6 @@ export class MultiServerTransport implements Transport {
         this.initializations.delete(message.id)
         pending.respond(message)
       } else if (typeof message.id === 'number') {
-        // Preserve completion provenance for its later native resolve request.
-        const tag = (item: object): object => ({ ...item, zettlrServer: this.peers.indexOf(peer) })
-        if (Array.isArray(message.result)) {message.result = message.result.map(item => typeof item === 'object' && item !== null && 'label' in item ? tag(item) : item)} else if (Array.isArray(message.result?.items)) {message.result = { ...message.result, items: message.result.items.map(tag) }}
         this.emit(message)
       }
     } else {

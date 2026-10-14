@@ -1,4 +1,5 @@
 // Exercise the actual provider with a real child process and mocked Electron IPC.
+/* eslint-disable @typescript-eslint/no-require-imports -- This isolated CommonJS fixture mocks Electron through Node's CommonJS loader before loading the provider. */
 const assert = require('node:assert/strict')
 const Module = require('node:module')
 const { EventEmitter } = require('node:events')

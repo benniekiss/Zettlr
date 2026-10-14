@@ -188,6 +188,8 @@ export default class MarkdownEditor extends EventEmitter {
    * @var {EditorView}
    */
   private readonly _instance: EditorView
+  private unmounted = false
+  private loadGeneration = 0
   /**
    * The absolute path to the document represented by this MainEditor instance.
    *
@@ -364,7 +366,14 @@ export default class MarkdownEditor extends EventEmitter {
    * edit it.
    */
   async loadDocument (persistentState?: EditorViewPersistentState): Promise<void> {
+    if (this.unmounted) {
+      return
+    }
+    const generation = ++this.loadGeneration
     const { content, type, startVersion } = await this.authority.fetchDoc(this.representedDocument)
+    if (this.unmounted || generation !== this.loadGeneration) {
+      return
+    }
 
     // The documents contents have changed, so we must recreate the state
     const extensions = this._getExtensions(this.representedDocument, type, startVersion)
@@ -445,6 +454,8 @@ export default class MarkdownEditor extends EventEmitter {
    * LONGER USE THIS CLASS INSTANCE! Instantiate it anew!
    */
   public unmount (): void {
+    this.unmounted = true
+    this.loadGeneration++
     this.instance.destroy()
   }
 

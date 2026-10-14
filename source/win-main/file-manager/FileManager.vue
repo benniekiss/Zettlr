@@ -94,6 +94,10 @@ import { nextTick, ref, computed, watch, onMounted } from 'vue'
 import { useConfigStore } from 'source/pinia'
 import { useWorkspaceStore } from 'source/pinia/workspace-store'
 
+import { useDisposables } from '@common/vue/use-disposables'
+
+const dispose = useDisposables()
+
 const ipcRenderer = window.ipc
 
 const props = defineProps<{ windowId: string }>()
@@ -165,7 +169,7 @@ watch(fileManagerMode, () => {
 })
 
 onMounted(() => {
-  ipcRenderer.on('shortcut', (event, message) => {
+  dispose(ipcRenderer.on('shortcut', (event, message) => {
     if (message === 'filter-files') {
       // Focus the filter on the next tick. Why? Because it might be that
       // the file manager is hidden, or the global search is visible. In both
@@ -174,7 +178,7 @@ onMounted(() => {
         .then(() => { quickFilter.value?.focus() })
         .catch(err => console.error(err))
     }
-  })
+  }))
 })
 
 /**

@@ -27,7 +27,7 @@ import { ChangeSet, StateEffect, type Extension } from '@codemirror/state'
 import { ViewPlugin, type EditorView, type ViewUpdate } from '@codemirror/view'
 import { configField } from '../util/configuration'
 
-export type PullUpdateCallback = (filePath: string, version: number) => Promise<Update[]|false>
+export type PullUpdateCallback = (filePath: string, version: number, signal?: AbortSignal) => Promise<Update[]|false>
 export type PushUpdateCallback = (filePath: string, version: number, updates: Update[]) => Promise<boolean>
 
 /**
@@ -60,6 +60,8 @@ export function hookDocumentAuthority (
   const plugin = ViewPlugin.fromClass(class {
     private isCurrentlyPushing: boolean
     private pluginDestroyed: boolean
+    private readonly pullController = new AbortController()
+    private pushTimeout: ReturnType<typeof setTimeout>|undefined
 
     constructor (private readonly view: EditorView) {
       this.isCurrentlyPushing = false
@@ -80,7 +82,7 @@ export function hookDocumentAuthority (
     }
 
     async push (): Promise<void> {
-      if (this.isCurrentlyPushing) {
+      if (this.pluginDestroyed || this.isCurrentlyPushing) {
         return // There's another push going on atm
       }
 
@@ -95,12 +97,19 @@ export function hookDocumentAuthority (
         return { clientID: u.clientID, changes: u.changes.toJSON() }
       })
 
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const success = await pushUpdates(filePath, version, serializedUpdates)
+      try {
+        await pushUpdates(filePath, version, serializedUpdates)
+      } finally {
+        this.isCurrentlyPushing = false
+      }
 
-      // Allow another push, if new updates have amassed during the push
-      this.isCurrentlyPushing = false
-      setTimeout(() => {
+      if (this.pluginDestroyed) {
+        return
+      }
+      // Allow another push, if new updates have amassed during the push.
+      clearTimeout(this.pushTimeout)
+      this.pushTimeout = setTimeout(() => {
+        this.pushTimeout = undefined
         this.push().catch(err => { console.error(`Pushing updates failed: ${String(err.message)}`, err) })
       }, 100)
     }
@@ -111,7 +120,10 @@ export function hookDocumentAuthority (
       }
 
       const version = getSyncedVersion(this.view.state)
-      const updates = await pullUpdates(filePath, version)
+      const updates = await pullUpdates(filePath, version, this.pullController.signal)
+      if (this.pluginDestroyed) {
+        return
+      }
       // NOTE: At this point, hours may have passed, so we have to re-check the
       // current state, because the view will remain valid for as long as the
       // editor leaf exists. *However* if the editor now shows a different file,
@@ -157,6 +169,8 @@ export function hookDocumentAuthority (
       // editor has been removed (hence, no dangling promises that will prevent
       // a smooth shutdown of the application)
       this.pluginDestroyed = true
+      this.pullController.abort()
+      clearTimeout(this.pushTimeout)
     }
   })
 

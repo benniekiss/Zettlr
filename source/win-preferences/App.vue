@@ -92,6 +92,9 @@ import { getShortcutFields } from './schema/shortcuts'
 
 export type PreferencesFieldset = Fieldset & { group: PreferencesGroups }
 
+import { useDisposables } from '@common/vue/use-disposables'
+
+const dispose = useDisposables()
 const ipcRenderer = window.ipc
 const configStore = useConfigStore()
 
@@ -304,12 +307,12 @@ onMounted(() => {
    * Listen to events in order to adapt display.
    */
 onBeforeMount(() => {
-  ipcRenderer.on('dictionary-provider', (event, message) => {
+  dispose(ipcRenderer.on('dictionary-provider', (event, message) => {
     const { command } = message
     if (command === 'invalidate-dict') {
       populateDynamicValues()
     }
-  })
+  }))
 })
 
 /**

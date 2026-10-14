@@ -37,6 +37,7 @@ import { trans } from '@common/i18n-main'
 import type FSALWatchdog from '@providers/fsal/fsal-watchdog'
 import { getDocumentTypeForExtension, hasImageExt, hasMdOrCodeExt, hasPDFExt } from 'source/common/util/file-extention-checks'
 import isDir from 'source/common/util/is-dir'
+import SaveQueue from './save-queue'
 
 type DocumentWindows = Record<string, DocumentTree>
 type DocumentWindowsJSON = Record<string, BranchNodeJSON|LeafNodeJSON>
@@ -199,9 +200,10 @@ export default class DocumentManager extends ProviderContract {
    * user. For those files, we need to ignore remote changes since they
    * originate here.
    *
-   * @var {string[]}
+   * @var {Set<string>}
    */
-  private readonly _ignoreChanges: string[]
+  private readonly _ignoreChanges: Set<string>
+  private readonly _saveQueue = new SaveQueue()
 
   /**
    * This array allows us to prevent showing multiple "Reload changes?" dialogs
@@ -233,7 +235,7 @@ export default class DocumentManager extends ProviderContract {
     this._windows = {}
     this._emitter = new EventEmitter()
     this._config = new PersistentDataContainer(containerPath, 'yaml')
-    this._ignoreChanges = []
+    this._ignoreChanges = new Set()
     this._remoteChangeDialogShownFor = []
     this.documents = []
     this._shuttingDown = false
@@ -246,9 +248,9 @@ export default class DocumentManager extends ProviderContract {
     this._watcher = this._app.fsal.getWatchdog()
 
     this._watcher.on('change', (event, filePath) => {
-      if (this._ignoreChanges.includes(filePath) && event === 'change') {
+      if (this._ignoreChanges.has(filePath) && event === 'change') {
         this._app.log.info(`[DocumentManager] Ignoring change for ${filePath}`)
-        this._ignoreChanges.splice(this._ignoreChanges.indexOf(filePath), 1)
+        this._ignoreChanges.delete(filePath)
         return
       } else {
         this._app.log.info(`[DocumentManager] Processing ${event} for ${filePath}`)
@@ -1526,6 +1528,14 @@ current contents from the editor somewhere else, and restart the application.`
 
   public async saveFile (filePath: string): Promise<boolean> {
     const doc = this.documents.find(doc => doc.filePath === filePath)
+    if (doc === undefined) {
+      return await this._saveFile(filePath)
+    }
+    return await this._saveQueue.save(filePath, doc.currentVersion, async () => await this._saveFile(filePath))
+  }
+
+  private async _saveFile (filePath: string): Promise<boolean> {
+    const doc = this.documents.find(doc => doc.filePath === filePath)
 
     if (doc === undefined) {
       this._app.log.error(`[Document Provider] Could not save file ${filePath}: Not found in loaded documents!`)
@@ -1575,7 +1585,7 @@ current contents from the editor somewhere else, and restart the application.`
       doc.lastSavedCharCount = newCharCount
     }
 
-    this._ignoreChanges.push(filePath)
+    this._ignoreChanges.add(filePath)
 
     try {
       if (doc.descriptor.type === 'file') {
@@ -1588,6 +1598,7 @@ current contents from the editor somewhere else, and restart the application.`
         doc.descriptor = await this._app.fsal.getDescriptorFor(doc.descriptor.path, false) as CodeFileDescriptor
       }
     } catch (err: unknown) {
+      this._ignoreChanges.delete(filePath)
       if (err instanceof Error) {
         dialog.showErrorBox(trans('Could not save file'), trans('Could not save file %s: %s', doc.descriptor.name, err.message))
       }

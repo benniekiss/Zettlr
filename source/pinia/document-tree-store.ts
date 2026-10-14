@@ -14,7 +14,7 @@
 
 import { defineStore } from 'pinia'
 import { DP_EVENTS, type BranchNodeJSON, type LeafNodeJSON, type OpenDocument } from 'source/types/common/documents'
-import { ref, type Ref } from 'vue'
+import { onScopeDispose, ref, type Ref } from 'vue'
 import type { DocumentManagerIPCAPI, DocumentsUpdateContext } from '@providers/documents'
 import { useWindowStateStore } from 'source/pinia'
 import { useWorkspaceStore } from 'source/pinia'
@@ -195,7 +195,7 @@ export const useDocumentTreeStore = defineStore('document-tree', () => {
     .catch(err => console.error(err))
 
   // ... and we listen to subsequent changes.
-  ipcRenderer.on('documents-update', (evt, payload: { event: DP_EVENTS, context: DocumentsUpdateContext }) => {
+  onScopeDispose(ipcRenderer.on('documents-update', (evt, payload: { event: DP_EVENTS, context: DocumentsUpdateContext }) => {
     const { event, context } = payload
     // A file has been saved or modified
     if (event === DP_EVENTS.CHANGE_FILE_STATUS && context.status === 'modification') {
@@ -255,9 +255,9 @@ export const useDocumentTreeStore = defineStore('document-tree', () => {
         })
         .catch(err => console.error(err))
     }
-  })
+  }))
 
-  ipcRenderer.on('shortcut', (event, command) => {
+  onScopeDispose(ipcRenderer.on('shortcut', (event, command) => {
     if (command === 'toggle-distraction-free') {
       if (windowStateStore.distractionFreeMode === undefined && lastLeafId.value !== undefined) {
         windowStateStore.distractionFreeMode = lastLeafId.value
@@ -273,7 +273,7 @@ export const useDocumentTreeStore = defineStore('document-tree', () => {
       })
         .catch(err => console.error(err))
     }
-  })
+  }))
 
   return { paneStructure, paneData, modifiedDocuments, lastLeafId, lastLeafActiveFile }
 })

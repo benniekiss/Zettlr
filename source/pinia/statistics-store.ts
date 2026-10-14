@@ -16,7 +16,7 @@ import { type Stats } from '@providers/stats'
 import { defineStore } from 'pinia'
 import { last30EntriesByDate, avgAny30Days, sumAny30Days } from 'source/common/util/stats'
 import { DateTime } from 'luxon'
-import { ref, computed } from 'vue'
+import { onScopeDispose, ref, computed } from 'vue'
 
 const ipcRenderer = window.ipc
 
@@ -105,9 +105,9 @@ export const useStatisticsStore = defineStore('statistics', () => {
     .catch(err => console.error(err))
 
   // Listen to subsequent updates
-  ipcRenderer.on('stats-updated', (event, data: Stats) => {
+  onScopeDispose(ipcRenderer.on('stats-updated', (event, data: Stats) => {
     stats.value = data
-  })
+  }))
 
   return {
     stats,

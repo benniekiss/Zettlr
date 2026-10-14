@@ -14,7 +14,7 @@
 
 import { defineStore } from 'pinia'
 import type { WritingTarget } from 'source/app/service-providers/targets'
-import { ref } from 'vue'
+import { onScopeDispose, ref } from 'vue'
 
 const ipcRenderer = window.ipc
 
@@ -22,7 +22,7 @@ export const useWritingTargetsStore = defineStore('writing-targets', () => {
   const targets = ref<WritingTarget[]>([])
 
   // Listen to subsequent changes
-  ipcRenderer.on('targets-provider', (event, command) => {
+  onScopeDispose(ipcRenderer.on('targets-provider', (event, command) => {
     if (command === 'writing-targets-updated') {
       ipcRenderer.invoke('targets-provider', { command: 'get-targets' })
         .then((t: WritingTarget[]) => {
@@ -30,7 +30,7 @@ export const useWritingTargetsStore = defineStore('writing-targets', () => {
         })
         .catch(err => console.error(err))
     }
-  })
+  }))
 
   ipcRenderer.invoke('targets-provider', { command: 'get-targets' })
     .then((t: WritingTarget[]) => {

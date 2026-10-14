@@ -60,6 +60,9 @@ import { type MDFileDescriptor } from '@dts/common/fsal'
 import type { DocumentManagerIPCAPI } from 'source/app/service-providers/documents'
 import getDocumentTitle from 'source/win-main/util/get-document-title'
 
+import { useDisposables } from '@common/vue/use-disposables'
+
+const dispose = useDisposables()
 const ipcRenderer = window.ipc
 
 // This is a lock variable to prevent multiple identical graphs from
@@ -256,9 +259,9 @@ onMounted(() => {
   buildGraph().catch(err => console.error(err))
 
   // Listen to any changes
-  ipcRenderer.on('links', () => {
+  dispose(ipcRenderer.on('links', () => {
     buildGraph().catch(err => console.error(err))
-  })
+  }))
 })
 
 onBeforeUnmount(() => {

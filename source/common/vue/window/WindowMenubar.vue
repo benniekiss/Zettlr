@@ -33,6 +33,9 @@
 import showPopupMenu, { type AnyMenuItem, type SubmenuItem } from '@common/modules/window-register/application-menu-helper'
 import { ref, onBeforeMount } from 'vue'
 
+import { useDisposables } from '@common/vue/use-disposables'
+
+const dispose = useDisposables()
 const ipcRenderer = window.ipc
 
 const menu = ref<SubmenuItem[]>([])
@@ -47,13 +50,13 @@ onBeforeMount(() => {
   type MenuMessage = { command: 'application-menu', payload: SubmenuItem[] }
   type SubmenuMessage = { command: 'application-submenu', payload: { id: string, submenu: SubmenuItem[] } }
 
-  ipcRenderer.on('menu-provider', (event, { command, payload }: MenuMessage|SubmenuMessage) => {
+  dispose(ipcRenderer.on('menu-provider', (event, { command, payload }: MenuMessage|SubmenuMessage) => {
     if (command === 'application-menu') {
       menu.value = payload
     } else if (command === 'application-submenu') {
       showSubmenu(payload.submenu, payload.id)
     }
-  })
+  }))
 
   // Send an initial request
   ipcRenderer.send('menu-provider', { command: 'get-application-menu' })

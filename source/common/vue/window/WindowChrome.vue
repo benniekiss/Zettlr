@@ -83,6 +83,9 @@ import { useConfigStore, useWindowStateStore } from 'source/pinia'
 const configStore = useConfigStore()
 const windowStateStore = useWindowStateStore()
 
+import { useDisposables } from '@common/vue/use-disposables'
+
+const dispose = useDisposables()
 const ipcRenderer = window.ipc
 
 const props = defineProps<{
@@ -173,11 +176,11 @@ watch(isFullscreen, () => {
 })
 
 onBeforeMount(() => {
-  ipcRenderer.on('config-provider', (event, { command, payload }) => {
+  dispose(ipcRenderer.on('config-provider', (event, { command, payload }) => {
     if (command === 'update' && payload === 'window.nativeAppearance') {
       useNativeAppearance.value = configStore.config.window.nativeAppearance
     }
-  })
+  }))
 
   // Apply the body class immediately and also set the title
   document.body.classList.add(platform.value)

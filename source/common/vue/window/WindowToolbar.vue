@@ -123,6 +123,9 @@ export type ToolbarControl = ToolbarButtonControl|RingProgressButtonControl|
 ToolbarSearchControl|ToolbarSpacerControl|ToolbarTextControl|
 ToolbarThreeWayControl|ToolbarToggleControl|IrisIndicatorControl
 
+import { useDisposables } from '@common/vue/use-disposables'
+
+const dispose = useDisposables()
 const ipcRenderer = window.ipc
 
 const props = defineProps<{ controls: ToolbarControl[], showLabels?: boolean }>()
@@ -162,12 +165,12 @@ function scrollRight () {
 
 onMounted(() => {
   // Make sure that (on macOS) we have the correct spacing of the toolbar.
-  ipcRenderer.on('window-controls', (event, message) => {
+  dispose(ipcRenderer.on('window-controls', (event, message) => {
     const { command, payload } = message
     if (command === 'traffic-lights-rtl') {
       hasRTLTrafficLights.value = payload
     }
-  })
+  }))
 
   // Also send an initial request
   ipcRenderer.send('window-controls', { command: 'get-traffic-lights-rtl' })

@@ -13,6 +13,7 @@
  * END HEADER
  */
 
+import { useDisposables } from '@common/vue/use-disposables'
 import { defineStore, storeToRefs } from 'pinia'
 import { type Ref, ref, watch, computed } from 'vue'
 import { useConfigStore } from './config'
@@ -91,6 +92,7 @@ async function retrieveInitialUpdate (rootPaths: string[], workspaceMap: Ref<Map
 }
 
 export const useWorkspaceStore = defineStore('workspace', () => {
+  const dispose = useDisposables()
   // Dependent stores and watched variables
   const configStore = useConfigStore()
   const documentTreeStore = useDocumentTreeStore()
@@ -114,7 +116,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       isLoading.value = false
       // Now we can set up the watchers. (We need to do this afterwards to not cause a hiccup)
       // Finally, listen to FSAL events and keep the descriptor map updated.
-      ipcRenderer.on('fsal-event', (_, payload: FSALEventPayload) => {
+      dispose(ipcRenderer.on('fsal-event', (_, payload: FSALEventPayload) => {
         // @ts-expect-error asdasd
         console.log(`[WorkspaceStore] Received event ${payload.event}:${payload.path ?? payload.descriptor.path}`)
         if (payload.event === 'unlink' || payload.event === 'unlinkDir') {
@@ -136,7 +138,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
           descriptorMap.value.set(payload.descriptor.path, payload.descriptor)
         }
-      })
+      }))
     })
 
   // Update the loaded workspaces as soon as the openPaths property changes.

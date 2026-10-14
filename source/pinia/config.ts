@@ -14,7 +14,7 @@
 
 import { type ConfigOptions } from '@providers/config/get-config-template'
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { onScopeDispose, ref } from 'vue'
 import _ from 'underscore'
 
 const ipcRenderer = window.ipc
@@ -39,11 +39,11 @@ export const useConfigStore = defineStore('config', () => {
   }, 50)
 
   // Listen to subsequent changes
-  ipcRenderer.on('config-provider', (event, { command }) => {
+  onScopeDispose(ipcRenderer.on('config-provider', (event, { command }) => {
     if (command === 'update') {
       throttledRetrieve()
     }
-  })
+  }))
 
   function setConfigValue (property: string, value: unknown): boolean {
     return ipcRenderer.sendSync('config-provider', {

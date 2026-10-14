@@ -35,7 +35,7 @@
 
 import MarkdownEditor, { type EditorViewPersistentState } from '@common/modules/markdown-editor'
 
-import { ref, computed, onMounted, onBeforeUnmount, watch, toRef, onUpdated } from 'vue'
+import { onScopeDispose, ref, computed, onMounted, onBeforeUnmount, watch, toRef, onUpdated } from 'vue'
 import { type EditorCommands } from './App.vue'
 import { hasMarkdownExt } from '@common/util/file-extention-checks'
 import { DP_EVENTS, type OpenDocument } from '@dts/common/documents'
@@ -53,6 +53,7 @@ import type { ProjectInfo } from 'source/common/modules/markdown-editor/plugins/
 import type { FileContentSearchResult } from 'source/app/service-providers/search'
 import type { CustomEditorShortcut } from 'source/common/modules/markdown-editor/keymaps/shortcuts'
 import getDocumentTitle from './util/get-document-title'
+
 
 const ipcRenderer = window.ipc
 
@@ -90,9 +91,17 @@ const tagStore = useTagsStore()
 
 // UNREFFED STUFF
 let currentEditor: MarkdownEditor|null = null
+let documentLoadGeneration = 0
+let disposed = false
+let citationEditor: MarkdownEditor|null = null
+let citationLibrary: string|undefined
+let citationRefresh: Promise<void>|undefined
+let citationDirty = false
+let requestedCitationLibrary = ''
+let requestedCitationEditor: MarkdownEditor|null = null
 
 // EVENT LISTENERS
-ipcRenderer.on('citeproc-database-updated', (_event, _dbPath: string) => {
+onScopeDispose(ipcRenderer.on('citeproc-database-updated', (_event, dbPath: string) => {
   const descriptor = activeFileDescriptor.value
 
   if (descriptor === undefined || descriptor.type !== 'file') {
@@ -100,12 +109,16 @@ ipcRenderer.on('citeproc-database-updated', (_event, _dbPath: string) => {
   }
 
   const library = getBibliographyForDescriptor(descriptor)
-  updateCitationKeys(library).catch(e => {
+  const actualLibrary = library === CITEPROC_MAIN_DB ? configStore.config.export.cslLibrary : library
+  if (dbPath !== library && dbPath !== actualLibrary) {
+    return
+  }
+  updateCitationKeys(library, true).catch(e => {
     console.error('Could not update citation keys', e)
   })
-})
+}))
 
-ipcRenderer.on('shortcut', (event, command) => {
+onScopeDispose(ipcRenderer.on('shortcut', (event, command) => {
   if (currentEditor?.hasFocusWithin() !== true) {
     return // None of our business
   }
@@ -131,9 +144,9 @@ ipcRenderer.on('shortcut', (event, command) => {
   } else if (command === 'paste-as-plain') {
     currentEditor.pasteAsPlainText()
   }
-})
+}))
 
-ipcRenderer.on('documents-update', (e, payload: { event: DP_EVENTS, context: DocumentsUpdateContext }) => {
+onScopeDispose(ipcRenderer.on('documents-update', (e, payload: { event: DP_EVENTS, context: DocumentsUpdateContext }) => {
   const { event, context } = payload
   if (event === DP_EVENTS.FILE_REMOTELY_CHANGED && context.filePath === props.file.path) {
     // The currently loaded document has been changed remotely. This event indicates
@@ -141,10 +154,15 @@ ipcRenderer.on('documents-update', (e, payload: { event: DP_EVENTS, context: Doc
     // need to tell the main editor to reload it as well.
     currentEditor?.reload().catch(e => console.error(e))
   } else if (event === DP_EVENTS.FILE_SAVED && context.filePath === props.file.path) {
+    const editor = currentEditor
+    const filePath = props.file.path
     // The file has been saved to disk. This means we should probably update the
     // descriptor to know of, e.g., library changes.
     ipcRenderer.invoke('fsal', { command: 'get-descriptor', payload: props.file.path })
       .then((descriptor: MDFileDescriptor|CodeFileDescriptor|undefined) => {
+        if (disposed || currentEditor !== editor || props.file.path !== filePath) {
+          return
+        }
         if (descriptor === undefined) {
           throw new Error(`Could not swap document: Could not retrieve descriptor for path ${props.file.path}!`)
         }
@@ -166,16 +184,16 @@ ipcRenderer.on('documents-update', (e, payload: { event: DP_EVENTS, context: Doc
       })
       .catch(err => console.error(err))
   }
-})
+}))
 
-ipcRenderer.on('reload-editors', _e => {
+onScopeDispose(ipcRenderer.on('reload-editors', _e => {
   currentEditor?.reload().catch(err => console.error('Failed to reload editor after `reload-editors` event', err))
-})
+}))
 
 // Update the file database whenever links have been updated
-ipcRenderer.on('links', _e => {
+onScopeDispose(ipcRenderer.on('links', _e => {
   updateFileDatabase().catch(err => console.error('Could not update file database', err))
-})
+}))
 
 // MOUNTED HOOK
 onMounted(() => {
@@ -183,11 +201,17 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  disposed = true
+  documentLoadGeneration++
+  citationDirty = false
+  citationEditor = null
+  requestedCitationEditor = null
   if (currentEditor !== null) {
     props.persistentStateMap.set(props.file.path, currentEditor.persistentState)
     // Clear out the table of contents before unmounting the component.
     windowStateStore.tableOfContents = undefined
     currentEditor.unmount()
+    currentEditor = null
   }
 })
 
@@ -206,7 +230,12 @@ onUpdated(() => {
     // onMounted and onBeforeUnmount hooks).
     props.persistentStateMap.set(currentFilePath, currentEditor.persistentState)
     currentEditor.unmount()
+    currentEditor = null
+    citationEditor = null
+    citationLibrary = undefined
+    requestedCitationEditor = null
     loadDocument().catch(err => console.error(err))
+    return
   }
 
   if (!currentEditor.hasFocus()) {
@@ -534,7 +563,12 @@ async function getEditorFor (doc: string): Promise<MarkdownEditor> {
  * Loads the document for this editor instance.
  */
 async function loadDocument (): Promise<void> {
+  const generation = ++documentLoadGeneration
   const newEditor = await getEditorFor(props.file.path)
+  if (disposed || generation !== documentLoadGeneration) {
+    newEditor.unmount()
+    return
+  }
 
   mainEditorWrapper.value?.appendChild(newEditor.dom)
   currentEditor = newEditor
@@ -545,6 +579,9 @@ async function loadDocument (): Promise<void> {
   maybeHighlightSearchResults()
 
   const descriptor: MDFileDescriptor|CodeFileDescriptor|undefined = await ipcRenderer.invoke('fsal', { command: 'get-descriptor', payload: props.file.path })
+  if (disposed || generation !== documentLoadGeneration || currentEditor !== newEditor) {
+    return
+  }
   if (descriptor === undefined) {
     throw new Error(`Could not swap document: Could not retrieve descriptor for path ${props.file.path}!`)
   }
@@ -573,7 +610,47 @@ function jtl (lineNumber: number): void {
   currentEditor?.jtl(lineNumber)
 }
 
-async function updateCitationKeys (library: string): Promise<void> {
+async function updateCitationKeys (library: string, force = false): Promise<void> {
+  if (currentEditor === null || disposed) {
+    return
+  }
+  if (force) {
+    citationLibrary = undefined
+  }
+  if (!force && ((citationEditor === currentEditor && citationLibrary === library) ||
+    (citationRefresh !== undefined && requestedCitationEditor === currentEditor && requestedCitationLibrary === library))) {
+    return await citationRefresh
+  }
+  requestedCitationLibrary = library
+  requestedCitationEditor = currentEditor
+  citationDirty = true
+  if (citationRefresh !== undefined) {
+    return await citationRefresh
+  }
+  citationRefresh = refreshCitationKeys()
+  try {
+    await citationRefresh
+  } finally {
+    citationRefresh = undefined
+  }
+}
+
+async function refreshCitationKeys (): Promise<void> {
+  while (citationDirty && currentEditor !== null && !disposed) {
+    citationDirty = false
+    const editor = currentEditor
+    const library = requestedCitationLibrary
+    const items = await getCitationKeys(library)
+    if (currentEditor !== editor || requestedCitationLibrary !== library || citationDirty || disposed) {
+      continue
+    }
+    editor.setCompletionDatabase('citations', items)
+    citationEditor = editor
+    citationLibrary = library
+  }
+}
+
+async function getCitationKeys (library: string): Promise<Array<{ citekey: string, displayText: string }>> {
   const items: Array<{ citekey: string, displayText: string }> = (await ipcRenderer.invoke('citeproc-provider', {
     command: 'get-items',
     payload: { database: library }
@@ -624,10 +701,11 @@ async function updateCitationKeys (library: string): Promise<void> {
       }
     })
 
-  currentEditor?.setCompletionDatabase('citations', items)
+  return items
 }
 
 async function updateFileDatabase (): Promise<void> {
+  const editor = currentEditor
   // Get all our files ...
   const fileDatabase: Array<{ filename: string, displayName: string, id: string }> = []
 
@@ -653,7 +731,9 @@ async function updateFileDatabase (): Promise<void> {
     }
   }
 
-  currentEditor?.setCompletionDatabase('files', fileDatabase)
+  if (!disposed && currentEditor === editor) {
+    editor?.setCompletionDatabase('files', fileDatabase)
+  }
 }
 
 function maybeHighlightSearchResults (): void {

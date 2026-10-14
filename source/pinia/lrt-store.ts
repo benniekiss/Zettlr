@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import type { LRTIPCAsyncMessage, LRTIPCSyncMessage } from 'source/app/service-providers/long-running-tasks'
 import type { LRT_JSON } from 'source/app/service-providers/long-running-tasks/task'
-import { ref } from 'vue'
+import { onScopeDispose, ref } from 'vue'
 
 /**
  * Enum of all status a task can have. (Mirror from the provider, because it's
@@ -41,7 +41,7 @@ export const useLRTStore = defineStore('lrt', () => {
     .catch(err => console.error('Could not fetch long running tasks', err))
 
   // Hook event listeners
-  ipcRenderer.on('lrt-provider', (event, args: LRTIPCSyncMessage) => {
+  onScopeDispose(ipcRenderer.on('lrt-provider', (event, args: LRTIPCSyncMessage) => {
     if (args.command === 'update-task') {
       // A single task was updated
       const { task } = args.payload
@@ -63,14 +63,14 @@ export const useLRTStore = defineStore('lrt', () => {
         tasks.value.splice(taskIdx, 1)
       }
     }
-  })
+  }))
 
-  ipcRenderer.on('lrt-provider', (event, args: LRTIPCSyncMessage) => {
+  onScopeDispose(ipcRenderer.on('lrt-provider', (event, args: LRTIPCSyncMessage) => {
     if (args.command === 'new-task') {
       // A new task has been started
       tasks.value.push(args.payload.task)
     }
-  })
+  }))
 
   function abortTask (id: string) {
     const task = tasks.value.find(t => t.id === id)

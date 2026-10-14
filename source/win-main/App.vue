@@ -186,6 +186,9 @@ import type { DocumentManagerIPCAPI } from 'source/app/service-providers/documen
 import { TaskStatus } from 'source/pinia/lrt-store'
 import PopoverLRT from './PopoverLRT.vue'
 
+import { useDisposables } from '@common/vue/use-disposables'
+
+const dispose = useDisposables()
 const ipcRenderer = window.ipc
 
 const configStore = useConfigStore()
@@ -685,7 +688,7 @@ onMounted(() => {
   tasksButton.value = document.querySelector('#toolbar-long-running-tasks')
   pandocButton.value = document.querySelector('#toolbar-pandocDivOrSpan')
 
-  ipcRenderer.on('shortcut', (event, shortcut) => {
+  dispose(ipcRenderer.on('shortcut', (event, shortcut) => {
     if (shortcut === 'toggle-sidebar') {
       configStore.setConfigValue('window.sidebarVisible', !sidebarVisible.value)
     } else if (shortcut === 'insert-id') {
@@ -747,7 +750,7 @@ onMounted(() => {
         }
       } as DocumentManagerIPCAPI).catch(err => console.error(err))
     }
-  })
+  }))
 
   // Initially, we need to hide the sidebar, since the view will be visible
   // by default.
@@ -768,11 +771,11 @@ onMounted(() => {
     .catch(err => console.error(err))
 
   // Also, listen for any changes in the update available state
-  ipcRenderer.on('update-provider', (event, command: string, updateState: UpdateState) => {
+  dispose(ipcRenderer.on('update-provider', (event, command: string, updateState: UpdateState) => {
     if (command === 'state-changed') {
       isUpdateAvailable.value = updateState.updateAvailable
     }
-  })
+  }))
 })
 
 function fileManagerSplitComponentResized (sizes: [number, number]): void {

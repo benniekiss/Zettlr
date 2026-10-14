@@ -32,7 +32,7 @@
  *
  * END HEADER
  */
-import { ref } from 'vue'
+import { onScopeDispose, ref } from 'vue'
 
 const ipcRenderer = window.ipc
 
@@ -49,11 +49,11 @@ const props = defineProps<{ control: ToolbarSearchControl }>()
 const emit = defineEmits<(e: 'update:modelValue', value: string) => void>()
 const input = ref<HTMLInputElement|null>(null)
 
-ipcRenderer.on('shortcut', (event, shortcut) => {
+onScopeDispose(ipcRenderer.on('shortcut', (event, shortcut) => {
   if (shortcut === 'search') {
     input.value?.focus()
   }
-})
+}))
 </script>
 
 <style lang="less">

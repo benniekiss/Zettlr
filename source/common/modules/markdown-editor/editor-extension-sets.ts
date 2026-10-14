@@ -87,7 +87,7 @@ export interface CoreExtensionOptions {
   remoteConfig: {
     filePath: string
     startVersion: number
-    pullUpdates: (filePath: string, version: number) => Promise<Update[]|false>
+    pullUpdates: (filePath: string, version: number, signal?: AbortSignal) => Promise<Update[]|false>
     pushUpdates: (filePath: string, version: number, updates: Update[]) => Promise<boolean>
   }
   updateListener: (update: ViewUpdate) => void

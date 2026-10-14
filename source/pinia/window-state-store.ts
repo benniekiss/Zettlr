@@ -17,7 +17,7 @@
 import { defineStore } from 'pinia'
 import type { DocumentInfo } from 'source/common/modules/markdown-editor'
 import type { ToCEntry } from 'source/common/modules/markdown-editor/plugins/toc-field'
-import { computed, ref, type Ref } from 'vue'
+import { onScopeDispose, computed, ref, type Ref } from 'vue'
 import { type WritingTarget } from '@providers/targets'
 import type { AssetsProviderIPCAPI } from 'source/app/service-providers/assets'
 import type { SearchResultWrapper } from 'source/win-main/GlobalSearch.vue'
@@ -69,32 +69,32 @@ export const useWindowStateStore = defineStore('window-state', () => {
   }
 
   // Snippets
-  ipcRenderer.on('assets-provider', (event, what: string) => {
+  onScopeDispose(ipcRenderer.on('assets-provider', (event, what: string) => {
     if (what === 'snippets-updated') {
       updateSnippets(snippets).catch(e => console.error(e))
     }
-  })
+  }))
 
   updateSnippets(snippets).catch(e => console.error(e))
 
   // Writing targets
-  ipcRenderer.on('targets-provider', (event, what: string) => {
+  onScopeDispose(ipcRenderer.on('targets-provider', (event, what: string) => {
     if (what === 'writing-targets-updated') {
       ipcRenderer.invoke('targets-provider', { command: 'get-targets' })
         .then((targets: WritingTarget[]) => { writingTargets.value = targets })
         .catch(e => console.error(e))
     }
-  })
+  }))
 
   ipcRenderer.invoke('targets-provider', { command: 'get-targets' })
     .then((targets: WritingTarget[]) => { writingTargets.value = targets })
     .catch(e => console.error(e))
   
-  ipcRenderer.on('window-controls', (event, { command, payload }) => {
+  onScopeDispose(ipcRenderer.on('window-controls', (event, { command, payload }) => {
     if (command === 'fullscreen' && typeof payload === 'boolean') {
       isFullscreen.value = payload
     }
-  })
+  }))
 
   return {
     uncollapsedDirectories,

@@ -190,6 +190,9 @@ import type { WritingTarget } from 'source/app/service-providers/targets'
 import { filterDescriptorChildren } from './util/filter-children'
 import getDocumentTitle from '../util/get-document-title'
 
+import { useDisposables } from '@common/vue/use-disposables'
+
+const dispose = useDisposables()
 const ipcRenderer = window.ipc
 
 const emit = defineEmits<(e: 'toggle-file-list') => void>()
@@ -496,16 +499,16 @@ watch(showDotFiles, async function () {
 
 onMounted(async () => {
   if (props.item.type === 'directory') {
-    ipcRenderer.on('shortcut', (_, message) => {
+    dispose(ipcRenderer.on('shortcut', (_, message) => {
       if (message === 'new-dir') {
         operationType.value = 'createDir'
       }
-    })
+    }))
 
     await fetchChildren()
   }
 
-  ipcRenderer.on('fsal-event', (_, payload: FSALEventPayload) => {
+  dispose(ipcRenderer.on('fsal-event', (_, payload: FSALEventPayload) => {
     const affectedPath = payload.event === 'unlink' || payload.event === 'unlinkDir'
       ? payload.path
       : (payload as FSALEventPayloadChange).descriptor.path
@@ -535,7 +538,7 @@ onMounted(async () => {
     // and we need to handle it. We'll make it easy and simply re-fetch the list
     // of children.
     fetchChildren().catch(err => console.error(`[TreeItem] Could not fetch children for item "${props.item.path}": ${err.message}`, err))
-  })
+  }))
 
   // Initially scroll into view if this item is selected
   if (isSelected.value) {

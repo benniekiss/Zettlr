@@ -180,6 +180,9 @@ const emit = defineEmits<{
   (e: 'create-dir'): void
 }>()
 
+import { useDisposables } from '@common/vue/use-disposables'
+
+const dispose = useDisposables()
 const ipcRenderer = window.ipc
 
 const configStore = useConfigStore()
@@ -199,7 +202,7 @@ async function fetchChildren (): Promise<void> {
 }
 
 onMounted(async () => {
-  ipcRenderer.on('fsal-event', (_, payload: FSALEventPayload) => {
+  dispose(ipcRenderer.on('fsal-event', (_, payload: FSALEventPayload) => {
     const affectedPath = payload.event === 'unlink' || payload.event === 'unlinkDir'
       ? payload.path
       : (payload as FSALEventPayloadChange).descriptor.path
@@ -229,7 +232,7 @@ onMounted(async () => {
     // and we need to handle it. We'll make it easy and simply re-fetch the list
     // of children.
     fetchChildren().catch(err => console.error(`[TreeItem] Could not fetch children for item "${props.item.path}": ${err.message}`, err))
-  })
+  }))
 
   if (props.item.type === 'directory') {
     await fetchChildren()

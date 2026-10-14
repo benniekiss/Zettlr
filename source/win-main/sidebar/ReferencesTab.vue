@@ -27,6 +27,9 @@ import localiseNumber from 'source/common/util/localise-number'
 import { hasMarkdownExt } from 'source/common/util/file-extention-checks'
 import { sanitizeHTML } from 'source/common/util/sanitize-html'
 
+import { useDisposables } from '@common/vue/use-disposables'
+
+const dispose = useDisposables()
 const ipcRenderer = window.ipc
 const documentTreeStore = useDocumentTreeStore()
 
@@ -86,7 +89,7 @@ watch(activeFile, () => {
 })
 
 onMounted(() => {
-  ipcRenderer.on('documents-update', (e, payload: { event: DP_EVENTS, context: DocumentsUpdateContext }) => {
+  dispose(ipcRenderer.on('documents-update', (e, payload: { event: DP_EVENTS, context: DocumentsUpdateContext }) => {
     const { event, context } = payload
     // Update the bibliography if the active file has been saved
     if (event === DP_EVENTS.FILE_SAVED) {
@@ -96,7 +99,7 @@ onMounted(() => {
         updateBibliography().catch(e => console.error('Could not update bibliography', e))
       }
     }
-  })
+  }))
 
   // Initial bibliography update
   updateBibliography().catch(e => console.error('Could not update bibliography', e))
@@ -126,7 +129,7 @@ async function updateBibliography (): Promise<void> {
     return
   }
 
-  const keys = descriptor.citekeys
+  const keys = [...descriptor.citekeys]
 
   // Now also include potential nocite citations (see https://pandoc.org/MANUAL.html#including-uncited-items-in-the-bibliography)
   if (descriptor.frontmatter != null && 'nocite' in descriptor.frontmatter) {

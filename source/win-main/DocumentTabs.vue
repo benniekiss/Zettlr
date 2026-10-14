@@ -103,6 +103,9 @@ import showPopupMenu from 'source/common/modules/window-register/application-men
 import { closeFile } from './file-manager/util/item-composable'
 import getDocumentTitle from './util/get-document-title'
 
+import { useDisposables } from '@common/vue/use-disposables'
+
+const dispose = useDisposables()
 const ipcRenderer = window.ipc
 
 const props = defineProps<{
@@ -143,7 +146,7 @@ watch(activeFile, () => {
 
 onMounted(() => {
   // Listen for shortcuts so that we can switch tabs programmatically
-  ipcRenderer.on('shortcut', (event, shortcut) => {
+  dispose(ipcRenderer.on('shortcut', (event, shortcut) => {
     if (documentTreeStore.lastLeafId !== props.leafId) {
       return // Doesn't apply to this pane
     }
@@ -239,7 +242,7 @@ onMounted(() => {
         instance.hide()
       })
     }
-  })
+  }))
 
   if (container.value !== null) {
     resizeObserver.observe(container.value)

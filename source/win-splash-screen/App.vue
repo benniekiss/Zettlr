@@ -39,9 +39,10 @@
  * END HEADER
  */
 
-import { ref } from 'vue'
+import { onScopeDispose, ref } from 'vue'
 import ProgressControl from '@common/vue/form/elements/ProgressControl.vue'
 import { trans } from '@common/i18n-renderer'
+
 
 const ipcRenderer = window.ipc
 
@@ -49,11 +50,11 @@ const stepLabel = ref(trans('Loading…'))
 const stepPercentage = ref(0)
 const year = (new Date()).getFullYear()
 
-ipcRenderer.on('step-update', (event, { currentStepMessage, currentStepPercentage }) => {
+onScopeDispose(ipcRenderer.on('step-update', (event, { currentStepMessage, currentStepPercentage }) => {
   stepLabel.value = currentStepMessage
   // Account for potential ratios instead of percentages
   stepPercentage.value = currentStepPercentage > 1 ? currentStepPercentage : Math.round(currentStepPercentage * 100)
-})
+}))
 </script>
 
 <style lang="less">

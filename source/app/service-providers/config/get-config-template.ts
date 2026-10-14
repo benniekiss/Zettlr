@@ -21,7 +21,7 @@ import type { EditorShortcutName } from 'source/common/modules/markdown-editor/k
 import { type MenuShortcutName } from '../menu/shortcuts'
 import { DEFAULT_PANDOC_WASM_URL } from '@common/pandoc-util/pandoc-wasm-url'
 
-export type MarkdownTheme = 'berlin'|'frankfurt'|'bielefeld'|'karl-marx-stadt'|'bordeaux'
+export type MarkdownTheme = 'berlin' | 'frankfurt' | 'bielefeld' | 'karl-marx-stadt' | 'bordeaux'
 
 // This is a handy interface to add groups of file types to the settings in
 // order to allow users to display them in filemanager and/or sidebar, and open
@@ -29,7 +29,7 @@ export type MarkdownTheme = 'berlin'|'frankfurt'|'bielefeld'|'karl-marx-stadt'|'
 // NOTE: The generics are meant so that you can restrict certain groupings.
 // E.g., FileTypeSettings<true, false, 'zettlr'> enforces these values for the
 // three properties.
-interface FileTypeSettings<F = boolean, S = boolean, O = 'zettlr'|'system'> {
+interface FileTypeSettings<F = boolean, S = boolean, O = 'zettlr' | 'system'> {
   showInFilemanager: F
   showInSidebar: S
   openWith: O
@@ -50,7 +50,7 @@ export type ConfigurableEditorShortcuts = Extends<
   'tr-strip-duplicate-spaces'|'tr-title-case'|'lsp-format-document'|'lsp-rename'|
   'lsp-go-to-definition'|'lsp-find-references'
 >
-export type ConfigurableUIShortcuts = Extends<MenuShortcutName, 'previous-tab'|'next-tab'|'filter-files'>
+export type ConfigurableUIShortcuts = Extends<MenuShortcutName, 'previous-tab' | 'next-tab' | 'filter-files'>
 
 export interface ConfigOptions {
   languageServers: string
@@ -61,12 +61,12 @@ export interface ConfigOptions {
   appLang: string
 
   darkMode: boolean
-  darkModeEditor: 'match'|'light'|'dark'
-  autoDarkMode: 'off'|'system'|'schedule'
+  darkModeEditor: 'match' | 'light' | 'dark'
+  autoDarkMode: 'off' | 'system' | 'schedule'
   autoDarkModeStart: string
   autoDarkModeEnd: string
 
-  openDirectory: string|null
+  openDirectory: string | null
   attachmentExtensions: string[]
   alwaysReloadFiles: boolean
   confirmExportOverwrite: boolean
@@ -74,14 +74,14 @@ export interface ConfigOptions {
 
   // NOTE to everyone: These options (and possibly others) that pertain to the
   // file manager should slowly be migrated into the fileManager group below.
-  fileManagerMode: 'thin'|'combined'|'expanded'
+  fileManagerMode: 'thin' | 'combined' | 'expanded'
   fileManagerShowFiles: boolean
   fileManagerShowWorkspaces: boolean
   fileMeta: boolean
-  fileMetaTime: 'modtime'|'creationtime'
-  sorting: 'natural'|'ascii'
+  fileMetaTime: 'modtime' | 'creationtime'
+  sorting: 'natural' | 'ascii'
   sortFoldersFirst: boolean
-  fileNameDisplay: 'filename'|'title'|'heading'|'title+heading'
+  fileNameDisplay: 'filename' | 'title' | 'heading' | 'title+heading'
 
   // NOTE to everyone: The various filemanager options (see above) should over
   // time be migrated into this group.
@@ -114,7 +114,7 @@ export interface ConfigOptions {
     dir: 'temp'|'cwd'|'ask'
     stripTags: boolean
     autoOpenExportedFiles: boolean
-    stripLinks: 'full'|'unlink'|'no'
+    stripLinks: 'full' | 'unlink' | 'no'
     cslLibrary: string
     cslStyle: string
     exportQmdWithQuarto: boolean
@@ -131,7 +131,7 @@ export interface ConfigOptions {
     idGen: string
     linkAddFileTitle: boolean
     linkWithIDIfPossible: boolean
-    linkFormat: 'link|title'|'title|link'
+    linkFormat: 'link|title' | 'title|link'
     autoSearch: boolean
     customDirectory: string
   }
@@ -140,8 +140,8 @@ export interface ConfigOptions {
     snippetAutocompleteTriggerCharacter: ':'
     autocompleteWithEnter: boolean
     autocompleteWithTab: boolean
-    autoSave: 'off'|'immediately'|'delayed'
-    citeStyle: 'in-text'|'in-text-suffix'|'regular'
+    autoSave: 'off' | 'immediately' | 'delayed'
+    citeStyle: 'in-text' | 'in-text-suffix' | 'regular'
     autoCloseBrackets: boolean
     showLinkPreviews: boolean
     showStatusbar: boolean
@@ -177,7 +177,7 @@ export interface ConfigOptions {
     previewModeShowSyntaxWhenCursorIsAdjacent: boolean
     imageWidth: number
     imageHeight: number
-    renderingMode: 'preview'|'raw'
+    renderingMode: 'preview' | 'raw'
     renderCitations: boolean
     renderIframes: boolean
     renderImages: boolean
@@ -213,7 +213,7 @@ export interface ConfigOptions {
     vibrancy: boolean
     sidebarVisible: boolean
     fileManagerVisible: boolean
-    currentSidebarTab: 'toc'|'references'|'relatedFiles'|'attachments'
+    currentSidebarTab: 'toc' | 'references' | 'relatedFiles' | 'attachments'
     recentGlobalSearches: string[]
   }
   ui: {
@@ -226,7 +226,7 @@ export interface ConfigOptions {
     avoidNewTabs: boolean
     iframeWhitelist: string[]
     checkForUpdates: boolean
-    zoomBehavior: 'gui'|'editor'
+    zoomBehavior: 'gui' | 'editor'
   }
   shortcuts: {
     editor: Record<ConfigurableEditorShortcuts, string>
@@ -246,6 +246,13 @@ export interface ConfigOptions {
     showInsertFootnoteButton: boolean
     showDocumentInfoText: boolean
     showPomodoroButton: boolean
+  }
+  workspaces: {
+    enableAssets: boolean
+    loadSnippets: boolean
+    loadCSS: boolean
+    loadExportProfiles: boolean
+    loadDictionary: boolean
   }
 }
 
@@ -535,6 +542,13 @@ export function getConfigTemplate (): ConfigOptions {
         'lsp-go-to-definition': '',
         'lsp-find-references': ''
       }
+    },
+    workspaces: {
+      enableAssets: false,
+      loadSnippets: true,
+      loadCSS: true,
+      loadExportProfiles: true,
+      loadDictionary: true,
     },
     uuid: uuid4() // The app's unique anonymous identifier
   }

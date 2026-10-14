@@ -59,6 +59,9 @@ import {
   getYAMLExtensions,
   inputModeCompartment,
   getMainEditorThemes,
+  getLuaExtensions,
+  getShellExtensions,
+  getCSSExtensions
 } from './editor-extension-sets'
 
 import {
@@ -218,7 +221,7 @@ export default class MarkdownEditor extends EventEmitter {
   private readonly databaseCache: {
     tags: TagRecord[]
     citations: Array<{ citekey: string, displayText: string }>
-    snippets: Array<{ name: string, content: string }>
+    snippets: Array<{ name: string, content: string, section?: string }>
     files: Array<{ filename: string, displayName: string, id: string }>
   }
 
@@ -350,6 +353,10 @@ export default class MarkdownEditor extends EventEmitter {
       })
     }
 
+    if (/\.jinja\.?/.test(filePath)) {
+      options.useJinja = true
+    }
+
     switch (type) {
       case DocumentType.Markdown:
         return getMarkdownExtensions(options)
@@ -359,6 +366,12 @@ export default class MarkdownEditor extends EventEmitter {
         return getYAMLExtensions(options)
       case DocumentType.JSON:
         return getJSONExtensions(options)
+      case DocumentType.CSS:
+        return getCSSExtensions(options)
+      case DocumentType.Lua:
+        return getLuaExtensions(options)
+      case DocumentType.Shell:
+        return getShellExtensions(options)
     }
   }
 

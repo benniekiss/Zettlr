@@ -10586,7 +10586,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"minimatch@npm:^10.2.2, minimatch@npm:^10.2.4, minimatch@npm:^10.2.5":
+"minimatch@npm:^10.2.2, minimatch@npm:^10.2.4, minimatch@npm:^10.2.5, minimatch@npm:^10.2.6":
   version: 10.2.6
   resolution: "minimatch@npm:10.2.6"
   dependencies:
@@ -15082,6 +15082,7 @@ __metadata:
     luxon: "npm:^3.7.2"
     md5: "npm:^2.3.0"
     mermaid: "npm:^11.17.2"
+    minimatch: "npm:^10.2.6"
     mocha: "npm:^11.8.0"
     node-loader: "npm:^2.1.0"
     nyc: "npm:^18.0.0"

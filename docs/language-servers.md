@@ -101,9 +101,21 @@ explicit `cwd` overrides its process directory and server root. Startup failures
 are reported to the console and application log. To retry a stopped server, reopen the document or
 change its configuration.
 
+Successful manual and automatic saves send `textDocument/didSave` once per shared
+document, respecting each server's save capability and request for saved text.
+Save snapshots superseded by newer edits are skipped to avoid reverting server state.
+Servers can register file-watcher patterns through LSP. Changes within open
+workspaces reuse Zettlr's filesystem watchers, including hidden configuration
+files; matching create, change, and delete events are sent to the requesting server.
+Paths outside Zettlr's watched workspaces are not additionally watched. Whether a
+particular configuration change is applied immediately remains server-dependent.
+The bundled codebook polls configuration on checks with a five-second debounce;
+after an external config edit, a later document edit or save triggers a recheck.
+This does not add project-file configuration discovery to LTeX+.
+
 This initial integration supports stdio and open-document editing. Navigation and
 edits can target documents already open in the shared client. Opening other files
-on behalf of a server and filesystem watches are not implemented. Only commands
+on behalf of a server is not implemented. Only commands
 returned by diagnostic code actions are exposed; server-specific client commands
 (such as LTeX+ dictionary management commands) are not implemented and are
 hidden from the action buttons. LTeX+ text corrections remain available.

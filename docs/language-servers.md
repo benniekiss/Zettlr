@@ -59,7 +59,7 @@ Each server accepts these fields:
 | `languages` | Required nonempty list of language IDs: `markdown`, `latex`, `yaml`, or `json`. |
 | `args` | Optional array of command arguments. |
 | `enabled` | Set to `false` to disable this server. Defaults to `true`. |
-| `cwd` | Working directory and workspace root. Defaults to the document's directory. |
+| `cwd` | Working directory and server root. Defaults to the containing open workspace, or the document's directory for standalone files. |
 | `env` | Additional environment variables; values must be strings. |
 | `initializationOptions` | Object sent with the LSP `initialize` request. |
 | `settings` | Object sent through `workspace/didChangeConfiguration` and returned for `workspace/configuration` requests. Use nested objects for section names. |
@@ -75,8 +75,8 @@ Load spelling fixes and other diagnostic code actions with the native
 **Show fixes** button: hover over an underlined diagnostic, or open the diagnostics
 panel by clicking the diagnostic counts in the status bar. **Ctrl-Shift-M** (Windows/Linux)
 or **Cmd-Shift-M** (macOS) also opens and focuses the panel. Choose **Show fixes**
-for a diagnostic to load its actions in the panel. Its action buttons have underlined keyboard shortcuts. Actions are fetched on demand and
-cached in a bounded cache.
+for a diagnostic to load its actions in the panel. Its action buttons have
+underlined keyboard shortcuts. Actions are fetched on demand and cached in a bounded cache.
 
 Codebook's buttons include spelling suggestions, **Add to dictionary**, **Add to
 global dictionary**, and ignoring the current file. Commands run on the server
@@ -86,16 +86,26 @@ Actions disappear after editing until fresh diagnostics arrive; stale fixes are
 never applied to changed text. Edits to unopened files and file creation,
 renaming, or deletion are rejected without applying part of the edit.
 
-Each editor view has its own server processes and client workspace. Settings
-changes restart its servers; closing the view or window stops them. A failed
-server does not disable other servers. Startup failures are reported to the
-console and application log. To retry a stopped server, reopen the document or
+Editor views in the same window share one native CodeMirror LSP client per
+workspace and configuration. Its enabled servers initialize once; only servers
+matching a document's language receive that document. Multiple panes showing the
+same file share one open-document record and synchronized version. Closing a pane
+detaches it; processes stop after the last consumer closes. Configuration changes
+replace the shared session once for all affected views. Separate windows retain
+separate sessions and IPC ownership. A failed server does not disable other servers.
+
+The root is the most specific open Zettlr workspace containing the document,
+falling back to the document's parent directory for standalone files. A server's
+explicit `cwd` overrides its process directory and server root. Startup failures
+are reported to the console and application log. To retry a stopped server, reopen the document or
 change its configuration.
 
-This initial integration supports stdio and open-document editing. Cross-file
-navigation/edits and filesystem watches are not implemented yet. Only commands
+This initial integration supports stdio and open-document editing. Navigation and
+edits can target documents already open in the shared client. Opening other files
+on behalf of a server and filesystem watches are not implemented. Only commands
 returned by diagnostic code actions are exposed; server-specific client commands
-(such as LTeX+ dictionary management commands) are not implemented.
+(such as LTeX+ dictionary management commands) are not implemented and are
+hidden from the action buttons. LTeX+ text corrections remain available.
 Legacy Hunspell dictionaries, LanguageTool HTTP settings, and remark lint settings
 are not converted automatically. Configure replacements through each server's
 settings or configuration files; existing dictionary files are not deleted.

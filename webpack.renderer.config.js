@@ -1,9 +1,10 @@
 const rules = require('./webpack.rules')
 const path = require('path')
 
-// TypeScript emits require(), while the ESM-only LSP client uses import.
+// Application TypeScript emits require(), while the ESM-only LSP client uses import.
 // Both must resolve to the same CodeMirror/Lezer instances: their extensions
-// and facets rely on object identity and cannot cross module copies.
+// and facets rely on object identity and cannot cross module copies. Without
+// these aliases the application renderer rejects LSP extensions at runtime.
 const editorAliases = Object.fromEntries([
   '@codemirror/state', '@codemirror/view', '@codemirror/language',
   '@codemirror/autocomplete', '@codemirror/lint', '@codemirror/commands',

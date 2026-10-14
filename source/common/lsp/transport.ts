@@ -14,6 +14,7 @@ interface Message {
 interface Peer {
   transport: Transport
   capabilities: Record<string, any>
+  sync: { openClose: boolean, change: number }
   diagnostics: Map<string, any[]>
   listener: (message: string) => void
   active: boolean
@@ -37,6 +38,20 @@ const providers: Record<string, string> = {
   'textDocument/references': 'referencesProvider'
 }
 
+function documentSync (capabilities: Record<string, any>): Peer['sync'] {
+  const sync = capabilities.textDocumentSync
+  if (typeof sync === 'number') {
+    // The numeric form predates TextDocumentSyncOptions and implies that the
+    // server participates in the open/change/close lifecycle.
+    return { openClose: sync !== 0, change: sync === 1 || sync === 2 ? sync : 0 }
+  }
+  if (sync === null || typeof sync !== 'object') {return { openClose: false, change: 0 }}
+  return {
+    openClose: sync.openClose === true,
+    change: sync.change === 1 || sync.change === 2 ? sync.change : 0
+  }
+}
+
 /**
  * CodeMirror has one LSP plugin per view. Combine diagnostics from every server,
  * while routing interactive requests to the first server advertising support.
@@ -48,10 +63,11 @@ export class MultiServerTransport implements Transport {
   private readonly versions = new Map<string, number>()
   private readonly initializations = new Map<number|string, { peer: Peer, respond: (message: Message) => void, timer: ReturnType<typeof setTimeout> }>()
   private readonly serverRequests = new Map<string, { peer: Peer, id: number|string }>()
+  private readonly activeRequests = new Map<string, { peer: Peer, id: number|string }>()
 
   constructor (transports: Transport[], private readonly applyEdit?: (params: { edit: WorkspaceEdit }) => { applied: boolean, failureReason?: string }, private readonly onClose?: (transport: Transport) => void, languages?: readonly (readonly string[])[], roots?: readonly string[]) {
     for (const [ index, transport ] of transports.entries()) {
-      const peer: Peer = { transport, capabilities: {}, diagnostics: new Map(), active: true, languages: languages?.[index], documents: new Set(), watchers: new Map(), rootUri: roots?.[index] ?? 'file:///', listener: message => this.receive(peer, JSON.parse(message)) }
+      const peer: Peer = { transport, capabilities: {}, sync: { openClose: false, change: 0 }, diagnostics: new Map(), active: true, languages: languages?.[index], documents: new Set(), watchers: new Map(), rootUri: roots?.[index] ?? 'file:///', listener: message => this.receive(peer, JSON.parse(message)) }
       this.peers.push(peer)
       transport.subscribe(peer.listener)
     }
@@ -117,6 +133,11 @@ export class MultiServerTransport implements Transport {
         this.serverRequests.delete(String(message.id))
         request.peer.transport.send(JSON.stringify({ ...message, id: request.id }))
       }
+    } else if (message.method === '$/cancelRequest' && message.id === undefined) {
+      const peer = this.activeRequests.get(String(message.params?.id))?.peer
+      if (peer?.active === true) {
+        try { peer.transport.send(json) } catch { this.closePeer(peer.transport) }
+      }
     } else if (message.id === undefined) {
       if (message.method === 'textDocument/didOpen' || message.method === 'textDocument/didChange') {
         const { uri, version } = message.params.textDocument
@@ -149,6 +170,8 @@ export class MultiServerTransport implements Transport {
           peer.documents.add(uri)
         } else if (uri !== undefined && peer.languages !== undefined && !peer.documents.has(uri)) {continue}
         if (message.method === 'textDocument/didClose') {peer.documents.delete(uri)}
+        if ((message.method === 'textDocument/didOpen' || message.method === 'textDocument/didClose') && !peer.sync.openClose) {continue}
+        if (message.method === 'textDocument/didChange' && peer.sync.change === 0) {continue}
         let outgoing = json
         if (message.method === 'textDocument/didSave') {
           const save = peer.capabilities.textDocumentSync?.save
@@ -167,7 +190,7 @@ export class MultiServerTransport implements Transport {
       message = { ...message, params: { ...message.params, capabilities: { ...message.params?.capabilities, textDocument } } }
       const peers = this.peers.filter(peer => peer.active)
       let remaining = peers.length
-      const capabilities: Record<string, any> = { textDocumentSync: { openClose: true, change: 1 } }
+      const capabilities: Record<string, any> = { textDocumentSync: { openClose: false, change: 0 } }
       let successes = 0
       const done = (): void => {
         // Match capability options to the same configured server used for requests,
@@ -178,6 +201,13 @@ export class MultiServerTransport implements Transport {
               capabilities[key] = value
             }
           }
+        }
+        const sync = peers.filter(peer => peer.active).map(peer => peer.sync)
+        capabilities.textDocumentSync = {
+          openClose: sync.some(value => value.openClose),
+          // A full replacement event is valid for incremental-sync servers as
+          // well, so prefer it whenever one peer cannot consume ranged edits.
+          change: sync.some(value => value.change === 1) ? 1 : sync.some(value => value.change === 2) ? 2 : 0
         }
         this.emit(successes > 0
           ? { jsonrpc: '2.0', id: message.id, result: { capabilities } }
@@ -190,6 +220,7 @@ export class MultiServerTransport implements Transport {
         this.initializePeer(peer, message, response => {
           if (response.error === undefined) {
             peer.capabilities = response.result?.capabilities ?? {}
+            peer.sync = documentSync(peer.capabilities)
             successes++
           } else {
             this.closePeer(peer.transport)
@@ -211,7 +242,9 @@ export class MultiServerTransport implements Transport {
           : { jsonrpc: '2.0', id: message.id, result: null })
       } else {
         // The native client owns request IDs, deadlines, and cancellation.
+        if (message.id !== undefined) {this.activeRequests.set(String(message.id), { peer, id: message.id })}
         try { peer.transport.send(JSON.stringify(message)) } catch {
+          if (message.id !== undefined) {this.activeRequests.delete(String(message.id))}
           this.emit({ jsonrpc: '2.0', id: message.id, error: { code: -32000, message: 'Language server disconnected' } })
           this.closePeer(peer.transport)
         }
@@ -259,8 +292,12 @@ export class MultiServerTransport implements Transport {
         clearTimeout(pending.timer)
         this.initializations.delete(message.id)
         pending.respond(message)
-      } else if (typeof message.id === 'number') {
-        this.emit(message)
+      } else {
+        const active = this.activeRequests.get(String(message.id))
+        if (active?.peer === peer) {
+          this.activeRequests.delete(String(message.id))
+          this.emit(message)
+        }
       }
     } else {
       this.emit(message)
@@ -288,6 +325,12 @@ export class MultiServerTransport implements Transport {
     for (const [ id, request ] of this.serverRequests) {
       if (request.peer === peer) {this.serverRequests.delete(id)}
     }
+    for (const [ key, request ] of this.activeRequests) {
+      if (request.peer === peer) {
+        this.activeRequests.delete(key)
+        this.emit({ jsonrpc: '2.0', id: request.id, error: { code: -32000, message: 'Language server disconnected' } })
+      }
+    }
     peer.transport.unsubscribe(peer.listener)
     for (const [ id, pending ] of this.initializations) {
       if (pending.peer !== peer) {
@@ -311,6 +354,7 @@ export class MultiServerTransport implements Transport {
     }
     this.handlers.clear()
     this.serverRequests.clear()
+    this.activeRequests.clear()
     this.versions.clear()
   }
 }

@@ -130,6 +130,47 @@ describe('Multiple language servers', () => {
     assert.strictEqual(second.sent[0].id, 1)
   })
 
+  it('releases failed initialization peers exactly once while keeping healthy peers', () => {
+    transport.destroy()
+    const closed: Transport[] = []
+    transport = new MultiServerTransport([first, second], undefined, peer => closed.push(peer))
+    transport.subscribe(message => received.push(JSON.parse(message)))
+    transport.send(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }))
+    first.receive({ id: first.sent[0].id, error: { code: -32603, message: 'Initialization failed' } })
+    second.receive({ id: second.sent[0].id, result: { capabilities: { hoverProvider: true } } })
+    assert.deepStrictEqual(closed, [first])
+    assert.strictEqual(received.at(-1).result.capabilities.hoverProvider, true)
+    transport.closePeer(first)
+    assert.deepStrictEqual(closed, [first])
+    transport.destroy()
+    assert.deepStrictEqual(closed, [first, second])
+  })
+
+  it('releases timed-out initialization peers', () => {
+    transport.destroy()
+    const closed: Transport[] = []
+    const timers: Array<{ callback: () => void, timer: ReturnType<typeof setTimeout> }> = []
+    const original = global.setTimeout
+    global.setTimeout = ((callback: () => void, delay: number) => {
+      const timer = original(callback, delay)
+      timers.push({ callback, timer })
+      return timer
+    }) as typeof setTimeout
+    try {
+      transport = new MultiServerTransport([first, second], undefined, peer => closed.push(peer))
+      transport.subscribe(message => received.push(JSON.parse(message)))
+      transport.send(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }))
+      second.receive({ id: second.sent[0].id, result: { capabilities: {} } })
+      clearTimeout(timers[0].timer)
+      timers[0].callback()
+      assert.deepStrictEqual(closed, [first])
+      assert(received.at(-1).result.capabilities)
+    } finally {
+      global.setTimeout = original
+      for (const { timer } of timers) clearTimeout(timer)
+    }
+  })
+
   it('initializes the real CodeMirror client through the combined transport', async () => {
     const client = new LSPClient().connect(transport)
     first.receive({ id: first.sent[0].id, result: { capabilities: { textDocumentSync: 2 } } })
@@ -165,6 +206,7 @@ describe('Editor LSP lifecycle', () => {
       },
       async invoke (_channel: string, payload: any) {
         calls.push(payload)
+        if (payload.command === 'resolve') return { uri: 'file:///test.md', rootUri: 'file:///' }
         if (payload.command === 'start') return { id: String(++sessionID), uri: 'file:///test.md', rootUri: 'file:///' }
         if (payload.command === 'send') {
           const message = JSON.parse(payload.message)
@@ -223,6 +265,16 @@ describe('Editor LSP lifecycle', () => {
         if (diagnostic.message === 'Warning 0') assert.strictEqual(diagnostic.actions?.[0].name, 'Show fixes')
       })
       assert.strictEqual(expanded, 1)
+      // Returning to a collapsed diagnostic must work, including cached fixes.
+      forEachDiagnostic(view.state, (diagnostic, from, to) => {
+        if (diagnostic.message === 'Warning 0') diagnostic.actions![0].apply(view, from, to)
+      })
+      await settle()
+      forEachDiagnostic(view.state, diagnostic => {
+        if (diagnostic.message === 'Warning 0') assert.strictEqual(diagnostic.actions?.[0].name, 'Add word')
+        if (diagnostic.message === 'Warning 1') assert.strictEqual(diagnostic.actions?.[0].name, 'Show fixes')
+      })
+      assert.strictEqual(sent().filter(message => message.method === 'textDocument/codeAction').length, 2)
       view.dispatch({ changes: { from: 5, insert: '!' } })
       await new Promise(resolve => setTimeout(resolve, 600))
       assert.strictEqual(sent().find(message => message.method === 'textDocument/didChange').params.contentChanges[0].text, 'hello!')
@@ -247,4 +299,46 @@ describe('Editor LSP lifecycle', () => {
     assert.strictEqual(listeners.get('lsp-message')!.size, 0)
     assert.strictEqual(listeners.get('config-provider')!.size, 0)
   })
+  it('stops a failed server session immediately and keeps its healthy sibling', async () => {
+    const previousIPC = window.ipc
+    const previousConfig = window.config.get('languageServers')
+    const listeners = new Map<string, Set<(...args: any[]) => void>>()
+    const calls: any[] = []
+    const emit = (payload: any): void => { for (const listener of listeners.get('lsp-message') ?? []) listener(undefined, payload) }
+    window.config.set('languageServers', JSON.stringify(['bad', 'good'].map(name => ({ name, command: name, languages: ['markdown'] }))))
+    window.ipc = {
+      ...previousIPC,
+      on (channel: string, listener: (...args: any[]) => void) {
+        if (!listeners.has(channel)) listeners.set(channel, new Set())
+        listeners.get(channel)!.add(listener)
+        return () => listeners.get(channel)!.delete(listener)
+      },
+      async invoke (_channel: string, payload: any) {
+        calls.push(payload)
+        if (payload.command === 'resolve') return { uri: 'file:///test.md', rootUri: 'file:///' }
+        if (payload.command === 'start') return { id: payload.name, uri: 'file:///test.md', rootUri: 'file:///' }
+        if (payload.command === 'send') {
+          const message = JSON.parse(payload.message)
+          if (message.method === 'initialize') queueMicrotask(() => emit({ id: payload.id, message: JSON.stringify({ jsonrpc: '2.0', id: message.id,
+            ...(payload.id === 'bad' ? { error: { code: -32603, message: 'Failed' } } : { result: { capabilities: { textDocumentSync: 1 } } })
+          }) }))
+        }
+      }
+    } as typeof window.ipc
+    const view = new EditorView({ doc: 'hello', extensions: [languageServers('/test.md', 'markdown')] })
+    try {
+      await new Promise(resolve => setTimeout(resolve, 30))
+      assert.strictEqual(calls.filter(call => call.command === 'stop' && call.id === 'bad').length, 1)
+      assert(!calls.some(call => call.command === 'stop' && call.id === 'good'))
+      assert(calls.some(call => call.command === 'send' && call.id === 'good' && JSON.parse(call.message).method === 'textDocument/didOpen'))
+    } finally {
+      view.destroy()
+      window.config.set('languageServers', previousConfig)
+      window.ipc = previousIPC
+    }
+    await new Promise(resolve => setTimeout(resolve, 10))
+    assert.strictEqual(calls.filter(call => call.command === 'stop' && call.id === 'bad').length, 1)
+    assert.strictEqual(calls.filter(call => call.command === 'stop' && call.id === 'good').length, 1)
+  })
+
 })

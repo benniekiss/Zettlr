@@ -8,7 +8,7 @@ export function getLanguageServerFields (): PreferencesFieldset[] {
     title: trans('Language servers'),
     group: PreferencesGroups.LanguageServers,
     help: undefined,
-    infoString: trans('Configure stdio language servers as a JSON array. Each server needs name, command, and languages (e.g. ["markdown"]). Optional fields: args, enabled, cwd, env, initializationOptions, settings. Servers run when matching documents are opened. Interactive features use the first supporting server; diagnostics are combined.'),
+    infoString: trans('Configure stdio language servers as a JSON array. Each server needs name, command, and languages (e.g. ["markdown"]). Optional fields: args, enabled, cwd, env, initializationOptions, settings. Enabled servers share a workspace session; each receives matching documents. Interactive features use the first supporting server; diagnostics are combined.'),
     fields: [{
       type: 'checkbox',
       model: 'useBundledLanguageServers',

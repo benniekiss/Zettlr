@@ -22,6 +22,9 @@
   ></Button>
   <TextInput
     v-else-if="props.field.type === 'text'"
+    v-bind:multiline="props.field.multiline"
+    v-bind:save-on-blur="props.field.saveOnBlur"
+    v-bind:validate="props.field.validate"
     v-bind:model-value="model"
     v-bind:disabled="props.field.disabled"
     v-bind:placeholder="props.field.placeholder"

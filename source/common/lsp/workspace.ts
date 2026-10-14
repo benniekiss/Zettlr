@@ -26,7 +26,11 @@ class SharedFile implements WorkspaceFile {
 
   getView (main?: EditorView): EditorView|null {
     if (main !== undefined && this.views.has(main)) {return main}
-    return [...this.views].sort((a, b) => compareViews(a, b, this.doc))[0] ?? null
+    // Native mappings compose a pane's pending changes with the shared document.
+    // Prefer panes with that base over panes still waiting for authority updates.
+    const views = [...this.views]
+    const current = views.filter(view => LSPPlugin.get(view)?.syncedDoc.eq(this.doc) === true)
+    return (current.length > 0 ? current : views).sort((a, b) => compareViews(a, b, this.doc))[0] ?? null
   }
 }
 

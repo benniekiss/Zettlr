@@ -6,6 +6,8 @@ import { forEachDiagnostic } from '@codemirror/lint'
 import { pathToFileURL } from 'url'
 import { languageServers } from '../source/common/modules/markdown-editor/plugins/lsp'
 import { languageServerRoot } from '../source/app/service-providers/lsp/workspace-root'
+import { applyWorkspaceEdit } from '../source/common/lsp/code-actions'
+import { acquireSession } from '../source/common/lsp/session'
 import type { LanguageServerConfig } from '../source/common/lsp/config'
 
 const settle = async (): Promise<void> => { await new Promise(resolve => setTimeout(resolve, 30)) }
@@ -74,7 +76,6 @@ describe('Shared editor LSP sessions', () => {
             const request = sent('textDocument/hover').find(request => request.id === payload.id && request.value.id === message.params.id)
             if (request) queueMicrotask(() => emit(payload.id, { id: request.value.id, result: null }))
           }
-          if (message.method === 'completionItem/resolve') queueMicrotask(() => emit(payload.id, { id: message.id, result: message.params }))
           if (message.method === 'textDocument/hover' && !holdHover) queueMicrotask(() => emit(payload.id, { id: message.id, result: null }))
         }
       }
@@ -97,6 +98,7 @@ describe('Shared editor LSP sessions', () => {
     await settle()
     assert.strictEqual(calls.filter(call => call.command === 'start').length, 3)
     assert.strictEqual(sent('initialize').length, 3)
+    assert(sent('initialize').every(call => !('diagnostic' in call.value.params.capabilities.textDocument)))
     assert.strictEqual(sent('textDocument/didOpen').length, 6)
     const client = LSPPlugin.get(first)!.client
     assert.strictEqual(LSPPlugin.get(second)!.client, client)
@@ -145,7 +147,7 @@ describe('Shared editor LSP sessions', () => {
     assert.strictEqual(sent('initialize').length, 8)
   })
 
-  it('routes document notifications, native feature requests, and completion resolution by language', async () => {
+  it('routes document notifications and native feature requests by language', async () => {
     configure([{ name: 'markdown', command: 'md', languages: ['markdown'] }, { name: 'json', command: 'json', languages: ['json'] }])
     const markdown = create('/workspace/first.md')
     const json = create('/workspace/config.json', '{}')
@@ -158,9 +160,25 @@ describe('Shared editor LSP sessions', () => {
     await client.request('textDocument/hover', params)
     assert.strictEqual(processes.get(sent('textDocument/hover')[0].id), 'json')
     const completions = await client.request<typeof params, any[]>('textDocument/completion', params)
-    await client.request('completionItem/resolve', completions[0])
-    assert.strictEqual(processes.get(sent('completionItem/resolve')[0].id), 'json')
-    assert(!('zettlrServer' in sent('completionItem/resolve')[0].value.params))
+    assert.deepStrictEqual(completions, [{ label: 'json' }])
+  })
+
+  it('uses a current pane for native mappings and workspace edits while another pane lags', async () => {
+    configure([markdownServers[0]])
+    const current = create('/workspace/shared.md')
+    const lagging = create('/workspace/shared.md')
+    await settle()
+    const client = LSPPlugin.get(current)!.client
+    const uri = LSPPlugin.get(current)!.uri
+    current.dispatch({ changes: { from: 5, insert: '!' } })
+    client.sync()
+    assert.strictEqual(client.workspace.getFile(uri)!.getView(), current)
+    await client.withMapping(async mapping => {
+      assert.strictEqual(mapping.mapPosition(uri, { line: 0, character: 6 }), 6)
+    })
+    applyWorkspaceEdit(client, { changes: { [uri]: [{ range: { start: { line: 0, character: 5 }, end: { line: 0, character: 6 } }, newText: '?' }] } })
+    assert.strictEqual(current.state.doc.toString(), 'hello?')
+    assert.strictEqual(lagging.state.doc.toString(), 'hello')
   })
 
   it('uses acknowledged authority versions and never rolls a document back from a lagging pane', async () => {
@@ -280,6 +298,32 @@ describe('Shared editor LSP sessions', () => {
     holdStart!({ id: [...processes.keys()][0], uri: 'file:///workspace/pending.md', rootUri: 'file:///workspace' })
     await settle()
     assert.strictEqual(calls.filter(call => call.command === 'stop').length, 1)
+  })
+
+  it('settles interrupted native initialization before disconnecting', async () => {
+    configure([markdownServers[0]])
+    initialize = false
+    const view = new EditorView({ doc: 'hello' })
+    views.push(view)
+    const lease = (await acquireSession(view, '/workspace/pending.md', 'markdown', window.config.get('languageServers'), true, () => true))!
+    await settle()
+    const native = lease.session.client.initializing
+    const rejected = assert.rejects(lease.session.ready, /./)
+    lease.release()
+    await rejected
+    await assert.rejects(native, /./)
+    assert.strictEqual(lease.session.client.serverCapabilities, null)
+    assert.strictEqual(calls.filter(call => call.command === 'stop').length, 1)
+  })
+
+  it('rejects failed initialization promptly instead of waiting for the native timeout', async () => {
+    configure([markdownServers[0]])
+    failInit = true
+    const view = new EditorView({ doc: 'hello' })
+    views.push(view)
+    const lease = (await acquireSession(view, '/workspace/failed.md', 'markdown', window.config.get('languageServers'), true, () => true))!
+    await assert.rejects(lease.session.ready, { message: 'No language server initialized' })
+    lease.release()
   })
 })
 

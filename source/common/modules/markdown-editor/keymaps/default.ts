@@ -44,6 +44,7 @@ import {
   selectSelectionMatches, gotoLine, selectNextOccurrence
 } from '@codemirror/search'
 import { type KeyBinding } from '@codemirror/view'
+import { findReferences, formatDocument, jumpToDefinition, renameSymbol } from '@codemirror/lsp-client'
 import {
   insertNewlineContinueMarkup, deleteMarkupBackward
 } from '@codemirror/lang-markdown'
@@ -241,6 +242,12 @@ export function mainEditorKeybindings (customShortcutMap: CustomEditorShortcut[]
     { key: "'", run: handleQuote("'") },
 
     { key: 'Mod-a', run: selectAll },
+
+    // Format the document with the active language server, when supported.
+    { key: sc('lsp-format-document'), run: formatDocument, preventDefault: true },
+    { key: sc('lsp-rename'), run: renameSymbol, preventDefault: true },
+    { key: sc('lsp-go-to-definition'), run: jumpToDefinition, preventDefault: true },
+    { key: sc('lsp-find-references'), run: findReferences, preventDefault: true },
 
     // Transformations keymap
     { key: sc('tr-zap-gremlins'), run: zapGremlins },

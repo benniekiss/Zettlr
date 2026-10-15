@@ -1,6 +1,6 @@
 import { StateEffect, StateField, type Extension } from '@codemirror/state'
-import { keymap, type EditorView } from '@codemirror/view'
-import { forceLinting, linter, lintKeymap, openLintPanel, type Diagnostic } from '@codemirror/lint'
+import { activateHover, keymap, type EditorView } from '@codemirror/view'
+import { forceLinting, forEachDiagnostic, linter, lintKeymap, type Diagnostic } from '@codemirror/lint'
 import { LSPPlugin, type LSPClient } from '@codemirror/lsp-client'
 import type { Diagnostic as ServerDiagnostic } from 'vscode-languageserver-types'
 import { trans } from '@common/i18n-renderer'
@@ -73,12 +73,38 @@ export class EditorDiagnostics {
         let loading = false
         diagnostic.actions = [{ name: trans('Show fixes'), apply: () => {
           if (loading || !current()) {return}
+          const panelWasOpen = this.view.dom.querySelector('.cm-panel-lint') !== null
           loading = true
           this.actions.load(params.uri, item, server, current).then(actions => {
             if (!current()) {return}
             // Keep only the selected diagnostic expanded to bound retained edits.
-            this.display(diagnostics.map(base => base === diagnostic ? { ...base, actions } : base))
-            openLintPanel(this.view)
+            const expanded = diagnostics.map(base => base === diagnostic ? { ...base, actions } : base)
+            const selected = expanded[diagnostics.indexOf(diagnostic)]
+            const panelIndex = expanded.slice().sort((a, b) => a.from - b.from || a.to - b.to).indexOf(selected)
+            this.display(expanded)
+
+            // CodeMirror runs lint sources through a promise batch even when
+            // they return synchronously. Wait until the native lint state has
+            // accepted these actions before refreshing its panel or hover.
+            const refresh = (): void => {
+              if (!current()) {return}
+              let updated = false
+              forEachDiagnostic(this.view.state, active => { if (active === selected) {updated = true} })
+              if (!updated) {
+                setTimeout(refresh, 0)
+                return
+              }
+              if (panelWasOpen) {
+                const panel = this.view.dom.querySelector('.cm-panel-lint ul')
+                const entry = panel?.children.item(panelIndex)
+                entry?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+              } else {
+                activateHover(this.view, diagnostic.from, 1, {
+                  until: transaction => transaction.docChanged || transaction.newSelection.main.head < diagnostic.from || transaction.newSelection.main.head > diagnostic.to
+                })
+              }
+            }
+            queueMicrotask(refresh)
           }).catch(err => {
             if (current()) {plugin.reportError(trans('Could not load code actions'), err)}
           }).finally(() => { loading = false })

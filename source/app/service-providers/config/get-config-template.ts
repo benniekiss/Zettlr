@@ -16,6 +16,7 @@ import { app, nativeTheme } from 'electron'
 import * as bcp47 from 'bcp-47'
 import { v4 as uuid4 } from 'uuid'
 import getLanguageFile from '@common/util/get-language-file'
+import { recommendedLanguageServers } from '@common/lsp/config'
 import type { EditorShortcutName } from 'source/common/modules/markdown-editor/keymaps/shortcuts'
 import { type MenuShortcutName } from '../menu/shortcuts'
 
@@ -45,7 +46,8 @@ export type ConfigurableEditorShortcuts = Extends<
   'tr-ensure-double-quotes'|'tr-italics-to-quotes'|'tr-quotes-to-italics'|
   'tr-quotes-to-magic'|'tr-remove-line-breaks'|'tr-sentence-case'|
   'tr-single-quotes-to-double'|'tr-straighten-quotes'|
-  'tr-strip-duplicate-spaces'|'tr-title-case'
+  'tr-strip-duplicate-spaces'|'tr-title-case'|'lsp-format-document'|'lsp-rename'|
+  'lsp-go-to-definition'|'lsp-find-references'
 >
 export type ConfigurableUIShortcuts = Extends<MenuShortcutName, 'previous-tab'|'next-tab'|'filter-files'>
 
@@ -259,7 +261,9 @@ export function getConfigTemplate (): ConfigOptions {
 
   // Return the complete configuration object
   return {
-    languageServers: '[]',
+    // Panache is the default Markdown formatter, linter, and LSP provider.
+    // Other servers remain opt-in through the Language Servers preferences.
+    languageServers: JSON.stringify(recommendedLanguageServers.slice(0, 1)),
     useBundledLanguageServers: true,
     version: app.getVersion(), // Useful for migrating
     buildDate: __BUILD_DATE__,
@@ -517,7 +521,11 @@ export function getConfigTemplate (): ConfigOptions {
         'tr-straighten-quotes': '',
         'tr-strip-duplicate-spaces': '',
         'tr-title-case': '',
-        'tr-zap-gremlins': ''
+        'tr-zap-gremlins': '',
+        'lsp-format-document': '',
+        'lsp-rename': '',
+        'lsp-go-to-definition': '',
+        'lsp-find-references': ''
       }
     },
     uuid: uuid4() // The app's unique anonymous identifier

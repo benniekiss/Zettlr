@@ -16,6 +16,8 @@
  */
 import { DocumentType } from '@dts/common/documents'
 
+// NOTE: Any extensions added to these lists must be in lowercase, as the file extension
+// check is done on the lowercased filepath to support case-insensitive matching.
 export const MD_EXT = [ '.md', '.rmd', '.qmd', '.markdown', '.txt', '.mdx', '.mkd' ]
 export const LATEX_EXT = [ '.tex', '.latex' ]
 export const YAML_EXT = [ '.yaml', '.yml' ]
@@ -38,6 +40,22 @@ const ALL_EXT = [
 ]
 
 /**
+ * Checks if the provided `filePath` has a filename extension from the list of
+ * `extensions`. The list of extensions must be in lowercase, as the check is done
+ * against the lowercased `filePath` for a case-insensitive match.
+ *
+ * @param   {string}    filePath    The file path in question
+ * @param   {string[]}  extensions  The list of lowercase filename extensions to check
+ *
+ * @return  {boolean}               Whether the file has one of these extensions
+ */
+export function hasExt (filePath: string, extensions: string[]): boolean {
+  const lowerCasePath = filePath.toLocaleLowerCase()
+
+  return extensions.some(ext => lowerCasePath.endsWith(ext))
+}
+
+/**
  * Returns true if the given path has a valid Markdown or Code extension
  *
  * @param   {string}   p  The path to check
@@ -46,21 +64,6 @@ const ALL_EXT = [
  */
 export function hasMdOrCodeExt (p: string): boolean {
   return hasMarkdownExt(p) || hasCodeExt(p)
-}
-
-/**
- * Checks if the provided `filePath` has a filename extension from the list of
- * `extensions`. The extension check is case insensitive.
- *
- * @param   {string}    filePath    The file path in question
- * @param   {string[]}  extensions  The list of filename extensions to check
- *
- * @return  {boolean}               Whether the file has one of these extensions
- */
-export function hasExt (filePath: string, extensions: string[]): boolean {
-  const lowerCasePath = filePath.toLowerCase()
-
-  return extensions.some(ext => lowerCasePath.endsWith(ext))
 }
 
 /**
@@ -149,7 +152,11 @@ export function hasDataExt (filePath: string): boolean {
  * @return  {boolean}            Whether the filePath has any recognized ext.
  */
 export function hasAnyRecognizedFileExtension (filePath: string, customExtensions: string[] = []): boolean {
-  return hasExt(filePath, [ ...ALL_EXT, ...customExtensions ])
+  return hasExt(filePath, [
+    ...ALL_EXT,
+    // Sanitize user input for case-insensitive matching
+    ...customExtensions.map(ext => ext.toLocaleLowerCase())
+  ])
 }
 
 /**

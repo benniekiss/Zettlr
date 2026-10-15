@@ -50,7 +50,7 @@ export function hasMdOrCodeExt (p: string): boolean {
 
 /**
  * Checks if the provided `filePath` has a filename extension from the list of
- * `extensions`.
+ * `extensions`. The extension check is case insensitive.
  *
  * @param   {string}    filePath    The file path in question
  * @param   {string[]}  extensions  The list of filename extensions to check
@@ -58,7 +58,9 @@ export function hasMdOrCodeExt (p: string): boolean {
  * @return  {boolean}               Whether the file has one of these extensions
  */
 export function hasExt (filePath: string, extensions: string[]): boolean {
-  return extensions.some(ext => filePath.endsWith(ext))
+  const lowerCasePath = filePath.toLowerCase()
+
+  return extensions.some(ext => lowerCasePath.endsWith(ext))
 }
 
 /**

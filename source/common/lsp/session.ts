@@ -44,16 +44,7 @@ export class EditorSession {
     })
     this.stopSaves = this.ipc.on('documents-update', (_event, { event, context }) => {
       if (event !== DP_EVENTS.FILE_SAVED) {return}
-      const consumer = [...this.consumers.values()].find(consumer => consumer.path === context?.filePath)
-      if (consumer === undefined) {return}
-      void this.ready.then(() => {
-        if (this.closed || this.client.workspace.getFile(consumer.uri) === null) {return}
-        this.client.sync()
-        // A save may finish after newer edits. Sending its old text would roll
-        // back servers (such as codebook) that update their buffer on didSave.
-        if (context.savedContent !== this.client.workspace.getFile(consumer.uri)?.doc.toString()) {return}
-        this.client.notification('textDocument/didSave', { textDocument: { uri: consumer.uri }, text: context.savedContent })
-      }).catch(err => console.error('[LSP]', err))
+      this.notifySaved(context?.filePath, context?.savedContent)
     })
     this.stopFiles = this.ipc.on('fsal-watch-event', (_event, { event, uri }) => {
       const type = ({ add: 1, addDir: 1, change: 2, unlink: 3, unlinkDir: 3 } as Record<string, number>)[event]
@@ -89,6 +80,20 @@ export class EditorSession {
     const consumer = this.consumers.get(view)
     const diagnostics = consumer && this.diagnostics.get(consumer.uri)
     if (diagnostics !== undefined) {consumer?.diagnostics?.publish(diagnostics)}
+  }
+
+  notifySaved (path: string|undefined, savedContent: string|undefined): void {
+    if (path === undefined || savedContent === undefined) {return}
+    const consumer = [...this.consumers.values()].find(consumer => consumer.path === path)
+    if (consumer === undefined) {return}
+    void this.ready.then(() => {
+      const file = this.client.workspace.getFile(consumer.uri)
+      if (this.closed || file === null) {return}
+      this.client.sync()
+      // Avoid sending stale contents if the user edited again while saving.
+      if (savedContent !== this.client.workspace.getFile(consumer.uri)?.doc.toString()) {return}
+      this.client.notification('textDocument/didSave', { textDocument: { uri: consumer.uri }, text: savedContent })
+    }).catch(err => console.error('[LSP]', err))
   }
 
   update (view: EditorView, update: ViewUpdate): void {
@@ -219,6 +224,11 @@ export class EditorSession {
 }
 
 export interface SessionLease { session: EditorSession, uri: string, release: () => void }
+
+/** Notify any LSP session attached to an auxiliary editor that its file saved. */
+export function notifyLspDocumentSaved (path: string, savedContent: string): void {
+  for (const session of sessions.values()) {session.notifySaved(path, savedContent)}
+}
 
 export async function acquireSession (view: EditorView, path: string, language: string, config: string, bundled: boolean, current: () => boolean): Promise<SessionLease|undefined> {
   const servers = parseLanguageServers(config).filter(server => server.enabled !== false)

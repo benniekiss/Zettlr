@@ -62,6 +62,7 @@
           ref="code-editor"
           v-model="editorContents"
           v-bind:mode="'yaml'"
+          v-bind:file-path="defaultsPath || undefined"
         ></CodeEditor>
         <!-- This div is used to keep the buttons in a line despite the flex -->
         <div class="save-asset-file">
@@ -129,6 +130,7 @@ const props = defineProps<{
 
 const currentItem = ref(0)
 const currentFilename = ref('')
+const defaultsPath = ref('')
 const editorContents = ref('')
 const lastLoadedEditorContents = ref('')
 const savingStatus = ref('')
@@ -212,10 +214,13 @@ async function loadDefaultsForState (): Promise<void> {
   // Loads a defaults file from main for the given state (tab + list item)
   if (availableDefaultsFiles.value.length === 0) {
     currentFilename.value = ''
+    defaultsPath.value = ''
+    editorContents.value = ''
     return
   }
 
   if (visibleItems.value.length === 0) {
+    defaultsPath.value = ''
     return
   }
 
@@ -229,11 +234,19 @@ async function loadDefaultsForState (): Promise<void> {
 
   const name = visibleItems.value[currentItem.value].name
 
-  const data = await ipcRenderer.invoke('assets-provider', {
-    command: 'get-defaults-file',
-    payload: { filename: name }
-  } as AssetsProviderIPCAPI)
+  const [ data, path ] = await Promise.all([
+    ipcRenderer.invoke('assets-provider', {
+      command: 'get-defaults-file',
+      payload: { filename: name }
+    } as AssetsProviderIPCAPI),
+    ipcRenderer.invoke('assets-provider', {
+      command: 'get-defaults-file-path',
+      payload: { filename: name }
+    } as AssetsProviderIPCAPI)
+  ])
+  if (visibleItems.value[currentItem.value]?.name !== name) {return}
 
+  defaultsPath.value = path
   lastLoadedEditorContents.value = data
   editorContents.value = data
   currentFilename.value = visibleItems.value[currentItem.value].name
@@ -265,6 +278,7 @@ function saveDefaultsFile (): void {
     payload: { filename: name, contents: editorContents.value }
   } as AssetsProviderIPCAPI)
     .then(async () => {
+      CodeEditor.value?.notifySaved(editorContents.value)
       lastLoadedEditorContents.value = editorContents.value
       savingStatus.value = trans('Saved!')
       await retrieveDefaultsFiles() // Always make sure to pull in any changes

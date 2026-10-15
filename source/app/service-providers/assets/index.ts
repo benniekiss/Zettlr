@@ -55,12 +55,14 @@ export interface PandocProfileMetadata {
 
 export type AssetsProviderIPCAPI = IPCAPI<{
   'get-filter': { filename: string },
+  'get-filter-path': { filename: string },
   'set-filter': { filename: string, contents: string },
   'rename-filter': { oldName: string, newName: string },
   'remove-filter': { filename: string },
   'list-filter': unknown,
   'list-protected-filter': unknown,
   'get-defaults-file': { filename: string }
+  'get-defaults-file-path': { filename: string }
   'set-defaults-file': { filename: string, contents: string }
   'rename-defaults-file': { oldName: string, newName: string }
   'remove-defaults-file': { filename: string }
@@ -131,6 +133,8 @@ export default class AssetsProvider extends ProviderContract {
       // the bundled YAML module to parse and stringify the files accordingly.
       if (command === 'get-filter') {
         return await this.getFilter(payload.filename)
+      } else if (command === 'get-filter-path') {
+        return path.join(this._filterPath, payload.filename)
       } else if (command === 'set-filter') {
         return await this.setFilter(payload.filename, payload.contents)
       } else if (command === 'rename-filter') {
@@ -146,6 +150,8 @@ export default class AssetsProvider extends ProviderContract {
         return await shell.openPath(this._filterPath)
       } else if (command === 'get-defaults-file') {
         return await this.getDefaultsFile(payload.filename, true)
+      } else if (command === 'get-defaults-file-path') {
+        return path.join(this._defaultsPath, payload.filename)
       } else if (command === 'set-defaults-file') {
         return await this.setDefaultsFile(payload.filename, payload.contents, true)
       } else if (command === 'rename-defaults-file') {

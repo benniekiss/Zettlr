@@ -62,6 +62,7 @@
             ref="code-editor"
             v-model="editorContents"
             v-bind:mode="'lua'"
+            v-bind:file-path="filterPath || undefined"
             v-bind:readonly="currentItem < 0"
           ></CodeEditor>
           <!-- This div is used to keep the buttons in a line despite the flex -->
@@ -117,6 +118,7 @@ const openFilterFolderLabel = trans('Open filters folder')
 
 const currentItem = ref(-1)
 const currentFilterText = ref('')
+const filterPath = ref('')
 const editorContents = ref('')
 const lastLoadedEditorContents = ref('')
 const savingStatus = ref('')
@@ -183,6 +185,7 @@ function getProtectedFilters (): void {
 
 function loadState (): void {
   if (availableFilters.value.length === 0) {
+    filterPath.value = ''
     editorContents.value = ''
     CodeEditor.value?.markClean()
     savingStatus.value = ''
@@ -197,13 +200,20 @@ function loadState (): void {
     currentItem.value = 0
   }
 
-  ipcRenderer.invoke('assets-provider', {
-    command: 'get-filter',
-    payload: {
-      filename: availableFilters.value[currentItem.value]
-    }
-  } as AssetsProviderIPCAPI)
-    .then(data => {
+  const filename = availableFilters.value[currentItem.value]
+  Promise.all([
+    ipcRenderer.invoke('assets-provider', {
+      command: 'get-filter',
+      payload: { filename }
+    } as AssetsProviderIPCAPI),
+    ipcRenderer.invoke('assets-provider', {
+      command: 'get-filter-path',
+      payload: { filename }
+    } as AssetsProviderIPCAPI)
+  ])
+    .then(([ data, path ]) => {
+      if (availableFilters.value[currentItem.value] !== filename) {return}
+      filterPath.value = path
       editorContents.value = data
       CodeEditor.value?.markClean()
       lastLoadedEditorContents.value = data
@@ -224,6 +234,7 @@ function saveFilter (): void {
     }
   } as AssetsProviderIPCAPI)
     .then(() => {
+      CodeEditor.value?.notifySaved(editorContents.value)
       lastLoadedEditorContents.value = editorContents.value
       savingStatus.value = trans('Saved!')
       setTimeout(() => { savingStatus.value = '' }, 1000)

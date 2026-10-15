@@ -1,5 +1,8 @@
-import { LSPClient, LSPPlugin, languageServerExtensions, type Transport } from '@codemirror/lsp-client'
-import type { EditorView, ViewUpdate } from '@codemirror/view'
+import {
+  LSPClient, LSPPlugin, serverCompletion, hoverTooltips, signatureHelp, serverDiagnostics,
+  closeReferencePanel, type Transport
+} from '@codemirror/lsp-client'
+import { keymap, type EditorView, type ViewUpdate } from '@codemirror/view'
 import DOMPurify from 'dompurify'
 import { parseLanguageServers, type LanguageServerConfig } from './config'
 import { MultiServerTransport } from './transport'
@@ -186,7 +189,9 @@ export class EditorSession {
           for (const consumer of this.consumers.values()) {if (consumer.uri === params.uri) {consumer.diagnostics?.publish(params)}}
           return true
         } }
-      }, ...languageServerExtensions() ]
+      }, serverCompletion(), hoverTooltips(),
+      signatureHelp(), serverDiagnostics(),
+      keymap.of([{ key: 'Escape', run: closeReferencePanel }]) ]
     }).connect(this.transport)
     await this.client.initializing
   }

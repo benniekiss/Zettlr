@@ -41,7 +41,8 @@ export type EditorShortcutName = 'autocomplete-invoke'|'autocomplete-accept'|
   'tr-double-quotes-to-single'|'tr-single-quotes-to-double'|'tr-title-case'|
   'tr-emdash-add-spaces'|'tr-emdash-remove-spaces'|
   // Miscellaneous
-  'misc-toggle-tab-focus'
+  'misc-toggle-tab-focus'|'lsp-format-document'|'lsp-rename'|
+  'lsp-go-to-definition'|'lsp-find-references'
 
 /**
  * Structure of a custom editor shortcut
@@ -98,7 +99,11 @@ export const defaultKeybindings: Record<EditorShortcutName, DefaultShortcut> = {
   'tr-strip-duplicate-spaces': {},
   'tr-title-case': {},
   'tr-zap-gremlins': {},
-  'misc-toggle-tab-focus': { key: 'Ctrl-m', mac: 'Shift-Alt-m' }
+  'misc-toggle-tab-focus': { key: 'Ctrl-m', mac: 'Shift-Alt-m' },
+  'lsp-format-document': { key: 'Shift-Alt-f' },
+  'lsp-rename': { key: 'F2' },
+  'lsp-go-to-definition': { key: 'F12' },
+  'lsp-find-references': { key: 'Shift-F12' }
 }
 
 /**

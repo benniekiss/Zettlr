@@ -26,11 +26,11 @@ export const tagsUpdateField = StateField.define<Completion[]>({
   create (_state) {
     return []
   },
-  update (val, transaction) {
+  update (value, transaction) {
     for (const effect of transaction.effects) {
       if (effect.is(tagsUpdate)) {
         // Convert the entries into completion objects
-        return effect.value
+        value = effect.value
           // Remove tags with spaces, as they cannot be applied within documents
           .filter(entry => !entry.name.includes(' '))
           .map(entry => {
@@ -43,7 +43,8 @@ export const tagsUpdateField = StateField.define<Completion[]>({
           })
       }
     }
-    return val
+
+    return value
   }
 })
 

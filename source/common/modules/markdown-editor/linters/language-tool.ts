@@ -134,7 +134,8 @@ export const languageToolState = StateField.define<LanguageToolStateField>({
         value.disabledRules = e.value.disabledRules ?? value.disabledRules
       }
     }
-    return value
+
+    return { ...value }
   }
 })
 

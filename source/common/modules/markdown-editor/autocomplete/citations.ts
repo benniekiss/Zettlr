@@ -27,11 +27,11 @@ export const citekeyUpdateField = StateField.define<Completion[]>({
   create (_state) {
     return []
   },
-  update (val, transaction) {
+  update (value, transaction) {
     for (const effect of transaction.effects) {
       if (effect.is(citekeyUpdate)) {
         // Convert the citationentries into completion objects
-        return effect.value.map(entry => {
+        value = effect.value.map(entry => {
           return {
             label: entry.citekey,
             info: entry.displayText,
@@ -40,7 +40,7 @@ export const citekeyUpdateField = StateField.define<Completion[]>({
         })
       }
     }
-    return val
+    return value
   }
 })
 

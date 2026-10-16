@@ -39,7 +39,7 @@ export function getImportExportFields (): PreferencesFieldset[] {
     {
       title: trans('Pandoc download'),
       group: PreferencesGroups.ImportExport,
-      infoString: trans('Pandoc is cached for offline use. On first use each session, custom sources are checked for updates when the server provides an ETag or Last-Modified value. Changing the URL applies to the next import or export.'),
+      infoString: trans('Pandoc is cached for offline use. Use Check for updates to download and verify the configured source again. Changing the URL applies to the next import or export.'),
       fields: [
         {
           type: 'text',

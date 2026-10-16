@@ -7,7 +7,7 @@ import { pathToFileURL } from 'url'
 import YAML from 'yaml'
 import { configurePandocWasm, runPandoc } from '../source/app/util/run-pandoc'
 import { validatePandocWasmRuntime } from '../source/app/util/pandoc-reactor'
-import { downloadPandocWasm } from '../source/app/util/download-pandoc-wasm'
+import { ensurePandocModule } from '../source/app/util/download-pandoc-wasm'
 import { plugin as exportDocument } from '../source/app/service-providers/commands/exporter/default-exporter'
 
 // Run explicitly against a downloaded module, without network access in tests.
@@ -20,7 +20,7 @@ integration('Pandoc WASM integration', function () {
   before(async function () {
     cacheDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'zettlr-pandoc-module-'))
     const source = pathToFileURL(path.resolve(process.env.PANDOC_TEST_WASM as string)).href
-    configurePandocWasm(async () => await downloadPandocWasm(source, cacheDirectory))
+    configurePandocWasm(async () => await ensurePandocModule({ url: source }, cacheDirectory))
   })
 
   after(async function () {

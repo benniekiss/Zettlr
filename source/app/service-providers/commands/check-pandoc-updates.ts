@@ -1,8 +1,8 @@
 import { app } from 'electron'
 import path from 'path'
 import type { AppServiceContainer } from 'source/app/app-service-container'
-import { DEFAULT_PANDOC_WASM_URL } from '@common/pandoc-util/pandoc-wasm-url'
-import { checkPandocWasmUpdates } from '../../util/download-pandoc-wasm'
+import { resolvePandocModuleSource } from '@common/pandoc-util/pandoc-module-source'
+import { updatePandocModule } from '../../util/download-pandoc-wasm'
 import ZettlrCommand from './zettlr-command'
 
 export default class CheckPandocUpdates extends ZettlrCommand {
@@ -11,15 +11,9 @@ export default class CheckPandocUpdates extends ZettlrCommand {
   }
 
   async run (): Promise<{ status?: string, error?: string }> {
-    const config = this._app.config.get().export
-    const url = config.pandocWasmUrl.trim()
     try {
-      const status = await checkPandocWasmUpdates(
-        url || DEFAULT_PANDOC_WASM_URL,
-        path.join(app.getPath('userData'), 'pandoc-wasm'),
-        undefined,
-        url === '' ? undefined : config.pandocWasmSha256
-      )
+      const source = resolvePandocModuleSource(this._app.config.get().export)
+      const status = await updatePandocModule(source, path.join(app.getPath('userData'), 'pandoc-wasm'))
       return { status }
     } catch (error) {
       this._app.log.error('Could not check for Pandoc WASM updates.', error)

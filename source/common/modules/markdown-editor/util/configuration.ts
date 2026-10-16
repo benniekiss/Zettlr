@@ -174,7 +174,13 @@ export const configField = StateField.define<EditorConfiguration>({
         value = safeAssign(effect.value, value)
         // Perform some housekeeping
         // Make sure the replacements are sorted longest-key-first
-        value.autocorrect.replacements.sort((a, b) => b.key.length - a.key.length)
+        value = {
+          ...value,
+          autocorrect: {
+            ...value.autocorrect,
+            replacements: [...value.autocorrect.replacements].sort((a, b) => b.key.length - a.key.length)
+          }
+        }
       }
     }
 

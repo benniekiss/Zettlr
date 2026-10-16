@@ -172,17 +172,16 @@ export const snippetsUpdateField = StateField.define<SnippetStateField>({
         // up the fact that this range doesn't exist anymore after the user
         // starts typing, which re-evaluates the length of the activeRanges
         // array.)
-        let activeSelections = value.activeSelections
-        activeSelections.shift()
+        let activeSelections = value.activeSelections.slice(1)
 
-        let association = getAssociation(value.activeSelections, transaction.selection?.main.from)
+        let association = getAssociation(activeSelections, transaction.selection?.main.from)
 
         return { ...value, activeSelections, association }
       }
     }
 
     if (!transaction.docChanged || value.activeSelections.length === 0) {
-      return { ...value }
+      return value
     }
 
     // This monstrosity ensures that our ranges stay in sync while the user types

@@ -1,5 +1,7 @@
-// Shared by the main and renderer builds so preferences and downloads agree.
-function getPandocBuildDefines (env = process.env) {
+const defaults = require('../source/common/pandoc-util/pandoc-wasm-defaults.json')
+
+// Resolve ordinary settings before deriving Webpack's serialized constants.
+function getPandocBuildSettings (env = process.env) {
   const url = env.PANDOC_WASM_URL?.trim() ?? ''
   const sha256 = env.PANDOC_WASM_SHA256?.trim().toLowerCase() ?? ''
   if (url !== '' && url !== 'none' && ![ 'https:', 'file:' ].includes(new URL(url).protocol)) {
@@ -9,9 +11,17 @@ function getPandocBuildDefines (env = process.env) {
     throw new Error('PANDOC_WASM_SHA256 must contain exactly 64 hexadecimal characters.')
   }
   return {
-    __PANDOC_WASM_URL__: JSON.stringify(url),
-    __PANDOC_WASM_SHA256__: JSON.stringify(sha256)
+    url: url === 'none' ? '' : url || defaults.url,
+    sha256: url === 'none' || sha256 === 'none' ? undefined : sha256 || defaults.sha256
   }
 }
 
-module.exports = { getPandocBuildDefines }
+function getPandocBuildDefines (env = process.env) {
+  const settings = getPandocBuildSettings(env)
+  return {
+    __PANDOC_WASM_URL__: JSON.stringify(settings.url),
+    __PANDOC_WASM_SHA256__: JSON.stringify(settings.sha256 ?? '')
+  }
+}
+
+module.exports = { getPandocBuildSettings, getPandocBuildDefines }

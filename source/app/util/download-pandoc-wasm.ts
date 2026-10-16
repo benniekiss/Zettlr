@@ -2,33 +2,24 @@ import { createHash, randomUUID } from 'crypto'
 import { promises as fs } from 'fs'
 import path from 'path'
 import ZIP from 'adm-zip'
-import { DEFAULT_PANDOC_WASM_SHA256, DEFAULT_PANDOC_WASM_URL } from '@common/pandoc-util/pandoc-wasm-url'
+import type { PandocModuleSource } from '@common/pandoc-util/pandoc-module-source'
 import { InvalidPandocModuleError, validatePandocWasmRuntime } from './pandoc-reactor'
-import { downloadPandocHttp, inspectPandocHttp, MAX_PANDOC_DOWNLOAD_BYTES, type SourceMetadata } from './pandoc-download-http'
+import { downloadPandocHttp, MAX_PANDOC_DOWNLOAD_BYTES } from './pandoc-download-http'
 
-interface DownloadedModule extends SourceMetadata {
-  bytes: Buffer
-}
-type Download = (url: URL) => Promise<Buffer|DownloadedModule>
-type Inspect = (url: URL) => Promise<SourceMetadata>
+type Download = (url: URL) => Promise<Buffer>
 type UpdateStatus = 'downloaded'|'updated'|'unchanged'
 interface CachedModule {
   filename: string
   status: UpdateStatus
 }
-const pending = new Map<string, Promise<CachedModule>>()
-const validated = new Map<string, string>()
-const checked = new Set<string>()
-// Custom builds with debug information can exceed 128 MiB. Keep downloads
-// bounded while allowing substantially larger modules than the stock release.
 const MAX_DOWNLOAD_BYTES = MAX_PANDOC_DOWNLOAD_BYTES
 
 /** Check before allocating, and bound reads if the opened file grows. */
-async function readLimitedFile (filename: string|URL, description: string, limit = MAX_DOWNLOAD_BYTES): Promise<Buffer> {
+async function readLimitedFile (filename: string|URL, description: string): Promise<Buffer> {
   const file = await fs.open(filename, 'r')
   try {
-    const error = () => new Error(`${description} is larger than the ${limit === MAX_DOWNLOAD_BYTES ? '512 MiB' : '16 KiB'} safety limit.`)
-    if ((await file.stat()).size > limit) {
+    const error = () => new Error(`${description} is larger than the 512 MiB safety limit.`)
+    if ((await file.stat()).size > MAX_DOWNLOAD_BYTES) {
       throw error()
     }
     const chunks: Buffer[] = []
@@ -36,7 +27,7 @@ async function readLimitedFile (filename: string|URL, description: string, limit
     for await (const chunk of file.createReadStream({ autoClose: false })) {
       const bytes = chunk as Buffer
       size += bytes.length
-      if (size > limit) {
+      if (size > MAX_DOWNLOAD_BYTES) {
         throw error()
       }
       chunks.push(bytes)
@@ -47,21 +38,10 @@ async function readLimitedFile (filename: string|URL, description: string, limit
   }
 }
 
-async function inspectSource (url: URL): Promise<SourceMetadata> {
-  if (url.protocol === 'file:') {
-    const stat = await fs.stat(url, { bigint: true })
-    return { lastModified: `${stat.mtimeNs}:${stat.size}` }
-  }
-  return await inspectPandocHttp(url)
-}
-
-async function download (url: URL): Promise<DownloadedModule> {
-  if (url.protocol === 'file:') {
-    const metadata = await inspectSource(url)
-    return { ...metadata, bytes: await readLimitedFile(url, 'The Pandoc download') }
-  }
-
-  return await downloadPandocHttp(url)
+async function downloadSource (url: URL): Promise<Buffer> {
+  return url.protocol === 'file:'
+    ? await readLimitedFile(url, 'The Pandoc download')
+    : await downloadPandocHttp(url)
 }
 
 function hasWasmHeader (bytes: Buffer): boolean {
@@ -92,201 +72,121 @@ function extractWasm (bytes: Buffer): Buffer {
   return wasm
 }
 
-/** Cache by source URL, sharing concurrent downloads and committing atomically. */
-export async function downloadPandocWasm (
-  urlString: string,
-  cacheDirectory: string,
-  request: Download = download,
-  sha256?: string|null,
-  inspect: Inspect = inspectSource,
-  bundledModule?: string
-): Promise<string> {
-  return (await resolvePandocWasm(urlString, cacheDirectory, request, sha256, inspect, false, bundledModule)).filename
-}
-
-/** Manual checks bypass the session guard and download when validators are absent. */
-export async function checkPandocWasmUpdates (
-  urlString: string,
-  cacheDirectory: string,
-  request: Download = download,
-  sha256?: string,
-  inspect: Inspect = inspectSource
-): Promise<UpdateStatus> {
-  return (await resolvePandocWasm(urlString, cacheDirectory, request, sha256, inspect, true)).status
-}
-
-async function resolvePandocWasm (
-  urlString: string,
-  cacheDirectory: string,
-  request: Download,
-  sha256: string|null|undefined,
-  inspect: Inspect,
-  manual: boolean,
-  bundledModule?: string
-): Promise<CachedModule> {
-  if (urlString.trim() === '') {
+function normalizeSource (source: PandocModuleSource): PandocModuleSource {
+  if (source.url.trim() === '') {
     throw new Error('No Pandoc WASM download URL is configured. Set one in Preferences → Import/Export → Pandoc download.')
   }
-  const url = new URL(urlString.trim())
+  const url = new URL(source.url.trim())
   if (![ 'https:', 'file:' ].includes(url.protocol)) {
     throw new Error('The Pandoc download URL must use HTTPS or file.')
   }
-  const configuredSha256 = sha256?.trim().toLowerCase()
-  if (configuredSha256 !== undefined && configuredSha256 !== '' && !/^[a-f0-9]{64}$/.test(configuredSha256)) {
+  const configuredHash = source.sha256?.trim().toLowerCase()
+  const sha256 = configuredHash === '' ? undefined : configuredHash
+  if (sha256 !== undefined && !/^[a-f0-9]{64}$/.test(sha256)) {
     throw new Error('The Pandoc SHA-256 hash must contain exactly 64 hexadecimal characters.')
   }
-  // Build tooling can explicitly omit the built-in pin with null.
-  const expectedSha256 = sha256 === null ? undefined : configuredSha256 !== undefined && configuredSha256 !== ''
-    ? configuredSha256
-    : url.href === DEFAULT_PANDOC_WASM_URL ? DEFAULT_PANDOC_WASM_SHA256 || undefined : undefined
-  // A URL/hash pair identifies a distinct expected module and must not share
-  // cache entries or in-flight downloads with a different hash configuration.
-  const cacheKey = expectedSha256 === undefined || url.href === DEFAULT_PANDOC_WASM_URL && expectedSha256 === DEFAULT_PANDOC_WASM_SHA256
-    ? url.href
-    : `${url.href}\0${expectedSha256}`
-  const filename = `${createHash('sha256').update(cacheKey).digest('hex')}.wasm`
-  const destination = path.join(cacheDirectory, filename)
-  const existing = pending.get(destination)
-  if (existing !== undefined) {
-    if (!manual) {
-      return await existing
-    }
-    // A manual check must not be satisfied by an automatic cache lookup.
-    await existing.catch(() => {})
-    return await resolvePandocWasm(urlString, cacheDirectory, request, sha256, inspect, manual, bundledModule)
-  }
+  return { ...source, url: url.href, sha256 }
+}
 
-  const task = (async (): Promise<CachedModule> => {
-    let cachedDigest: string|undefined
+/** Internal construction boundary for isolated state and test transport injection. */
+export function createPandocModuleManager ({ download = downloadSource }: { download?: Download } = {}) {
+  const pending = new Map<string, { update: boolean, task: Promise<CachedModule> }>()
+  const validated = new Map<string, string>()
+
+  async function readCachedDigest (filename: string, expectedSha256?: string): Promise<string|undefined> {
     try {
-      const cached = await readLimitedFile(destination, 'The cached Pandoc WASM module')
-      const digest = createHash('sha256').update(cached).digest('hex')
-      const previous = validated.get(destination)
-      // Once this process has validated a cache entry, a changed digest is
-      // tampering or corruption, not a new candidate to trust based on exports.
+      const bytes = await readLimitedFile(filename, 'The cached Pandoc WASM module')
+      const digest = createHash('sha256').update(bytes).digest('hex')
+      const previous = validated.get(filename)
+      // Changed bytes must be replaced from the source, even if they still expose
+      // a working API. Keep hashing on every use to detect changes within a session.
       if ((previous === undefined || previous === digest) && (expectedSha256 === undefined || digest === expectedSha256)) {
         if (previous !== digest) {
-          // Compilation, API checks, and initialization belong to the
-          // isolated runtime, including the first cache use each session.
-          await validatePandocWasmRuntime(destination)
+          await validatePandocWasmRuntime(filename)
         }
-        validated.set(destination, digest)
-        cachedDigest = digest
-      }
-      if (cachedDigest === undefined) {
-        validated.delete(destination)
+        validated.set(filename, digest)
+        return digest
       }
     } catch (error: unknown) {
       if (!(error instanceof InvalidPandocModuleError) && (error as NodeJS.ErrnoException).code !== 'ENOENT') {
         throw error
       }
     }
+    validated.delete(filename)
+  }
 
-    const metadataPath = `${destination}.json`
-    if (cachedDigest !== undefined) {
-      // A pinned module cannot advance without changing the configured hash.
-      if (!manual && (checked.has(destination) || expectedSha256 !== undefined)) {
-        return { filename: destination, status: 'unchanged' }
-      }
-      checked.add(destination)
-      try {
-        let previous: SourceMetadata = {}
-        try {
-          const saved: unknown = JSON.parse((await readLimitedFile(metadataPath, 'Pandoc cache metadata', 16 * 1024)).toString('utf8'))
-          if (saved !== null && typeof saved === 'object') {
-            const data = saved as Record<string, unknown>
-            if (data.digest === cachedDigest) {
-              previous = {
-                etag: typeof data.etag === 'string' ? data.etag : undefined,
-                lastModified: typeof data.lastModified === 'string' ? data.lastModified : undefined
-              }
-            }
-          }
-        } catch { /* Missing or invalid metadata cannot establish freshness. */ }
-        const current = await inspect(url)
-        const hasValidators = current.etag !== undefined || current.lastModified !== undefined
-        const unchanged = current.etag !== undefined && previous.etag !== undefined
-          ? current.etag === previous.etag
-          : current.lastModified !== undefined && previous.lastModified !== undefined && current.lastModified === previous.lastModified
-        if (unchanged || (!manual && !hasValidators)) {
-          return { filename: destination, status: 'unchanged' }
-        }
-      } catch (error) {
-        if (manual) {
-          throw error
-        }
-        console.warn('Could not check for Pandoc WASM updates; using the cached module.', error)
-        return { filename: destination, status: 'unchanged' }
-      }
+  async function installCandidate (source: PandocModuleSource, destination: string, cachedDigest: string|undefined, update: boolean): Promise<CachedModule> {
+    const bytes = !update && source.bundledPath !== undefined
+      ? await readLimitedFile(source.bundledPath, 'The bundled Pandoc WASM module')
+      : await download(new URL(source.url))
+    const wasm = extractWasm(bytes)
+    const digest = createHash('sha256').update(wasm).digest('hex')
+    if (source.sha256 !== undefined && digest !== source.sha256) {
+      throw new Error('The downloaded Pandoc WASM module failed its integrity check.')
     }
-
-    let fetched: Buffer|DownloadedModule
-    let wasm: Buffer
-    let digest: string
-    try {
-      // Seed only an absent cache. Updates continue to use the configured source.
-      fetched = cachedDigest === undefined && bundledModule !== undefined
-        ? await readLimitedFile(bundledModule, 'The bundled Pandoc WASM module')
-        : await request(url)
-      wasm = extractWasm(Buffer.isBuffer(fetched) ? fetched : fetched.bytes)
-      digest = createHash('sha256').update(wasm).digest('hex')
-      if (expectedSha256 !== undefined && digest !== expectedSha256) {
-        throw new Error('The downloaded Pandoc WASM module failed its integrity check.')
+    if (digest !== cachedDigest) {
+      await fs.mkdir(path.dirname(destination), { recursive: true })
+      const temporary = `${destination}.${randomUUID()}.tmp`
+      try {
+        await fs.writeFile(temporary, wasm, { flag: 'wx' })
+        // Initialization and a real version query must succeed before replacing
+        // a working installation. A matching export table alone is insufficient.
+        await validatePandocWasmRuntime(temporary)
+        await fs.rename(temporary, destination)
+      } finally {
+        await fs.rm(temporary, { force: true }).catch(error => {
+          console.warn('Could not remove a temporary Pandoc WASM module.', error)
+        })
       }
-      if (digest !== cachedDigest) {
-        await fs.mkdir(cacheDirectory, { recursive: true })
-        const temporary = path.join(cacheDirectory, `${filename}.${randomUUID()}.tmp`)
-        try {
-          await fs.writeFile(temporary, wasm, { flag: 'wx' })
-          // Never replace a working cache with a module that merely has the
-          // right export names. Initialization and a real query must succeed.
-          await validatePandocWasmRuntime(temporary)
-          await fs.rename(temporary, destination)
-        } finally {
-          await fs.rm(temporary, { force: true }).catch(error => {
-            console.warn('Could not remove a temporary Pandoc WASM module.', error)
-          })
-        }
-      }
-    } catch (error) {
-      if (manual || cachedDigest === undefined) {
-        throw error
-      }
-      console.warn('Could not update Pandoc WASM; using the cached module.', error)
-      return { filename: destination, status: 'unchanged' }
     }
     validated.set(destination, digest)
-    checked.add(destination)
-    const metadata = Buffer.isBuffer(fetched) ? {} : { etag: fetched.etag, lastModified: fetched.lastModified }
-    const metadataTemporary = `${metadataPath}.${randomUUID()}.tmp`
-    try {
-      if (metadata.etag !== undefined || metadata.lastModified !== undefined) {
-        await fs.writeFile(metadataTemporary, JSON.stringify({ ...metadata, digest }), { flag: 'wx' })
-        await fs.rename(metadataTemporary, metadataPath)
-      } else {
-        await fs.rm(metadataPath, { force: true })
-      }
-    } catch (error) {
-      // Metadata is an optimization; a fully validated module remains usable.
-      console.warn('Could not save Pandoc WASM update metadata.', error)
-    } finally {
-      await fs.rm(metadataTemporary, { force: true }).catch(error => {
-        console.warn('Could not remove temporary Pandoc WASM metadata.', error)
-      })
-    }
     return { filename: destination, status: cachedDigest === undefined ? 'downloaded' : digest === cachedDigest ? 'unchanged' : 'updated' }
-  })()
-  pending.set(destination, task)
-  try {
-    return await task
-  } finally {
-    pending.delete(destination)
+  }
+
+  async function resolve (input: PandocModuleSource, cacheDirectory: string, update: boolean): Promise<CachedModule> {
+    const source = normalizeSource(input)
+    const cacheKey = source.sha256 === undefined ? source.url : `${source.url}\0${source.sha256}`
+    const key = createHash('sha256').update(cacheKey).digest('hex')
+    const destination = path.resolve(cacheDirectory, `${key}.wasm`)
+    // Share matching jobs. A manual update must still fetch the source after an
+    // in-flight cache lookup or bundled installation has completed.
+    let existing = pending.get(destination)
+    while (existing !== undefined) {
+      if (!update || existing.update) {
+        return await existing.task
+      }
+      await existing.task.catch(() => {})
+      existing = pending.get(destination)
+    }
+    const task = (async (): Promise<CachedModule> => {
+      const digest = await readCachedDigest(destination, source.sha256)
+      if (!update && digest !== undefined) {
+        return { filename: destination, status: 'unchanged' }
+      }
+      return await installCandidate(source, destination, digest, update)
+    })()
+    pending.set(destination, { update, task })
+    try {
+      return await task
+    } finally {
+      pending.delete(destination)
+    }
+  }
+
+  return {
+    /** Resolve a valid cached module, installing the bundled or remote source if needed. */
+    async ensurePandocModule (source: PandocModuleSource, cacheDirectory: string): Promise<string> {
+      return (await resolve(source, cacheDirectory, false)).filename
+    },
+    /** Always fetch the configured source; retain the installed module on failure. */
+    async updatePandocModule (source: PandocModuleSource, cacheDirectory: string): Promise<UpdateStatus> {
+      return (await resolve(source, cacheDirectory, true)).status
+    },
+    async invalidatePandocWasm (filename: string): Promise<void> {
+      validated.delete(filename)
+      await fs.rm(filename, { force: true })
+    }
   }
 }
 
-/** Remove a cached module that fails compile, API, or runtime validation. */
-export async function invalidatePandocWasm (filename: string): Promise<void> {
-  validated.delete(filename)
-  checked.delete(filename)
-  await Promise.all([ fs.rm(filename, { force: true }), fs.rm(`${filename}.json`, { force: true }) ])
-}
+export const { ensurePandocModule, updatePandocModule, invalidatePandocWasm } = createPandocModuleManager()

@@ -499,16 +499,14 @@ while the URL is blank is ignored.
 Zettlr bundles its default module and copies it into the user data cache on
 first use, so the first import or export works offline. Custom sources are
 downloaded on first use and cached there too. Changing the URL selects a separate cache entry
-on the next import or export; no restart is needed. On first use each app
-session, unpinned custom sources are checked for changes using ETag or
-Last-Modified headers. Servers without these headers keep using the cached
-module. Preferences → Import/Export → Check for updates bypasses the session
-check and redownloads when the server supplies no validators. Local file URLs
-use file modification time and size. A configured SHA-256 hash continues to pin
-the module. Failed automatic checks use the valid cached module; manual errors
-are shown in preferences. Replacements must compile, initialize, and return a
-valid Pandoc version before updating the cache. Failed automatic replacements,
-including cache-write failures, keep using the previously validated module.
+on the next import or export; no restart is needed. Cached modules are reused
+without checking the source automatically. Preferences → Import/Export → Check
+for updates downloads the configured source again and compares the extracted
+module's SHA-256 digest with the installed copy. This also works for local file
+URLs. A configured hash continues to pin the module; to advance a pinned source,
+change its hash too. Replacements must compile, initialize, and return a valid
+Pandoc version before updating the cache. Failed checks or replacements report
+an error and preserve the previously installed module.
 
 Filesystem access follows the OS account's permissions, like native Pandoc.
 Lua readers and filters can read resources and write side-effect files outside

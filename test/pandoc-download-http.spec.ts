@@ -1,5 +1,5 @@
 import assert from 'assert'
-import { downloadPandocHttp, inspectPandocHttp } from '../source/app/util/pandoc-download-http'
+import { downloadPandocHttp } from '../source/app/util/pandoc-download-http'
 
 describe('Pandoc HTTP transport', function () {
   const originalFetch = globalThis.fetch
@@ -9,7 +9,7 @@ describe('Pandoc HTTP transport', function () {
     globalThis.fetch = async (input, init) => await handler(input instanceof Request ? input : new Request(input, init))
   }
 
-  it('streams the response and records its update validators', async function () {
+  it('streams the response', async function () {
     respond(request => {
       assert.strictEqual(request.method, 'GET')
       assert.strictEqual(request.redirect, 'manual')
@@ -19,12 +19,10 @@ describe('Pandoc HTTP transport', function () {
           controller.enqueue(Buffer.from('second'))
           controller.close()
         }
-      }), { headers: { etag: '"version"', 'last-modified': 'Tue, 13 Oct 2026 12:00:00 GMT' } })
+      }))
     })
     const result = await downloadPandocHttp(new URL('https://example.org/pandoc.wasm'))
-    assert.strictEqual(result.bytes.toString(), 'firstsecond')
-    assert.strictEqual(result.etag, '"version"')
-    assert.strictEqual(result.lastModified, 'Tue, 13 Oct 2026 12:00:00 GMT')
+    assert.strictEqual(result.toString(), 'firstsecond')
   })
 
   it('follows relative HTTPS redirects and cancels their unused bodies', async function () {
@@ -106,22 +104,15 @@ describe('Pandoc HTTP transport', function () {
     assert.strictEqual(signal?.aborted, true)
   })
 
-  it('retries a transient GET failure once but does not retry HEAD checks', async function () {
+  it('retries a transient GET failure once', async function () {
     let requests = 0
     respond(() => {
       requests++
       return new Response(requests === 1 ? 'Temporary failure' : 'module', { status: requests === 1 ? 503 : 200 })
     })
-    assert.strictEqual((await downloadPandocHttp(new URL('https://example.org/module'))).bytes.toString(), 'module')
+    assert.strictEqual((await downloadPandocHttp(new URL('https://example.org/module'))).toString(), 'module')
     assert.strictEqual(requests, 2)
-    requests = 0
-    respond(request => {
-      requests++
-      assert.strictEqual(request.method, 'HEAD')
-      return new Response(null, { status: 503 })
-    })
-    await assert.rejects(inspectPandocHttp(new URL('https://example.org/module')), /HTTP 503/)
-    assert.strictEqual(requests, 1)
+
   })
 
   it('reports HTTP download errors instead of treating an error page as a module', async function () {

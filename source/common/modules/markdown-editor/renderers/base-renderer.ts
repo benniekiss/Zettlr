@@ -136,22 +136,27 @@ function renderWidgets (
  *                                          return a widget to render in its
  *                                          place.
  *
+ * @param   {boolean}     refreshLayout     Also refresh on configuration and
+ *                                          geometry changes (for sized widgets).
+ *
  * @return  {ViewPlugin}                    The instantiated ViewPlugin
  */
 export function renderInlineWidgets (
   shouldHandleNode: (node: SyntaxNodeRef) => boolean,
-  createWidget: (state: EditorState, node: SyntaxNodeRef) => WidgetType|undefined
+  createWidget: (state: EditorState, node: SyntaxNodeRef, view: EditorView) => WidgetType|undefined,
+  refreshLayout: boolean = false
 ) {
   const plugin = ViewPlugin.fromClass(class {
     decorations: DecorationSet
 
     constructor (view: EditorView) {
-      this.decorations = renderWidgets(view.state, view.visibleRanges, shouldHandleNode, createWidget)
+      this.decorations = renderWidgets(view.state, view.visibleRanges, shouldHandleNode, (state, node) => createWidget(state, node, view))
     }
 
     update (update: ViewUpdate): void {
-      if (update.docChanged || update.viewportChanged || update.selectionSet) {
-        this.decorations = renderWidgets(update.view.state, update.view.visibleRanges, shouldHandleNode, createWidget)
+      if (update.docChanged || update.viewportChanged || update.selectionSet ||
+        (refreshLayout && (update.geometryChanged || update.startState.field(configField) !== update.state.field(configField)))) {
+        this.decorations = renderWidgets(update.view.state, update.view.visibleRanges, shouldHandleNode, (state, node) => createWidget(state, node, update.view))
       }
     }
   }, {
@@ -187,8 +192,17 @@ export function renderBlockWidgets (
     create (state: EditorState) {
       return renderWidgets(state, [], shouldHandleNode, createWidget)
     },
-    update (oldDecoSet, transactions) {
-      return renderWidgets(transactions.state, [], shouldHandleNode, createWidget)
+    update (oldDecoSet, transaction) {
+      const { startState, state } = transaction
+      // Background parsing can change the tree without changing the document.
+      // Selection changes must also rebuild, since selected widgets show syntax.
+      if (!transaction.docChanged &&
+        startState.selection.eq(state.selection) &&
+        syntaxTree(startState) === syntaxTree(state) &&
+        startState.field(configField, false) === state.field(configField, false)) {
+        return oldDecoSet
+      }
+      return renderWidgets(state, [], shouldHandleNode, createWidget)
     },
     provide: f => EditorView.decorations.from(f)
   })

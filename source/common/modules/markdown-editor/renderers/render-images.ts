@@ -34,16 +34,11 @@ function isDataUrl (url: string): boolean {
   return /^data:[a-zA-Z0-9/;=]+(?:;base64){0,1},.+/.test(url)
 }
 
-/**
- * This map is a cache that holds the actual (natural) sizes of the images we
- * have loaded across the app, identified by their absolute paths. These numbers
- * will be updated as images load, and will be used by the image widgets to
- * report a (likely) height which will help CodeMirror render scroll bars etc.
- * much more accurately. NOTE: The image height cache caches the EXACT height of
- * the rendered widget at the time of caching, NOT the natural image's height!
- * Also, this cache will be kept updated whenever an image is reloaded.
- */
-const IMAGE_HEIGHT_CACHE = new Map<string, number>()
+// Intrinsic dimensions survive editor resizes and different Markdown constraints.
+// Bound the cache, since data URLs and documents may otherwise accumulate forever.
+const imageObservers = new WeakMap<HTMLElement, ResizeObserver>()
+const IMAGE_DIMENSIONS = new Map<string, { width: number, height: number }>()
+const IMAGE_HEIGHT_CACHE = new WeakMap<EditorView, Map<string, number>>()
 
 /**
  * Resolves the actual image URL to load, provided the current file's location.
@@ -82,17 +77,32 @@ class ImageWidget extends WidgetType {
     readonly imageUrl: string,
     readonly resolvedImageUrl: string,
     readonly altText: string,
-    readonly data: ParsedPandocAttributes
+    readonly data: ParsedPandocAttributes,
+    readonly view: EditorView,
+    readonly previewWidth: number,
+    readonly previewHeight: number
   ) {
     super()
   }
 
   eq (other: ImageWidget) {
-    return this.imageTitle === other.imageTitle && this.imageUrl === other.imageUrl && this.altText === other.altText
+    return this.node.from === other.node.from && this.node.to === other.node.to && this.sameContent(other)
+  }
+
+  private sameContent (other: ImageWidget): boolean {
+    return this.imageTitle === other.imageTitle && this.imageUrl === other.imageUrl &&
+      this.resolvedImageUrl === other.resolvedImageUrl && this.altText === other.altText &&
+      JSON.stringify(this.data) === JSON.stringify(other.data) &&
+      Object.is(this.previewWidth, other.previewWidth) && Object.is(this.previewHeight, other.previewHeight)
   }
 
   get estimatedHeight (): number {
-    return IMAGE_HEIGHT_CACHE.get(this.resolvedImageUrl) ?? -1
+    return IMAGE_HEIGHT_CACHE.get(this.view)?.get(this.heightCacheKey) ?? -1
+  }
+
+  private get heightCacheKey (): string {
+    return JSON.stringify([ this.resolvedImageUrl, this.data.properties?.width,
+      this.data.properties?.height, this.previewWidth, this.previewHeight ])
   }
 
   toDOM (view: EditorView): HTMLElement {
@@ -129,12 +139,26 @@ class ImageWidget extends WidgetType {
     // IMG
     //////////////////////////////////////////
     const img = document.createElement('img')
-    // We need to apply the same max width/height styles to the image as to the
-    // figure. Otherwise the image will be cropped.
-    img.style.maxWidth = maxWidth
+    // The figure applies the percentage width limit. Applying it again to the
+    // image would constrain it twice.
+    img.style.maxWidth = '100%'
+    img.style.height = 'auto'
     img.style.maxHeight = maxHeight
     img.alt = this.altText
     img.title = this.imageTitle
+    const reserveSpace = (width: number, height: number) => {
+      img.width = width
+      img.height = height
+      // Reserve the same aspect ratio while loading, including the height cap.
+      // Percentage heights depend on the containing block, so leave those to CSS.
+      const heightBound = maxHeight.includes('%') ? '' : `, calc(${maxHeight} * ${width / height})`
+      img.style.width = heightBound === '' ? `${width}px` : `min(${width}px${heightBound})`
+    }
+    const dimensions = IMAGE_DIMENSIONS.get(this.resolvedImageUrl)
+    if (dimensions !== undefined) {
+      reserveSpace(dimensions.width, dimensions.height)
+    }
+    img.decoding = 'async'
 
     // Store some crucial information on the node itself
     img.dataset.from = String(this.node.from)
@@ -149,6 +173,9 @@ class ImageWidget extends WidgetType {
 
     // Display a replacement image in case the correct one is not found
     img.onerror = () => {
+      img.style.removeProperty('width')
+      img.removeAttribute('width')
+      img.removeAttribute('height')
       img.src = img404
       caption.textContent = trans('Image not found: %s', img.dataset.originalUrl)
       caption.contentEditable = 'false'
@@ -166,23 +193,15 @@ class ImageWidget extends WidgetType {
         figure.appendChild(openExternally)
       }
 
-      const { width, height } = figure.getBoundingClientRect()
-
-      // Determine if the image is wide enough to display the surrounding elements
-      if (width >= 256 && height >= 128) {
-        size.style.display = ''
-        caption.style.display = ''
-        openExternally.style.display = ''
-      } else {
-        size.style.display = 'none'
-        caption.style.display = 'none'
-        openExternally.style.display = 'none'
+      if (img.naturalWidth > 0 && img.naturalHeight > 0 && img.getAttribute('src') !== img404) {
+        IMAGE_DIMENSIONS.delete(this.resolvedImageUrl)
+        IMAGE_DIMENSIONS.set(this.resolvedImageUrl, { width: img.naturalWidth, height: img.naturalHeight })
+        if (IMAGE_DIMENSIONS.size > 512) {
+          IMAGE_DIMENSIONS.delete(IMAGE_DIMENSIONS.keys().next().value!)
+        }
+        reserveSpace(img.naturalWidth, img.naturalHeight)
       }
-
-      // Lastly, cache the image's resolved height. This can quickly become
-      // inaccurate, but can be solved by the user with a simple Ctrl+A, which
-      // will force-reload everything.
-      IMAGE_HEIGHT_CACHE.set(this.resolvedImageUrl, height)
+      measure()
     }
 
     //////////////////////////////////////////
@@ -260,44 +279,64 @@ class ImageWidget extends WidgetType {
     const size = document.createElement('span')
     size.classList.add('image-size-info')
 
+    // Read all widget geometry in CodeMirror's measure phase, then write styles.
+    const measure = () => view.requestMeasure({
+      key: figure,
+      read: () => ({
+        bounds: figure.getBoundingClientRect(),
+        editorWidth: view.contentDOM.getBoundingClientRect().width
+      }),
+      write: ({ bounds: { width, height }, editorWidth }) => {
+        if (!figure.isConnected) { return }
+        const cache = IMAGE_HEIGHT_CACHE.get(view) ?? new Map<string, number>()
+        // A width change invalidates rendered heights, but not intrinsic sizes.
+        if (cache.get('editorWidth') !== editorWidth) {
+          cache.clear()
+          cache.set('editorWidth', editorWidth)
+        }
+        if (height > 0 && (img.naturalHeight > 0 || dimensions !== undefined)) {
+          cache.set(this.heightCacheKey, height)
+        }
+        IMAGE_HEIGHT_CACHE.set(view, cache)
+        const display = width >= 256 && height >= 128 ? '' : 'none'
+        size.style.display = display
+        caption.style.display = display
+        openExternally.style.display = display
+      }
+    })
+    const observer = new ResizeObserver(measure)
+    observer.observe(figure)
+    observer.observe(view.contentDOM)
+    imageObservers.set(figure, observer)
+
     // Finally, construct the DOM tree, start loading the image, and return
     figure.appendChild(img)
     figure.appendChild(caption)
     figure.appendChild(size)
 
-    img.src = resolveImageUrl(view.state.field(configField).metadata.path, this.imageUrl)
+    img.src = this.resolvedImageUrl
 
     return figure
   }
 
-  updateDOM (dom: HTMLElement, view: EditorView): boolean {
-    // We assume a given structure, and if there's something wrong, we just
-    // capture the error and return false, indicating that the entire dom has to
-    // be rebuilt.
-    try {
-      // First, update the image itself
-      const img = dom.querySelector('img')! as HTMLImageElement
-      img.dataset.from = String(this.node.from)
-      img.dataset.to = String(this.node.to)
-      img.dataset.originalUrl = this.imageUrl
+  updateDOM (dom: HTMLElement, _view: EditorView, previous: ImageWidget): boolean {
+    // Position changes only need fresh event-handler data. Recreate the widget
+    // when its content changes so load handlers use the current URL and sizing.
+    if (!this.sameContent(previous)) { return false }
+    const img = dom.querySelector('img')
+    if (img === null) { return false }
+    img.dataset.from = String(this.node.from)
+    img.dataset.to = String(this.node.to)
+    return true
+  }
 
-      if (img.dataset.title !== this.imageTitle) {
-        img.dataset.title = this.imageTitle
-        const caption = dom.querySelector('figcaption')! as HTMLElement
-        caption.textContent = this.imageTitle.replace(/\\"/g, '"') // Un-escape title
-      }
-
-      const resolvedURL = resolveImageUrl(view.state.field(configField).metadata.path, this.imageUrl)
-
-      if (resolvedURL !== img.src) {
-        // The load and onerror handlers will handle this accordingly (and also
-        // update the size and title)
-        img.src = resolvedURL
-      }
-
-      return true
-    } catch (err) {
-      return false
+  destroy (dom: HTMLElement): void {
+    imageObservers.get(dom)?.disconnect()
+    imageObservers.delete(dom)
+    const img = dom.querySelector('img')
+    if (img !== null) {
+      img.onload = null
+      img.onerror = null
     }
   }
 
@@ -308,7 +347,7 @@ function shouldHandleNode (node: SyntaxNodeRef): boolean {
   return node.type.name === 'Image'
 }
 
-function createWidget (state: EditorState, node: SyntaxNodeRef): ImageWidget | undefined {
+function createWidget (state: EditorState, node: SyntaxNodeRef, view: EditorView): ImageWidget | undefined {
   // Get the actual link contents, extract title and URL and create a
   // replacement widget
   const marks = node.node.getChildren('LinkMark')
@@ -350,7 +389,8 @@ function createWidget (state: EditorState, node: SyntaxNodeRef): ImageWidget | u
   }
 
   const resolvedImageSrc = resolveImageUrl(state.field(configField).metadata.path, url)
-  return new ImageWidget(node.node, title, url, resolvedImageSrc, alt, data)
+  const { imagePreviewWidth, imagePreviewHeight } = state.field(configField)
+  return new ImageWidget(node.node, title, url, resolvedImageSrc, alt, data, view, imagePreviewWidth, imagePreviewHeight)
 }
 
 export const renderImages = [
@@ -409,5 +449,5 @@ export const renderImages = [
       }
     }
   }),
-  renderInlineWidgets(shouldHandleNode, createWidget)
+  renderInlineWidgets(shouldHandleNode, createWidget, true)
 ]

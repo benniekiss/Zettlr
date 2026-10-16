@@ -97,10 +97,11 @@ export async function downloadPandocWasm (
   urlString: string,
   cacheDirectory: string,
   request: Download = download,
-  sha256?: string,
-  inspect: Inspect = inspectSource
+  sha256?: string|null,
+  inspect: Inspect = inspectSource,
+  bundledModule?: string
 ): Promise<string> {
-  return (await resolvePandocWasm(urlString, cacheDirectory, request, sha256, inspect, false)).filename
+  return (await resolvePandocWasm(urlString, cacheDirectory, request, sha256, inspect, false, bundledModule)).filename
 }
 
 /** Manual checks bypass the session guard and download when validators are absent. */
@@ -118,9 +119,10 @@ async function resolvePandocWasm (
   urlString: string,
   cacheDirectory: string,
   request: Download,
-  sha256: string|undefined,
+  sha256: string|null|undefined,
   inspect: Inspect,
-  manual: boolean
+  manual: boolean,
+  bundledModule?: string
 ): Promise<CachedModule> {
   if (urlString.trim() === '') {
     throw new Error('No Pandoc WASM download URL is configured. Set one in Preferences → Import/Export → Pandoc download.')
@@ -133,7 +135,8 @@ async function resolvePandocWasm (
   if (configuredSha256 !== undefined && configuredSha256 !== '' && !/^[a-f0-9]{64}$/.test(configuredSha256)) {
     throw new Error('The Pandoc SHA-256 hash must contain exactly 64 hexadecimal characters.')
   }
-  const expectedSha256 = configuredSha256 !== undefined && configuredSha256 !== ''
+  // Build tooling can explicitly omit the built-in pin with null.
+  const expectedSha256 = sha256 === null ? undefined : configuredSha256 !== undefined && configuredSha256 !== ''
     ? configuredSha256
     : url.href === DEFAULT_PANDOC_WASM_URL ? DEFAULT_PANDOC_WASM_SHA256 || undefined : undefined
   // A URL/hash pair identifies a distinct expected module and must not share
@@ -150,7 +153,7 @@ async function resolvePandocWasm (
     }
     // A manual check must not be satisfied by an automatic cache lookup.
     await existing.catch(() => {})
-    return await resolvePandocWasm(urlString, cacheDirectory, request, sha256, inspect, manual)
+    return await resolvePandocWasm(urlString, cacheDirectory, request, sha256, inspect, manual, bundledModule)
   }
 
   const task = (async (): Promise<CachedModule> => {
@@ -221,7 +224,10 @@ async function resolvePandocWasm (
     let wasm: Buffer
     let digest: string
     try {
-      fetched = await request(url)
+      // Seed only an absent cache. Updates continue to use the configured source.
+      fetched = cachedDigest === undefined && bundledModule !== undefined
+        ? await readLimitedFile(bundledModule, 'The bundled Pandoc WASM module')
+        : await request(url)
       wasm = extractWasm(Buffer.isBuffer(fetched) ? fetched : fetched.bytes)
       digest = createHash('sha256').update(wasm).digest('hex')
       if (expectedSha256 !== undefined && digest !== expectedSha256) {

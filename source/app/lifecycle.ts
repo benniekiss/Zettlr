@@ -19,7 +19,7 @@ import environmentCheck from './util/environment-check'
 import resolveTimespanMs from './util/resolve-timespan-ms'
 import { configurePandocWasm } from './util/run-pandoc'
 import { downloadPandocWasm, invalidatePandocWasm } from './util/download-pandoc-wasm'
-import { DEFAULT_PANDOC_WASM_URL } from '@common/pandoc-util/pandoc-wasm-url'
+import { DEFAULT_PANDOC_WASM_URL, DEFAULT_PANDOC_WASM_SHA256 } from '@common/pandoc-util/pandoc-wasm-url'
 import { warmTypstFontCache } from './util/compile-typst'
 import path from 'path'
 
@@ -79,11 +79,16 @@ export async function bootApplication (): Promise<AppServiceContainer> {
   configurePandocWasm(async () => {
     const exportConfig = appServiceContainer.config.get().export
     const configuredUrl = exportConfig.pandocWasmUrl.trim()
+    const url = configuredUrl || DEFAULT_PANDOC_WASM_URL
+    const hash = configuredUrl === '' ? '' : exportConfig.pandocWasmSha256.trim().toLowerCase()
     return await downloadPandocWasm(
-      configuredUrl || DEFAULT_PANDOC_WASM_URL,
+      url,
       path.join(app.getPath('userData'), 'pandoc-wasm'),
       undefined,
-      configuredUrl === '' ? undefined : exportConfig.pandocWasmSha256
+      configuredUrl === '' ? undefined : exportConfig.pandocWasmSha256,
+      undefined,
+      url !== '' && url === DEFAULT_PANDOC_WASM_URL && (hash === '' || hash === DEFAULT_PANDOC_WASM_SHA256)
+        ? path.join(__dirname, 'assets/pandoc.wasm') : undefined
     )
   }, invalidatePandocWasm)
 

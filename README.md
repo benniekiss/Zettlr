@@ -496,8 +496,9 @@ For a custom source, an optional SHA-256 preference can pin the extracted
 `pandoc.wasm` module; leave it blank to skip hash verification. A hash entered
 while the URL is blank is ignored.
 
-Zettlr downloads the module on first use and caches it in the user data
-directory for offline use. Changing the URL selects a separate cache entry
+Zettlr bundles its default module and copies it into the user data cache on
+first use, so the first import or export works offline. Custom sources are
+downloaded on first use and cached there too. Changing the URL selects a separate cache entry
 on the next import or export; no restart is needed. On first use each app
 session, unpinned custom sources are checked for changes using ETag or
 Last-Modified headers. Servers without these headers keep using the cached
@@ -518,8 +519,9 @@ The reactor reserves the guest root paths `/stdin`, `/stdout`, `/stderr`, and
 resources.
 Downloads and extracted modules are limited to 512 MiB, including larger builds.
 
-No Pandoc binary is downloaded or bundled during the build, and no native
-Pandoc installation is needed.
+The build downloads, extracts, and validates the default WASM module, then
+bundles it with the application. Build downloads are cached under
+`build/pandoc-wasm`. No native Pandoc installation is needed.
 
 To customize a build's defaults, set `PANDOC_WASM_URL` and
 `PANDOC_WASM_SHA256` when running the build command. For example:
@@ -535,9 +537,9 @@ override therefore supports mirrors of the official module. To use a different
 module, provide its matching hash as well. Invalid hashes fail the build.
 These values are compiled into both the main and renderer bundles; setting them
 when launching an already built app has no effect. Preferences → Import/Export
-can still override the download source. No module is downloaded during the build.
+can still override the download source.
 
-Set `PANDOC_WASM_URL=none` to build without a default download source or hash.
+Set `PANDOC_WASM_URL=none` to build without a bundled module, default download source, or hash.
 Users must then configure a source in Preferences before using Pandoc.
 Set `PANDOC_WASM_SHA256=none` to omit the default integrity pin while retaining
 a default URL. An empty URL override still keeps the checked-in URL;

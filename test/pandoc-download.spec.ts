@@ -34,6 +34,29 @@ describe('Pandoc WASM download', function () {
     return filename
   }
 
+  it('seeds the cache from a bundled module without contacting the source', async function () {
+    const bundled = path.join(directory, 'bundled.wasm')
+    await fs.writeFile(bundled, wasm)
+    const url = 'https://example.org/bundled.wasm'
+    const unexpected = async () => { throw new Error('Unexpected network request') }
+    const filename = await downloadPandocWasm(url, directory, unexpected, undefined, unexpected, bundled)
+    assert.deepStrictEqual(await fs.readFile(filename), wasm)
+    assert.strictEqual(await downloadPandocWasm(url, directory, unexpected, undefined, unexpected, bundled), filename)
+    assert.strictEqual(await checkPandocWasmUpdates(url, directory, async () => updatedWasm, undefined, async () => ({})), 'updated')
+    assert.deepStrictEqual(await fs.readFile(filename), updatedWasm)
+  })
+
+  it('validates bundled modules and checks their configured hash before installing', async function () {
+    const bundled = path.join(directory, 'bundled.wasm')
+    const url = 'https://example.org/bundled.wasm'
+    const unexpected = async () => { throw new Error('Unexpected network request') }
+    await fs.writeFile(bundled, brokenWasm)
+    await assert.rejects(downloadPandocWasm(url, directory, unexpected, undefined, unexpected, bundled))
+    await fs.writeFile(bundled, wasm)
+    await assert.rejects(downloadPandocWasm(url, directory, unexpected, 'a'.repeat(64), unexpected, bundled), /integrity check/)
+    assert.deepStrictEqual((await fs.readdir(directory)).filter(name => name !== 'bundled.wasm'), [])
+  })
+
   it('downloads and refreshes through ky while preserving server validators', async function () {
     const originalFetch = globalThis.fetch
     const methods: string[] = []

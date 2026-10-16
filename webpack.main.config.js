@@ -3,6 +3,7 @@ const { DefinePlugin } = require('webpack')
 const path = require('path')
 const rules = require('./webpack.rules')
 const { getPandocBuildDefines } = require('./scripts/pandoc-build-defines')
+const { BundlePandocPlugin } = require('./scripts/bundle-pandoc')
 
 const externals = {}
 
@@ -21,6 +22,7 @@ module.exports = {
   mode: process.env.NODE_ENV === 'production' ? 'production' : 'development',
   module: { rules },
   plugins: [
+    new BundlePandocPlugin(),
     new CopyWebpackPlugin({
       patterns: [
         // These are all static files that simply need to be bundled with the

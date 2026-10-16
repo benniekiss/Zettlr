@@ -27,21 +27,20 @@ export const tagsUpdateField = StateField.define<Completion[]>({
     return []
   },
   update (value, transaction) {
-    for (const effect of transaction.effects) {
-      if (effect.is(tagsUpdate)) {
-        // Convert the entries into completion objects
-        value = effect.value
-          // Remove tags with spaces, as they cannot be applied within documents
-          .filter(entry => !entry.name.includes(' '))
-          .map(entry => {
-            return {
-              label: entry.name,
-              info: entry.desc,
-              type: entry.color !== undefined ? 'keyword' : undefined,
-              apply
-            }
-          })
-      }
+    const effect = transaction.effects.findLast(effect => effect.is(tagsUpdate))
+    if (effect !== undefined) {
+      // Convert the entries into completion objects
+      return effect.value
+        // Remove tags with spaces, as they cannot be applied within documents
+        .filter(entry => !entry.name.includes(' '))
+        .map(entry => {
+          return {
+            label: entry.name,
+            info: entry.desc,
+            type: entry.color !== undefined ? 'keyword' : undefined,
+            apply
+          }
+        })
     }
 
     return value

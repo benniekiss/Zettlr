@@ -28,18 +28,18 @@ export const citekeyUpdateField = StateField.define<Completion[]>({
     return []
   },
   update (value, transaction) {
-    for (const effect of transaction.effects) {
-      if (effect.is(citekeyUpdate)) {
-        // Convert the citationentries into completion objects
-        value = effect.value.map(entry => {
-          return {
-            label: entry.citekey,
-            info: entry.displayText,
-            apply
-          }
-        })
-      }
+    const effect = transaction.effects.findLast(effect => effect.is(citekeyUpdate))
+    if (effect !== undefined) {
+      // Convert the citationentries into completion objects
+      return effect.value.map(entry => {
+        return {
+          label: entry.citekey,
+          info: entry.displayText,
+          apply
+        }
+      })
     }
+
     return value
   }
 })

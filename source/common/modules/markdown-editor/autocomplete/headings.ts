@@ -12,29 +12,31 @@
  * END HEADER
  */
 
+import type { EditorState } from '@codemirror/state'
 import { type AutocompletePlugin } from '.'
 import { tocField } from '../plugins/toc-field'
 
+
+function getEntries (state: EditorState): { label: string, apply: string }[] {
+  const entries = state.field(tocField)
+
+  return entries.map(entry => {
+    return {
+      label: entry.text,
+      apply: entry.id
+    }
+  })
+
+}
+
 export const headings: AutocompletePlugin = {
   applies (ctx) {
-    // A valid citekey position is: Beginning of the line (citekey without square
-    // brackets), after a square bracket open (regular citation without prefix),
-    // or after a space (either a standalone citation or within square brackets
-    // but with a prefix). Also, the citekey can be prefixed with a -.
-    if (ctx.state.doc.sliceString(ctx.pos - 3, ctx.pos) !== '](#') {
-      return false // Only applies after the user typed an # within a link
-    }
-
-    return ctx.pos
+    const match = ctx.matchBefore(/\]\(#[^()]*$/)
+    return match !== null ? match.from + 3 : false
   },
   entries (ctx, query) {
     query = query.toLowerCase()
-    const entries = ctx.state.field(tocField).map(entry => {
-      return {
-        label: entry.text,
-        apply: entry.id
-      }
-    })
+    const entries = getEntries(ctx.state)
     return entries.filter(entry => {
       return entry.label.toLowerCase().includes(query)
     })

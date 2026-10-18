@@ -37,7 +37,7 @@ function generate (infoString: string): (view: EditorView, completion: Completio
   }
 }
 
-function getEntries (): Completion[] {
+function getCodeEntries (): Completion[] {
   return [
     { apply: generate(''), label: trans('No highlighting') },
     { apply: generate('bash'), label: 'Bash' },
@@ -122,7 +122,7 @@ export const codeBlocks: AutocompletePlugin = {
   },
   entries (ctx, query) {
     query = query.toLowerCase()
-    const entries = getEntries()
+    const entries = getCodeEntries()
     return entries.filter(entry => {
       return entry.label.toLowerCase().includes(query)
     })

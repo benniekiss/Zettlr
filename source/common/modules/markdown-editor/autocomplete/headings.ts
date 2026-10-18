@@ -17,7 +17,7 @@ import { type AutocompletePlugin } from '.'
 import { tocField } from '../plugins/toc-field'
 
 
-function getEntries (state: EditorState): { label: string, apply: string }[] {
+function getHeadingEntries (state: EditorState): { label: string, apply: string }[] {
   const entries = state.field(tocField)
 
   return entries.map(entry => {
@@ -36,7 +36,7 @@ export const headings: AutocompletePlugin = {
   },
   entries (ctx, query) {
     query = query.toLowerCase()
-    const entries = getEntries(ctx.state)
+    const entries = getHeadingEntries(ctx.state)
     return entries.filter(entry => {
       return entry.label.toLowerCase().includes(query)
     })

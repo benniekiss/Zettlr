@@ -433,7 +433,7 @@ async function replaceSnippetVariables (state: EditorState, text: string): Promi
   })
 }
 
-function getEntries (state: EditorState): Completion[]  {
+function getSnippetEntries (state: EditorState): Completion[]  {
   // NOTE: We need to create a new array, otherwise we're going to have an
   // emoji party after ten characters typed
   const entries = [...state.field(snippetsUpdateField).availableSnippets]
@@ -472,7 +472,7 @@ export const snippets: AutocompletePlugin = {
   },
   entries (ctx, query) {
     query = query.toLowerCase()
-    const entries = getEntries(ctx.state)
+    const entries = getSnippetEntries(ctx.state)
 
     return entries.filter(entry => {
       if (entry.section === undefined) { // Snippets don't have a section

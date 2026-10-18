@@ -61,7 +61,7 @@ export const citekeyUpdateField = StateField.define<Completion[]>({
  *
  * @return  {Completion[]}        The sorted completions
  */
-function getEntries (state: EditorState): Completion[] {
+function getCitationEntries (state: EditorState): Completion[] {
   // First, get our existing entries in the database, and re-transform them into
   // what the update effect expects
   const entries = state.field(citekeyUpdateField)
@@ -143,7 +143,7 @@ export const citations: AutocompletePlugin = {
   },
   entries (ctx, query) {
     query = query.toLowerCase()
-    const entries = getEntries(ctx.state)
+    const entries = getCitationEntries(ctx.state)
     return entries.filter(entry => {
       return entry.label.toLowerCase().includes(query) || (entry.info as string|undefined)?.toLowerCase().includes(query) === true
     })

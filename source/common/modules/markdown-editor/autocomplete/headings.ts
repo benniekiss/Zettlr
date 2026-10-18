@@ -31,8 +31,10 @@ function getHeadingEntries (state: EditorState): { label: string, apply: string 
 
 export const headings: AutocompletePlugin = {
   applies (ctx) {
-    const match = ctx.matchBefore(/\]\(#[^()]*$/)
-    return match !== null ? match.from + 3 : false
+    const line = ctx.state.doc.lineAt(ctx.pos)
+    const textBefore = ctx.state.sliceDoc(line.from, ctx.pos)
+    const match = /\]\(#[^()]*$/.exec(textBefore)
+    return match !== null ? line.from + match.index + 3 : false
   },
   entries (ctx, query) {
     query = query.toLowerCase()

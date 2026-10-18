@@ -138,8 +138,10 @@ export const citations: AutocompletePlugin = {
     // brackets), after a square bracket open (regular citation without prefix),
     // or after a space (either a standalone citation or within square brackets
     // but with a prefix). Also, the citekey can be prefixed with a -.
-    const match = ctx.matchBefore(/(?:^|(?<=[-[\s(]))@[^[\]]*$/)
-    return match !== null ? match.from + match.text.lastIndexOf('@') + 1 : false
+    const line = ctx.state.doc.lineAt(ctx.pos)
+    const textBefore = ctx.state.sliceDoc(line.from, ctx.pos)
+    const match = /(?:^|(?<=[-[\s(]))@[^[\]]*$/.exec(textBefore)
+    return match !== null ? line.from + textBefore.lastIndexOf('@') + 1 : false
   },
   entries (ctx, query) {
     query = query.toLowerCase()

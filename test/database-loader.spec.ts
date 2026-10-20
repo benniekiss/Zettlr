@@ -12,13 +12,6 @@
  * END HEADER
  */
 
-// BUG: The BibLaTeX parser currently exhibits a wrong package.json structure
-// that prevents CommonJS projects such as ours from loading it without a bundler.
-// Once the biblatex-csl-parser releases a version above 3.5.5, we can actually
-// arm this test. I have written this test with a manually overridden
-// package.json to make it work, but I don't want to start patching node modules
-// in the CI; hence it will remain ignored until the update is out.
-// Context: https://github.com/fiduswriter/biblatex-csl-converter/issues/135
 import assert from 'assert'
 import os from 'os'
 import { promises as fs } from 'fs'

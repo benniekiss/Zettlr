@@ -14,14 +14,15 @@
  * END HEADER
  */
 
-import { FSWatcher, type ChokidarOptions } from 'chokidar'
+import { FSWatcher, type ChokidarOptions, type FSWatcherEventMap } from 'chokidar'
 
 import type LogProvider from '@providers/log'
 import type ConfigProvider from '@providers/config'
 import path from 'path'
-import type { EventName } from 'chokidar/handler.js'
 import { WATCHDOG_IGNORE_RE } from '@common/util/ignore-path'
 import { type Stats } from 'fs'
+
+export type EventName = FSWatcherEventMap['all'][0]
 
 /**
 * Represents an event the watchdog can work with
@@ -50,11 +51,9 @@ export default class FSALWatchdog {
       followSymlinks: false, // Zettlr does not support symlinks
       ignorePermissionErrors: true, // In the worst case one has to reboot the software, but so it looks nicer.
 
-      // Chokidar should always be using fsevents, but we will be leaving this
-      // in here both in case something happens in the future, and for nostalgic
-      // reasons.
-      interval: 5000,
-      binaryInterval: 5000
+      // Used when Chokidar's polling backend is enabled.
+      pollingInterval: 5000,
+      pollingBinaryInterval: 5000
     }
 
     if (this._config.get('watchdog.activatePolling') as boolean) {
@@ -82,7 +81,7 @@ export default class FSALWatchdog {
    * @param   {change}    channel  The change channel
    * @param   {Function}  report   A reporter that gets called with eventName and eventPath
    */
-  public on (channel: 'change', report: (eventName: EventName, eventPath: string, stats?: Stats) => void): any {
+  public on (channel: 'change', report: (eventName: EventName, eventPath: string, stats?: Stats) => void): void {
     this.process.on('all', (event, p, stats) => {
       const basename = path.basename(p)
       const dirname = path.dirname(p)
@@ -105,10 +104,7 @@ export default class FSALWatchdog {
    */
   async shutdown (): Promise<void> {
     this.process.removeAllListeners()
-    // We MUST under all circumstances properly call the close() function on
-    // every chokidar process we utilize. Otherwise, the fsevents dylib will
-    // still hold on to some memory after the Electron process itself shuts down
-    // which will result in a crash report appearing on macOS.
+    // Await close() to release all filesystem watchers before Electron exits.
     await this.process.close()
   }
 

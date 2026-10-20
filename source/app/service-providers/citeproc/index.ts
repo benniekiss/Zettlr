@@ -122,8 +122,8 @@ export default class CiteprocProvider extends ProviderContract {
       ignored: /(^|[/\\])\../,
       persistent: true,
       ignoreInitial: true,
-      // See for the following property the file source/main/modules/fsal/fsal-watchdog.ts
-      interval: 5000,
+      // Used when Chokidar's polling backend is enabled.
+      pollingInterval: 5000,
       // Databases can become quite large, so we have to wait for it to finish
       awaitWriteFinish: {
         stabilityThreshold: 1000,
@@ -391,10 +391,7 @@ export default class CiteprocProvider extends ProviderContract {
    */
   async shutdown (): Promise<void> {
     this._logger.verbose('Citeproc provider shutting down ...')
-    // We MUST under all circumstances properly call the close() function on
-    // every chokidar process we utilize. Otherwise, the fsevents dylib will
-    // still hold on to some memory after the Electron process itself shuts down
-    // which will result in a crash report appearing on macOS.
+    // Await close() to release all filesystem watchers before Electron exits.
     await this._watcher.close()
   }
 

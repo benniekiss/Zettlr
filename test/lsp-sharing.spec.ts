@@ -9,6 +9,7 @@ import { languageServerRoot } from '../source/app/service-providers/lsp/workspac
 import { applyWorkspaceEdit } from '../source/common/lsp/code-actions'
 import { acquireSession } from '../source/common/lsp/session'
 import type { LanguageServerConfig } from '../source/common/lsp/config'
+import markdownParser from '../source/common/modules/markdown-editor/parser/markdown-parser'
 
 const settle = async (): Promise<void> => { await new Promise(resolve => setTimeout(resolve, 30)) }
 const markdownServers = ['panache', 'codebook', 'ltex'].map(name => ({ name, command: name, languages: ['markdown'] }))
@@ -161,6 +162,28 @@ describe('Shared editor LSP sessions', () => {
     assert.strictEqual(processes.get(sent('textDocument/hover')[0].id), 'json')
     const completions = await client.request<typeof params, any[]>('textDocument/completion', params)
     assert.deepStrictEqual(completions, [{ label: 'json' }])
+  })
+
+  it('forwards Markdown frontmatter as a virtual YAML document and maps its diagnostics back', async () => {
+    configure([markdownServers[0], { name: 'yaml', command: 'yaml-language-server', args: ['--node-ipc'], languages: ['yaml'] }])
+    const doc = '---\ntitle: hello\n---\nBody'
+    const view = new EditorView({ doc, extensions: [markdownParser(), languageServers('/workspace/frontmatter.md', 'markdown')] })
+    views.push(view)
+    await settle()
+    const yamlID = [...processes].find(([, name]) => name === 'yaml')![0]
+    const virtualUri = `${pathToFileURL('/workspace/frontmatter.md').href}.zettlr-frontmatter.yaml`
+    const opens = sent('textDocument/didOpen')
+    assert(opens.some(call => call.id === yamlID && call.value.params.textDocument.uri === virtualUri && call.value.params.textDocument.languageId === 'yaml' && call.value.params.textDocument.text === 'title: hello'))
+    assert(!opens.some(call => call.id !== yamlID && call.value.params.textDocument.uri === virtualUri))
+    emit(yamlID, { method: 'textDocument/publishDiagnostics', params: { uri: virtualUri, version: 1, diagnostics: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, severity: 1, message: 'Unknown property' }] } })
+    await settle()
+    const mapped: Array<{ from: number, to: number, message: string }> = []
+    forEachDiagnostic(view.state, diagnostic => mapped.push({ from: diagnostic.from, to: diagnostic.to, message: diagnostic.message }))
+    assert(mapped.some(diagnostic => diagnostic.from === 4 && diagnostic.to === 9 && diagnostic.message === 'Unknown property'))
+    view.dispatch({ changes: { from: 11, to: 16, insert: 'world' } })
+    await settle()
+    const changes = sent('textDocument/didChange').filter(call => call.id === yamlID)
+    assert.strictEqual(changes.at(-1)?.value.params.contentChanges[0].text, 'title: world')
   })
 
   it('sends current saves once per shared document and rejects snapshots superseded by edits', async () => {

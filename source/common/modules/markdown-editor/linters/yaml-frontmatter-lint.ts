@@ -19,6 +19,7 @@ import { linter, type Diagnostic } from '@codemirror/lint'
 import { type EditorState } from '@codemirror/state'
 import { type SyntaxNodeRef } from '@lezer/common'
 import YAML from 'yaml'
+import { parseLanguageServers } from '@common/lsp/config'
 
 /**
  * Takes a state and detects if there is a frontmatter. If so, it returns the
@@ -64,6 +65,16 @@ function findYamlFrontmatterNode (state: EditorState): SyntaxNodeRef|undefined {
  */
 export const yamlFrontmatterLint = linter(async view => {
   const diagnostics: Diagnostic[] = []
+
+  // Prefer the YAML language server when it is configured. This local parser
+  // remains a fallback for users who disable YAML LSP support.
+  try {
+    const servers = parseLanguageServers(window.config.get('languageServers') ?? '[]')
+    if (servers.some(server => server.enabled !== false && server.languages.includes('yaml'))) {return diagnostics}
+  } catch {
+    // Invalid settings are reported by the configuration UI; keep local linting
+    // available while they are being corrected.
+  }
 
   const frontmatterNode = findYamlFrontmatterNode(view.state)
   if (frontmatterNode === undefined) {

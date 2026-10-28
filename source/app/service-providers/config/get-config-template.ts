@@ -261,9 +261,10 @@ export function getConfigTemplate (): ConfigOptions {
 
   // Return the complete configuration object
   return {
-    // Panache is the default Markdown formatter, linter, and LSP provider.
+    // Panache is the default Markdown formatter and LSP provider; YAML gets
+    // language-server support for standalone YAML files and asset profiles.
     // Other servers remain opt-in through the Language Servers preferences.
-    languageServers: JSON.stringify(recommendedLanguageServers.slice(0, 1)),
+    languageServers: JSON.stringify(recommendedLanguageServers.filter(server => server.name === 'panache' || server.name === 'yaml')),
     useBundledLanguageServers: true,
     version: app.getVersion(), // Useful for migrating
     buildDate: __BUILD_DATE__,

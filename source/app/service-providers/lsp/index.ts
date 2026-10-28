@@ -1,4 +1,4 @@
-import { app, ipcMain, type WebContents } from 'electron'
+import { app, ipcMain, utilityProcess, type UtilityProcess, type WebContents } from 'electron'
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process'
 import { randomUUID } from 'crypto'
 import { join } from 'path'
@@ -12,7 +12,8 @@ import { resolveLanguageServerCommand } from './bundled-servers'
 import { languageServerRoot } from './workspace-root'
 
 interface Session {
-  process: ChildProcessWithoutNullStreams
+  process: ChildProcessWithoutNullStreams|UtilityProcess
+  utility: boolean
   owner: WebContents
   config: LanguageServerConfig
   rootUri: string
@@ -45,13 +46,23 @@ export default class LSPProvider extends ProviderContract {
         const owner = event.sender
         if (owner.isDestroyed()) {throw new Error('Language server window closed during startup')}
         this.logger.verbose(`[LSP ${server.name}] Starting ${launcher.bundled ? 'bundled' : 'configured'} server: ${launcher.command}`)
-        const process = spawn(launcher.command, launcher.args, {
-          cwd, env: { ...global.process.env, ...server.env }, windowsHide: true, shell: false
-        })
+        const childEnv = { ...global.process.env, ...server.env }
+        const child = launcher.utilityProcess === true
+          ? utilityProcess.fork(launcher.command, launcher.args, { cwd, env: childEnv, stdio: 'ignore' })
+          : spawn(launcher.command, launcher.args, { cwd, env: childEnv, windowsHide: true, shell: false })
+        const utility = launcher.utilityProcess === true
         const id = randomUUID()
-        this.sessions.set(id, { process, owner, config: server, rootUri: pathToFileURL(cwd).href })
+        this.sessions.set(id, { process: child, utility, owner, config: server, rootUri: pathToFileURL(cwd).href })
         const send = (message: string): void => {
           if (!owner.isDestroyed()) {owner.send('lsp-message', { id, message })}
+        }
+        const write = (value: unknown): void => {
+          const message = JSON.stringify(value)
+          if (utility) {
+            (child as UtilityProcess).postMessage(JSON.parse(message))
+          } else {
+            (child as ChildProcessWithoutNullStreams).stdin.write(frameLSPMessage(message))
+          }
         }
         const reader = new LSPMessageReader(message => {
           const value = JSON.parse(message)
@@ -59,7 +70,11 @@ export default class LSPProvider extends ProviderContract {
             this.logger.error(`[LSP ${server.name}] Server request failed`, value.error)
           }
           if (value.id === 'zettlr-shutdown' && value.method === undefined) {
-            process.stdin.end(frameLSPMessage(JSON.stringify({ jsonrpc: '2.0', method: 'exit' })))
+            if (utility) {
+              write({ jsonrpc: '2.0', method: 'exit' })
+            } else {
+              (child as ChildProcessWithoutNullStreams).stdin.end(frameLSPMessage(JSON.stringify({ jsonrpc: '2.0', method: 'exit' })))
+            }
             return
           }
           // CodeMirror doesn't implement server configuration requests.
@@ -71,36 +86,62 @@ export default class LSPProvider extends ProviderContract {
               }
               return settings ?? null
             })
-            process.stdin.write(frameLSPMessage(JSON.stringify({ jsonrpc: '2.0', id: value.id, result })))
+            write({ jsonrpc: '2.0', id: value.id, result })
           } else if (value.method === 'window/workDoneProgress/create') {
-            process.stdin.write(frameLSPMessage(JSON.stringify({ jsonrpc: '2.0', id: value.id, result: null })))
+            write({ jsonrpc: '2.0', id: value.id, result: null })
           } else {
             send(message)
           }
         })
-        process.stdout.on('data', (chunk: Buffer) => {
-          try { reader.push(chunk) } catch (err) {
-            this.logger.error(`[LSP ${server.name}] Invalid server message`, err)
-            this.stop(id)
-          }
-        })
-        process.stderr.on('data', (chunk: Buffer) => this.logger.verbose(`[LSP ${server.name}] ${chunk.toString().slice(0, 4096)}`))
-        process.stdin.on('error', err => this.logger.error(`[LSP ${server.name}] Write failed`, err))
-        process.on('exit', () => {
+        if (utility) {
+          (child as UtilityProcess).on('message', message => {
+            try { reader.push(Buffer.from(frameLSPMessage(JSON.stringify(message)))) } catch (err) {
+              this.logger.error(`[LSP ${server.name}] Invalid server message`, err)
+              this.stop(id)
+            }
+          })
+          const stderr = (child as UtilityProcess).stderr
+          stderr?.on('data', chunk => this.logger.verbose(`[LSP ${server.name}] ${chunk.toString().slice(0, 4096)}`))
+        } else {
+          const process = child as ChildProcessWithoutNullStreams
+          process.stdout.on('data', (chunk: Buffer) => {
+            try { reader.push(chunk) } catch (err) {
+              this.logger.error(`[LSP ${server.name}] Invalid server message`, err)
+              this.stop(id)
+            }
+          })
+          process.stderr.on('data', (chunk: Buffer) => this.logger.verbose(`[LSP ${server.name}] ${chunk.toString().slice(0, 4096)}`))
+          process.stdin.on('error', err => this.logger.error(`[LSP ${server.name}] Write failed`, err))
+        }
+        const exited = (): void => {
           this.sessions.delete(id)
           if (!owner.isDestroyed()) {owner.send('lsp-message', { id, closed: true })}
-        })
+        }
         const destroyed = (): void => this.stop(id)
         owner.once('destroyed', destroyed)
-        process.once('close', () => owner.removeListener('destroyed', destroyed))
-        await new Promise<void>((resolve, reject) => {
-          process.once('spawn', resolve)
-          process.once('error', err => {
-            this.logger.error(`[LSP ${server.name}] Process failed`, err)
-            this.stop(id)
-            reject(err)
+        let waitForSpawn: Promise<void>
+        if (utility) {
+          const utilityChild = child as UtilityProcess
+          utilityChild.on('exit', exited)
+          utilityChild.once('exit', () => owner.removeListener('destroyed', destroyed))
+          waitForSpawn = new Promise<void>((resolve, reject) => {
+            utilityChild.once('spawn', resolve)
+            utilityChild.once('error', (type, location, report) => reject(new Error(`${type}: ${location} ${report}`)))
           })
-        })
+        } else {
+          const nodeChild = child as ChildProcessWithoutNullStreams
+          nodeChild.on('exit', exited)
+          nodeChild.once('close', () => owner.removeListener('destroyed', destroyed))
+          waitForSpawn = new Promise<void>((resolve, reject) => {
+            nodeChild.once('spawn', resolve)
+            nodeChild.once('error', err => {
+              this.logger.error(`[LSP ${server.name}] Process failed`, err)
+              this.stop(id)
+              reject(err)
+            })
+          })
+        }
+        await waitForSpawn
         return { id, uri: pathToFileURL(payload.path).href, rootUri: pathToFileURL(cwd).href }
       }
       const session = this.sessions.get(payload.id)
@@ -114,9 +155,18 @@ export default class LSPProvider extends ProviderContract {
           value.params.rootUri = session.rootUri
           value.params.initializationOptions = session.config.initializationOptions
         }
-        session.process.stdin.write(frameLSPMessage(JSON.stringify(value)))
+        if (session.utility) {
+          (session.process as UtilityProcess).postMessage(value)
+        } else {
+          (session.process as ChildProcessWithoutNullStreams).stdin.write(frameLSPMessage(JSON.stringify(value)))
+        }
         if (value.method === 'initialized') {
-          session.process.stdin.write(frameLSPMessage(JSON.stringify({ jsonrpc: '2.0', method: 'workspace/didChangeConfiguration', params: { settings: session.config.settings ?? {} } })))
+          const settings = { jsonrpc: '2.0', method: 'workspace/didChangeConfiguration', params: { settings: session.config.settings ?? {} } }
+          if (session.utility) {
+            (session.process as UtilityProcess).postMessage(settings)
+          } else {
+            (session.process as ChildProcessWithoutNullStreams).stdin.write(frameLSPMessage(JSON.stringify(settings)))
+          }
         }
       }
     })
@@ -128,16 +178,25 @@ export default class LSPProvider extends ProviderContract {
       return
     }
     this.sessions.delete(id)
-    if (session.process.stdin.writable) {
-      session.process.stdin.write(frameLSPMessage(JSON.stringify({ jsonrpc: '2.0', id: 'zettlr-shutdown', method: 'shutdown' })))
+    const shutdown = { jsonrpc: '2.0', id: 'zettlr-shutdown', method: 'shutdown' }
+    if (session.utility) {
+      (session.process as UtilityProcess).postMessage(shutdown)
+    } else if ((session.process as ChildProcessWithoutNullStreams).stdin.writable) {
+      (session.process as ChildProcessWithoutNullStreams).stdin.write(frameLSPMessage(JSON.stringify(shutdown)))
     }
     const timer = setTimeout(() => {
-      if (session.process.exitCode === null && session.process.signalCode === null) {
-        session.process.kill('SIGKILL')
+      if (session.utility) {
+        (session.process as UtilityProcess).kill()
+      } else if ((session.process as ChildProcessWithoutNullStreams).exitCode === null && (session.process as ChildProcessWithoutNullStreams).signalCode === null) {
+        (session.process as ChildProcessWithoutNullStreams).kill('SIGKILL')
       }
     }, 2000)
     timer.unref()
-    session.process.once('close', () => clearTimeout(timer))
+    if (session.utility) {
+      (session.process as UtilityProcess).once('exit', () => clearTimeout(timer))
+    } else {
+      (session.process as ChildProcessWithoutNullStreams).once('close', () => clearTimeout(timer))
+    }
     if (!session.owner.isDestroyed()) {session.owner.send('lsp-message', { id, closed: true })}
   }
 

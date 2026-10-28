@@ -3,6 +3,7 @@ import {
   closeReferencePanel, type Transport
 } from '@codemirror/lsp-client'
 import { keymap, type EditorView, type ViewUpdate } from '@codemirror/view'
+import { syntaxTree } from '@codemirror/language'
 import DOMPurify from 'dompurify'
 import { parseLanguageServers, type LanguageServerConfig } from './config'
 import { MultiServerTransport } from './transport'
@@ -14,7 +15,8 @@ import { DP_EVENTS } from '@dts/common/documents'
 // Renderer-local: IPC ownership remains isolated between application windows.
 const sessions = new Map<string, EditorSession>()
 
-interface Consumer { uri: string, path: string, leases: Set<symbol>, diagnostics?: EditorDiagnostics }
+interface VirtualFrontmatter { uri: string, version: number, text: string, baseOffset: number }
+interface Consumer { uri: string, path: string, language: string, leases: Set<symbol>, diagnostics?: EditorDiagnostics, frontmatter?: VirtualFrontmatter }
 
 export class EditorSession {
   private readonly ipc = window.ipc
@@ -58,12 +60,12 @@ export class EditorSession {
     void this.ready.catch(() => {})
   }
 
-  retain (view: EditorView, uri: string, path: string): () => void {
+  retain (view: EditorView, uri: string, path: string, language: string): () => void {
     clearTimeout(this.idle)
     const token = Symbol()
     let consumer = this.consumers.get(view)
     if (consumer === undefined) {
-      consumer = { uri, path, leases: new Set() }
+      consumer = { uri, path, language, leases: new Set() }
       this.consumers.set(view, consumer)
     }
     consumer.leases.add(token)
@@ -74,6 +76,7 @@ export class EditorSession {
     const consumer = this.consumers.get(view)
     if (consumer === undefined || this.closed) {return}
     consumer.diagnostics = new EditorDiagnostics(view, this.client, this.transport!)
+    this.syncFrontmatter(view, consumer)
   }
 
   replay (view: EditorView): void {
@@ -97,6 +100,10 @@ export class EditorSession {
   }
 
   update (view: EditorView, update: ViewUpdate): void {
+    if (update.docChanged) {
+      const consumer = this.consumers.get(view)
+      if (consumer !== undefined) {this.syncFrontmatter(view, consumer)}
+    }
     if (update.docChanged) {
       this.consumers.get(view)?.diagnostics?.clear()
       queueMicrotask(() => {
@@ -123,11 +130,47 @@ export class EditorSession {
     const consumer = this.consumers.get(view)
     if (this.closed || consumer === undefined || !consumer.leases.delete(token) || consumer.leases.size > 0) {return}
     consumer.diagnostics?.destroy()
+    const frontmatterUri = consumer.frontmatter?.uri
     this.consumers.delete(view)
+    if (frontmatterUri !== undefined) {this.closeVirtualFrontmatterIfUnused(frontmatterUri)}
     if (this.consumers.size === 0) {
       // Let native plugin teardown send didClose before disconnecting.
       this.idle = setTimeout(() => { if (this.consumers.size === 0) {this.destroy()} }, 0)
     }
+  }
+
+  private syncFrontmatter (view: EditorView, consumer: Consumer): void {
+    if (consumer.language !== 'markdown' || this.transport === undefined) {return}
+    let node: { from: number, to: number }|undefined
+    syntaxTree(view.state).iterate({ enter (ref) {
+      if (ref.name === 'YAMLFrontmatter') {
+        const code = ref.node.getChild('CodeText')
+        if (code !== null) {node = { from: code.from, to: code.to }; return false}
+      }
+    } })
+    if (node === undefined) {
+      if (consumer.frontmatter !== undefined) {
+        const uri = consumer.frontmatter.uri
+        consumer.diagnostics?.clearMapped(uri)
+        consumer.frontmatter = undefined
+        this.closeVirtualFrontmatterIfUnused(uri)
+      }
+      return
+    }
+    const text = view.state.sliceDoc(node.from, node.to)
+    const previous = consumer.frontmatter
+    const uri = previous?.uri ?? `${consumer.uri}.zettlr-frontmatter.yaml`
+    if (previous?.text === text && previous.baseOffset === node.from) {return}
+    consumer.diagnostics?.clearMapped(uri)
+    const version = this.transport.syncVirtualDocument(uri, 'yaml', text)
+    consumer.frontmatter = { uri, version, text, baseOffset: node.from }
+    const cached = this.diagnostics.get(uri)
+    if (cached !== undefined) {consumer.diagnostics?.publishMapped(uri, cached, text, node.from, version)}
+  }
+
+  private closeVirtualFrontmatterIfUnused (uri: string): void {
+    if ([...this.consumers.values()].some(consumer => consumer.frontmatter?.uri === uri)) {return}
+    this.transport?.syncVirtualDocument(uri, 'yaml', '', true)
   }
 
   private stop (id: string): void {
@@ -191,7 +234,11 @@ export class EditorSession {
         },
         notificationHandlers: { 'textDocument/publishDiagnostics': (_client, params: ServerDiagnostics) => {
           this.diagnostics.set(params.uri, params)
-          for (const consumer of this.consumers.values()) {if (consumer.uri === params.uri) {consumer.diagnostics?.publish(params)}}
+          for (const consumer of this.consumers.values()) {
+            if (consumer.uri === params.uri) {consumer.diagnostics?.publish(params)}
+            const frontmatter = consumer.frontmatter
+            if (frontmatter?.uri === params.uri) {consumer.diagnostics?.publishMapped(frontmatter.uri, params, frontmatter.text, frontmatter.baseOffset, frontmatter.version)}
+          }
           return true
         } }
       }, serverCompletion(), hoverTooltips(),
@@ -241,6 +288,6 @@ export async function acquireSession (view: EditorView, path: string, language: 
     session = new EditorSession(key, servers, path, rootUri)
     sessions.set(key, session)
   }
-  const release = session.retain(view, uri, path)
+  const release = session.retain(view, uri, path, language)
   return { session, uri, release }
 }

@@ -35,6 +35,8 @@ export interface ServerDiagnostics { uri: string, version?: number, diagnostics:
 export class EditorDiagnostics {
   private generation = 0
   private active = true
+  private documentDiagnostics: Diagnostic[] = []
+  private readonly mappedDiagnostics = new Map<string, Diagnostic[]>()
   private readonly actions: DiagnosticActions
 
   constructor (private readonly view: EditorView, private readonly client: LSPClient, private readonly transport: MultiServerTransport) {
@@ -44,6 +46,15 @@ export class EditorDiagnostics {
   clear (): void {
     this.generation++
     this.actions.clear()
+  }
+
+  clearMapped (uri: string): void {
+    this.mappedDiagnostics.delete(uri)
+    // This can run from a CodeMirror ViewPlugin.update callback, where direct
+    // dispatch is forbidden. Drop the cached mapping now and refresh afterward.
+    queueMicrotask(() => {
+      if (this.active) {this.display([ ...this.documentDiagnostics, ...[...this.mappedDiagnostics.values()].flat() ])}
+    })
   }
 
   destroy (): void {
@@ -112,7 +123,29 @@ export class EditorDiagnostics {
       }
       return diagnostic
     })
-    this.display(diagnostics)
+    this.documentDiagnostics = diagnostics
+    this.display([ ...this.documentDiagnostics, ...[...this.mappedDiagnostics.values()].flat() ])
+  }
+
+  /** Map diagnostics for a virtual language document into this editor. */
+  publishMapped (uri: string, params: ServerDiagnostics, text: string, baseOffset: number, version: number): void {
+    if (!this.active || (params.version != null && params.version !== version)) {return}
+    const lines = text.split('\n')
+    const offset = (position: { line: number, character: number }): number => {
+      const line = Math.max(0, Math.min(position.line, lines.length - 1))
+      const column = Math.max(0, Math.min(position.character, lines[line].length))
+      let result = column
+      for (let index = 0; index < line; index++) {result += lines[index].length + 1}
+      return Math.min(this.view.state.doc.length, baseOffset + result)
+    }
+    this.mappedDiagnostics.set(uri, params.diagnostics.map(item => ({
+      from: offset(item.range.start),
+      to: offset(item.range.end),
+      severity: item.severity === 1 ? 'error' : item.severity === 2 ? 'warning' : 'info',
+      source: item.source ?? 'yaml-language-server',
+      message: typeof item.message === 'string' ? item.message : item.message.value
+    })))
+    this.display([ ...this.documentDiagnostics, ...[...this.mappedDiagnostics.values()].flat() ])
   }
 
   private display (diagnostics: Diagnostic[]): void {

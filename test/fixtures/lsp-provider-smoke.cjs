@@ -8,7 +8,7 @@ const handlers = new Map()
 const originalLoad = Module._load
 Module._load = function (name, ...args) {
   if (name === 'electron') return {
-    app: { isPackaged: true },
+    app: { isPackaged: true, getPath: () => '/tmp/zettlr-test-user-data' },
     ipcMain: {
       handle: (channel, handler) => handlers.set(channel, handler),
       removeHandler: channel => handlers.delete(channel)
@@ -96,6 +96,7 @@ async function main () {
     const stopping = waitFor(message => message.id === session.id && message.closed)
     await invoke({ sender: owner }, { command: 'stop', id: session.id })
     await stopping
+    await invoke({ sender: owner }, { command: 'stop', id: session.id })
     const another = await start()
     owner.destroyed = true
     owner.emit('destroyed')

@@ -13,7 +13,7 @@ export interface LanguageServerConfig {
 
 export const recommendedLanguageServers: LanguageServerConfig[] = [
   { name: 'panache', command: 'panache', args: ['lsp'], languages: ['markdown'] },
-  { name: 'yaml', command: 'yaml-language-server', args: ['--node-ipc'], languages: ['yaml'], settings: { yaml: { schemaStore: { enable: false } } } },
+  { name: 'yaml', command: 'yaml-language-server', args: ['--stdio'], languages: ['yaml'], settings: { yaml: { schemaStore: { enable: false } } } },
   { name: 'codebook', command: 'codebook-lsp', args: ['serve'], languages: ['markdown'] },
   { name: 'ltex', command: 'ltex-ls-plus', languages: [ 'markdown', 'latex' ], settings: { ltex: { language: 'en-US' } } }
 ]

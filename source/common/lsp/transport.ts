@@ -90,7 +90,7 @@ export class MultiServerTransport implements Transport {
     }, 20000)
     this.initializations.set(id, { peer, respond, timer })
     try { peer.transport.send(JSON.stringify({ ...message, id })) } catch (err) {
-      this.closePeer(peer.transport) 
+      this.closePeer(peer.transport)
     }
   }
 
@@ -219,7 +219,7 @@ export class MultiServerTransport implements Transport {
           outgoing = JSON.stringify({ ...message, params: { textDocument: message.params.textDocument, ...(save.includeText === true ? { text: message.params.text } : {}) } })
         }
         try { peer.transport.send(outgoing) } catch (err) {
-          this.closePeer(peer.transport) 
+          this.closePeer(peer.transport)
         }
       }
     } else if (message.method === 'initialize') {

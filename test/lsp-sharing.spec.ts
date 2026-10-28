@@ -26,6 +26,7 @@ describe('Shared editor LSP sessions', () => {
   let processes: Map<string, string>
   let initialize: boolean
   let failInit: boolean
+  let failServer: string|undefined
   let holdHover: boolean
   let holdStart: ((value: any) => void)|undefined
 
@@ -45,7 +46,7 @@ describe('Shared editor LSP sessions', () => {
     previousConfig = window.config.get('languageServers')
     previousRoots = window.config.get('app.openWorkspaces')
     delayResolve = false; resolveQueue = []
-    views = []; calls = []; processes = new Map(); listeners = new Map(); initialize = true; failInit = false; holdHover = false; holdStart = undefined
+    views = []; calls = []; processes = new Map(); listeners = new Map(); initialize = true; failInit = false; failServer = undefined; holdHover = false; holdStart = undefined
     configure(markdownServers)
     window.requestAnimationFrame = global.requestAnimationFrame
     window.cancelAnimationFrame = global.cancelAnimationFrame
@@ -70,7 +71,7 @@ describe('Shared editor LSP sessions', () => {
         }
         if (payload.command === 'send') {
           const message = JSON.parse(payload.message)
-          if (message.method === 'initialize' && initialize) queueMicrotask(() => emit(payload.id, { id: message.id, ...(failInit ? { error: { code: -32603, message: 'Failed initialization' } } : { result: { capabilities: { textDocumentSync: { change: 1, openClose: true, save: processes.get(payload.id) === 'panache' ? { includeText: true } : false }, hoverProvider: true, completionProvider: {}, codeActionProvider: true } } }) }))
+          if (message.method === 'initialize' && initialize) queueMicrotask(() => emit(payload.id, { id: message.id, ...(failInit || processes.get(payload.id) === failServer ? { error: { code: -32603, message: 'Failed initialization' } } : { result: { capabilities: { textDocumentSync: { change: 1, openClose: true, save: processes.get(payload.id) === 'panache' ? { includeText: true } : false }, hoverProvider: true, completionProvider: {}, codeActionProvider: true } } }) }))
           if (message.method === 'textDocument/codeAction') queueMicrotask(() => emit(payload.id, { id: message.id, result: [{ title: 'Add word', command: { title: 'Add word', command: 'codebook.addWord' } }] }))
           if (message.method === 'textDocument/completion') queueMicrotask(() => emit(payload.id, { id: message.id, result: [{ label: processes.get(payload.id) }] }))
           if (message.method === '$/cancelRequest') {
@@ -154,7 +155,7 @@ describe('Shared editor LSP sessions', () => {
     const json = create('/workspace/config.json', '{}')
     await settle()
     assert.strictEqual(calls.filter(call => call.command === 'start').length, 2)
-    assert.strictEqual(LSPPlugin.get(markdown)!.client, LSPPlugin.get(json)!.client)
+    assert.notStrictEqual(LSPPlugin.get(markdown)!.client, LSPPlugin.get(json)!.client)
     assert.deepStrictEqual(sent('textDocument/didOpen').map(call => [processes.get(call.id), call.value.params.textDocument.languageId]), [['markdown', 'markdown'], ['json', 'json']])
     const client = LSPPlugin.get(json)!.client
     const params = { textDocument: { uri: pathToFileURL('/workspace/config.json').href }, position: { line: 0, character: 0 } }
@@ -165,7 +166,7 @@ describe('Shared editor LSP sessions', () => {
   })
 
   it('forwards Markdown frontmatter as a virtual YAML document and maps its diagnostics back', async () => {
-    configure([markdownServers[0], { name: 'yaml', command: 'yaml-language-server', args: ['--node-ipc'], languages: ['yaml'] }])
+    configure([markdownServers[0], { name: 'yaml', command: 'yaml-language-server', args: ['--stdio'], languages: ['yaml'] }])
     const doc = '---\ntitle: hello\n---\nBody'
     const view = new EditorView({ doc, extensions: [markdownParser(), languageServers('/workspace/frontmatter.md', 'markdown')] })
     views.push(view)
@@ -184,6 +185,24 @@ describe('Shared editor LSP sessions', () => {
     await settle()
     const changes = sent('textDocument/didChange').filter(call => call.id === yamlID)
     assert.strictEqual(changes.at(-1)?.value.params.contentChanges[0].text, 'title: world')
+  })
+
+  it('starts only YAML for YAML editors and supports frontmatter with YAML as the only server', async () => {
+    const yamlServer = { name: 'yaml', command: 'yaml-language-server', args: ['--stdio'], languages: ['yaml'] }
+    configure([yamlServer, markdownServers[0]])
+    const yamlView = new EditorView({ doc: 'title: Profile', extensions: [languageServers('/workspace/profile.yaml', 'yaml')] })
+    views.push(yamlView)
+    await settle()
+    assert.deepStrictEqual([...processes.values()], ['yaml'])
+
+    configure([yamlServer])
+    const markdown = new EditorView({ doc: '---\ntitle: Note\n---\nBody', extensions: [markdownParser(), languageServers('/workspace/note.md', 'markdown')] })
+    views.push(markdown)
+    await settle()
+    assert.strictEqual(calls.filter(call => call.command === 'start').length, 2)
+    assert([...processes.values()].every(name => name === 'yaml'))
+    const markdownVirtualUri = `${pathToFileURL('/workspace/note.md').href}.zettlr-frontmatter.yaml`
+    assert(sent('textDocument/didOpen').some(call => call.value.params.textDocument.uri === markdownVirtualUri && call.value.params.textDocument.languageId === 'yaml'))
   })
 
   it('sends current saves once per shared document and rejects snapshots superseded by edits', async () => {

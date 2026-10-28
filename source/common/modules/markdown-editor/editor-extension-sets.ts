@@ -56,7 +56,6 @@ import { statusbar } from './statusbar'
 import { renderers } from './renderers'
 import { mdPasteDropHandlers } from './plugins/md-paste-drop-handlers'
 import { footnoteGutter } from './plugins/footnote-gutter'
-import { yamlFrontmatterLint } from './linters/yaml-frontmatter-lint'
 import {
   mainThemes, darkMode, useDarkModeEditor,
   themeBerlinLight, themeBerlinDark,
@@ -267,8 +266,7 @@ function getGenericCodeExtensions (options: CoreExtensionOptions, language: stri
  * @return  {Extension[]}                    An array of Markdown extensions
  */
 export function getMarkdownExtensions (options: CoreExtensionOptions): Extension[] {
-  const mdLinterExtensions = [yamlFrontmatterLint]
-  mdLinterExtensions.push(lintGutter())
+  const mdLinterExtensions = [lintGutter()]
 
   return [
     ...getCoreExtensions(options, 'markdown'),

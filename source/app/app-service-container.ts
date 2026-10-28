@@ -20,7 +20,7 @@ import CiteprocProvider from '@providers/citeproc'
 import CommandProvider from '@providers/commands'
 import ConfigProvider from '@providers/config'
 import CssProvider from '@providers/css'
-import DictionaryProvider from '@providers/dictionary'
+import LSPProvider from '@providers/lsp'
 import DocumentManager from '@providers/documents'
 import FSAL from '@providers/fsal'
 import LinkProvider from '@providers/links'
@@ -78,8 +78,8 @@ export class AppServiceContainer {
   private readonly _citeprocProvider: CiteprocProvider
   private readonly _commandProvider: CommandProvider
   private readonly _configProvider: ConfigProvider
+  private readonly _lspProvider: LSPProvider
   private readonly _cssProvider: CssProvider
-  private readonly _dictionaryProvider: DictionaryProvider
   private readonly _linkProvider: LinkProvider
   private readonly _logProvider: LogProvider
   private readonly _menuProvider: MenuProvider
@@ -111,10 +111,10 @@ export class AppServiceContainer {
     this._recentDocsProvider = new RecentDocumentsProvider(this._logProvider)
     this._assetsProvider = new AssetsProvider(this._logProvider)
     this._cssProvider = new CssProvider(this._logProvider)
+    this._lspProvider = new LSPProvider(this._logProvider, this._configProvider)
     this._statsProvider = new StatsProvider(this._logProvider)
 
     this._appearanceProvider = new AppearanceProvider(this._logProvider, this._configProvider)
-    this._dictionaryProvider = new DictionaryProvider(this._logProvider, this._configProvider)
 
     this._targetProvider = new TargetProvider(this._logProvider, this._fsal)
     this._linkProvider = new LinkProvider(this._logProvider, this._configProvider, this._fsal)
@@ -170,7 +170,6 @@ export class AppServiceContainer {
     await this._informativeBoot(this._statsProvider, 'StatsProvider')
 
     await this._informativeBoot(this._appearanceProvider, 'AppearanceProvider')
-    await this._informativeBoot(this._dictionaryProvider, 'DictionaryProvider')
 
     // Reindex every file if necessary. Needs to come after appearance provider
     // and CSS provider (due to splashscreen), and before anything that accesses
@@ -227,7 +226,6 @@ export class AppServiceContainer {
   public get citeproc (): CiteprocProvider { return this._citeprocProvider }
   public get config (): ConfigProvider { return this._configProvider }
   public get css (): CssProvider { return this._cssProvider }
-  public get dictionary (): DictionaryProvider { return this._dictionaryProvider }
   public get links (): LinkProvider { return this._linkProvider }
   public get log (): LogProvider { return this._logProvider }
   public get menu (): MenuProvider { return this._menuProvider }
@@ -247,6 +245,7 @@ export class AppServiceContainer {
    * Prepares quitting the app by shutting down the service providers
    */
   async shutdown (): Promise<void> {
+    await this._safeShutdown(this._lspProvider, 'LSP Provider')
     await this._safeShutdown(this._lrtProvider, 'Long-running Task Provider')
     await this._safeShutdown(this._commandProvider, 'CommandProvider')
     await this._safeShutdown(this._documentManager, 'DocumentManager')
@@ -263,7 +262,6 @@ export class AppServiceContainer {
     await this._safeShutdown(this._searchProvider, 'SearchProvider')
     await this._safeShutdown(this._menuProvider, 'MenuProvider')
     await this._safeShutdown(this._recentDocsProvider, 'RecentDocsProvider')
-    await this._safeShutdown(this._dictionaryProvider, 'DictionaryProvider')
     await this._safeShutdown(this._citeprocProvider, 'CiteprocProvider')
     await this._safeShutdown(this._assetsProvider, 'AssetsProvider')
     await this._safeShutdown(this._appearanceProvider, 'AppearanceProvider')

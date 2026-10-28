@@ -13869,7 +13869,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"vscode-languageserver-types@npm:3.18.4":
+"vscode-languageserver-types@npm:3.18.4, vscode-languageserver-types@npm:^3.18.4":
   version: 3.18.4
   resolution: "vscode-languageserver-types@npm:3.18.4"
   checksum: 10/e399241413ab69e35e422862f935e6bdfe312834dd6202342c15418ea76f44d60e933fb343fc157a8905bd63f334be3b57f74f8fd4234b94179ac476068ac822
@@ -14682,6 +14682,7 @@ __metadata:
     unified: "npm:^11.0.5"
     uuid: "npm:^14.0.3"
     vue: "npm:^3.5.43"
+    vscode-languageserver-types: "npm:^3.18.4"
     vue-eslint-parser: "npm:^10.4.1"
     vue-loader: "npm:^17.4.2"
     vue-tsc: "npm:^3.3.13"

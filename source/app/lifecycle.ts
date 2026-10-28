@@ -16,10 +16,9 @@
 // Helper/Utility functions
 import registerCustomProtocols from './util/custom-protocols'
 import environmentCheck from './util/environment-check'
-import addToPath from './util/add-to-PATH'
 import resolveTimespanMs from './util/resolve-timespan-ms'
+import { configurePandocWasm } from './util/run-pandoc'
 import path from 'path'
-import { getProgramVersion } from './util/get-program-version'
 
 // Developer tools
 import installExtension, { VUEJS_DEVTOOLS } from 'electron-devtools-installer'
@@ -46,7 +45,6 @@ export async function bootApplication (): Promise<AppServiceContainer> {
   // the log and config providers. Then we just need to remember to boot it
   // before we access anything important.
   const appServiceContainer = new AppServiceContainer()
-  const config = appServiceContainer.config
   const log = appServiceContainer.log
 
   log.info(`こんにちは！ Booting Zettlr at ${(new Date()).toString()}.`)
@@ -75,26 +73,7 @@ export async function bootApplication (): Promise<AppServiceContainer> {
   // Now make the service container available for the rest of the main process.
   setAppServiceContainer(appServiceContainer)
 
-  // If we have a bundled pandoc, unshift its path to env.PATH in order to have
-  // the system search there first for the binary, and not use the internal
-  // one.
-  const useBundledPandoc = Boolean(config.get('export.useBundledPandoc'))
-  if (process.env.PANDOC_PATH !== undefined && useBundledPandoc) {
-    addToPath(log, path.dirname(process.env.PANDOC_PATH), 'unshift')
-    log.info('[Application] The bundled pandoc executable is now in PATH. If you do not want to use the bundled pandoc, uncheck the corresponding setting and reboot the app.')
-  }
-
-  // NOTE: Normally, we should check the Pandoc version in the environment check.
-  // However, since the user can decide whether they want to use the internal
-  // one or the system one (if applicable), we have to wait until here to
-  // extract the version string, since we may get any of the two but need the
-  // correct version string of the version that will actually be used.
-  try {
-    const version = await getProgramVersion('pandoc')
-    process.env.PANDOC_VERSION = String(version)
-  } catch (err) {
-    // No Pandoc available.
-  }
+  configurePandocWasm(async () => path.join(app.getPath('userData'), 'pandoc.wasm'))
 
   return appServiceContainer
 }

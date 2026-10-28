@@ -1,4 +1,4 @@
-# Ignore everything except icons, pandoc and the less files
+# Ignore generated resources; keep the source assets listed below.
 /*
 
 !icons

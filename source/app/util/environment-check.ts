@@ -16,7 +16,6 @@ import path from 'path'
 import { app } from 'electron'
 import tls from 'tls'
 import { promises as fs } from 'fs'
-import isFile from '../../common/util/is-file'
 import isTraySupported from './is-tray-supported'
 import { getProgramVersion } from './get-program-version'
 import fixPath from 'fix-path'
@@ -67,26 +66,6 @@ export default async function environmentCheck (): Promise<void> {
     // We support: Windows ARM and macOS ARM
     // and anything 64bit. Warn for everything else.
     console.warn(`[Application] Your platform/arch (${process.platform}/${process.arch}) combination is not officially supported. Zettlr might not function correctly.`)
-  }
-
-  // We need to check if Pandoc has been bundled with this package.
-  // Because if it is, we can simply use that one instead.
-  const executable = (process.platform === 'win32') ? 'pandoc.exe' : 'pandoc'
-  const pandocPath = path.join(process.resourcesPath, executable)
-  if (isFile(pandocPath)) {
-    console.log(`[Application] Pandoc has been bundled with this release. Path: ${pandocPath}`)
-    process.env.PANDOC_PATH = pandocPath
-  } else if (!app.isPackaged) {
-    // We're in develop mode, so possibly, we have a Pandoc exe. Let's check
-    const resPath = path.join(__dirname, '../../resources', executable)
-    if (isFile(resPath)) {
-      process.env.PANDOC_PATH = resPath
-      console.log(`[Application] App is unpackaged, and Pandoc has been found in the resources directory: ${resPath}`)
-    } else {
-      console.warn(`[Application] App is unpackaged, but there was no Pandoc executable: ${resPath}`)
-    }
-  } else {
-    console.warn('[Application] Pandoc has not been bundled with this release. Falling back to system version instead.')
   }
 
   // Now, let's see if there's a quarto package installed

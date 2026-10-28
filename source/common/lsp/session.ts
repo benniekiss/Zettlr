@@ -6,11 +6,12 @@ import { MultiServerTransport } from './transport'
 import { applyWorkspaceEdit } from './code-actions'
 import { EditorDiagnostics, type ServerDiagnostics } from './diagnostics'
 import { EditorWorkspace, authorityChanged } from './workspace'
+import { DP_EVENTS } from '@dts/common/documents'
 
 // Renderer-local: IPC ownership remains isolated between application windows.
 const sessions = new Map<string, EditorSession>()
 
-interface Consumer { uri: string, leases: Set<symbol>, diagnostics?: EditorDiagnostics }
+interface Consumer { uri: string, path: string, leases: Set<symbol>, diagnostics?: EditorDiagnostics }
 
 export class EditorSession {
   private readonly ipc = window.ipc
@@ -21,6 +22,8 @@ export class EditorSession {
   private readonly receivers = new Map<string, { transport: Transport, listeners: Set<(message: string) => void> }>()
   private readonly diagnostics = new Map<string, ServerDiagnostics>()
   private readonly stopMessages: () => void
+  private readonly stopSaves: () => void
+  private readonly stopFiles: () => void
   private closed = false
   private idle?: ReturnType<typeof setTimeout>
   private syncTimer?: ReturnType<typeof setTimeout>
@@ -36,17 +39,37 @@ export class EditorSession {
         for (const listener of receiver.listeners) {listener(payload.message)}
       }
     })
+    this.stopSaves = this.ipc.on('documents-update', (_event, { event, context }) => {
+      if (event !== DP_EVENTS.FILE_SAVED) {return}
+      const consumer = [...this.consumers.values()].find(consumer => consumer.path === context?.filePath)
+      if (consumer === undefined) {return}
+      void this.ready.then(() => {
+        if (this.closed || this.client.workspace.getFile(consumer.uri) === null) {return}
+        this.client.sync()
+        // A save may finish after newer edits. Sending its old text would roll
+        // back servers (such as codebook) that update their buffer on didSave.
+        if (context.savedContent !== this.client.workspace.getFile(consumer.uri)?.doc.toString()) {return}
+        this.client.notification('textDocument/didSave', { textDocument: { uri: consumer.uri }, text: context.savedContent })
+      }).catch(err => console.error('[LSP]', err))
+    })
+    this.stopFiles = this.ipc.on('fsal-watch-event', (_event, { event, uri }) => {
+      const type = ({ add: 1, addDir: 1, change: 2, unlink: 3, unlinkDir: 3 } as Record<string, number>)[event]
+      if (type === undefined) {return}
+      void this.ready.then(() => {
+        if (!this.closed) {this.client.notification('workspace/didChangeWatchedFiles', { changes: [{ uri, type }] })}
+      }).catch(err => console.error('[LSP]', err))
+    })
     this.ready = this.start(servers, path, rootUri).catch(err => { this.destroy(); throw err })
     // A view can disappear before initialization finishes.
     void this.ready.catch(() => {})
   }
 
-  retain (view: EditorView, uri: string): () => void {
+  retain (view: EditorView, uri: string, path: string): () => void {
     clearTimeout(this.idle)
     const token = Symbol()
     let consumer = this.consumers.get(view)
     if (consumer === undefined) {
-      consumer = { uri, leases: new Set() }
+      consumer = { uri, path, leases: new Set() }
       this.consumers.set(view, consumer)
     }
     consumer.leases.add(token)
@@ -107,6 +130,7 @@ export class EditorSession {
   private async start (servers: LanguageServerConfig[], path: string, rootUri: string): Promise<void> {
     const transports: Transport[] = []
     const languages: string[][] = []
+    const roots: string[] = []
     for (const server of servers) {
       if (this.closed) {throw new Error('Language server session released')}
       try {
@@ -127,6 +151,7 @@ export class EditorSession {
         this.receivers.set(session.id, { transport, listeners })
         transports.push(transport)
         languages.push(server.languages)
+        roots.push(session.rootUri)
       } catch (err) {
         if (this.closed) {throw err}
         console.error(`[LSP ${server.name}] Could not start server`, err)
@@ -142,7 +167,7 @@ export class EditorSession {
       // The router must finish reporting failed initialization before teardown
       // removes the native response listener.
       if (this.receivers.size === 0) {queueMicrotask(() => this.destroy())}
-    }, languages)
+    }, languages, roots)
     this.client = new LSPClient({
       rootUri, timeout: 30000,
       workspace: client => new EditorWorkspace(client, uri => { this.diagnostics.delete(uri) }),
@@ -150,8 +175,8 @@ export class EditorSession {
       extensions: [{
         clientCapabilities: {
           window: { workDoneProgress: false },
-          workspace: { configuration: true, applyEdit: true },
-          textDocument: { codeAction: {
+          workspace: { configuration: true, applyEdit: true, didChangeWatchedFiles: { dynamicRegistration: true, relativePatternSupport: true } },
+          textDocument: { synchronization: { didSave: true }, codeAction: {
             codeActionLiteralSupport: { codeActionKind: { valueSet: ['quickfix'] } },
             dataSupport: true, resolveSupport: { properties: [ 'edit', 'command' ] }, disabledSupport: true
           } }
@@ -182,6 +207,8 @@ export class EditorSession {
     }
     for (const id of this.receivers.keys()) {this.stop(id)}
     this.stopMessages()
+    this.stopSaves()
+    this.stopFiles()
     this.diagnostics.clear()
   }
 }
@@ -199,6 +226,6 @@ export async function acquireSession (view: EditorView, path: string, language: 
     session = new EditorSession(key, servers, path, rootUri)
     sessions.set(key, session)
   }
-  const release = session.retain(view, uri)
+  const release = session.retain(view, uri, path)
   return { session, uri, release }
 }

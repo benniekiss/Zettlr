@@ -1,0 +1,9 @@
+# Zettlr compiles this profile to PDF with typst.ts.
+reader: markdown
+writer: typst-pdf
+standalone: true
+filters:
+  - type: citeproc
+variables:
+  papersize: a4
+fail-if-warnings: false

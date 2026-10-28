@@ -62,6 +62,7 @@ export const PANDOC_READERS: Record<string, string> = {
  * @var {Record<string, string>}
  */
 export const PANDOC_WRITERS: Record<string, string> = {
+  typst: 'Typst',
   asciidoc: 'AsciiDoc',
   beamer: 'Beamer slides',
   commonmark: 'CommonMark',
@@ -136,6 +137,8 @@ export const SUPPORTED_READERS = [
  * @var {Record<string, string>}
  */
 export const WRITER2EXT: Record<string, string> = {
+  typst: 'typ',
+  'typst-pdf': 'pdf',
   asciidoc: 'adoc', // See https://asciidoctor.org/docs/asciidoc-recommended-practices/#document-extension
   beamer: 'pdf',
   commonmark: 'md',

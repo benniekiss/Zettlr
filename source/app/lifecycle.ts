@@ -20,6 +20,7 @@ import resolveTimespanMs from './util/resolve-timespan-ms'
 import { configurePandocWasm } from './util/run-pandoc'
 import { downloadPandocWasm, invalidatePandocWasm } from './util/download-pandoc-wasm'
 import { DEFAULT_PANDOC_WASM_URL } from '@common/pandoc-util/pandoc-wasm-url'
+import { warmTypstFontCache } from './util/compile-typst'
 import path from 'path'
 
 // Developer tools
@@ -85,6 +86,11 @@ export async function bootApplication (): Promise<AppServiceContainer> {
       configuredUrl === '' ? undefined : exportConfig.pandocWasmSha256
     )
   }, invalidatePandocWasm)
+
+  // Prepare fonts without delaying window creation or requiring an export.
+  void warmTypstFontCache(appServiceContainer.config.get().export.typstFontPath).catch(error => {
+    log.warning('Could not prepare Typst fonts at startup; they will be loaded on export.', error)
+  })
 
   return appServiceContainer
 }

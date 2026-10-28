@@ -25,6 +25,18 @@ const pandocUpdateMessage = ref('')
 export function getImportExportFields (): PreferencesFieldset[] {
   return [
     {
+      title: trans('Typst PDF'),
+      group: PreferencesGroups.ImportExport,
+      infoString: trans('Typst PDF uses a bundled WebAssembly compiler and installed system fonts. Customize its layout in the Typst export profile.'),
+      fields: [{
+        type: 'text',
+        label: trans('Additional Typst fonts folder'),
+        model: 'export.typstFontPath',
+        reset: '',
+        info: trans('Optional folder containing TTF, OTF, TTC, or OTC fonts, in addition to installed system fonts. Subfolders are included.')
+      }]
+    },
+    {
       title: trans('Pandoc download'),
       group: PreferencesGroups.ImportExport,
       infoString: trans('Pandoc is cached for offline use. On first use each session, custom sources are checked for updates when the server provides an ETag or Last-Modified value. Changing the URL applies to the next import or export.'),

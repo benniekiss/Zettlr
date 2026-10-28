@@ -19,6 +19,7 @@ import isFile from '@common/util/is-file'
 import type { DefaultsOverride, ExporterAPI, ExporterOptions, ExportResult, PandocDefaults, PandocRunnerOutput } from './types'
 import { plugin as DefaultExporter } from './default-exporter'
 import { plugin as PDFExporter } from './pdf-exporter'
+import { plugin as TypstPDFExporter } from './typst-pdf-exporter'
 import { plugin as TextbundleExporter } from './textbundle-exporter'
 import type AssetsProvider from '@providers/assets'
 import type LogProvider from '@providers/log'
@@ -67,6 +68,7 @@ export function getCustomProfiles (): PandocProfileMetadata[] {
 const PLUGINS = {
   pandoc: DefaultExporter,
   'simple-pdf': PDFExporter,
+  'typst-pdf': TypstPDFExporter,
   textbundle: TextbundleExporter
 }
 
@@ -90,6 +92,7 @@ export async function makeExport (
 
   // This is basically the "plugin API"
   const ctx: ExporterAPI = {
+    typstFontPath: config.get().export.typstFontPath,
     resolveTargetPath: async (target: string) => {
       // Output is to a custom or temporary directory,
       // in which case, ignore any custom-set output path
@@ -120,6 +123,7 @@ export async function makeExport (
 
       return await windows.shouldOverwriteExport(target)
     },
+  
     runPandoc: async (defaults: PandocDefaults) => {
       return await runPandoc(logger, defaults, options.cwd)
     },
@@ -136,6 +140,8 @@ export async function makeExport (
     return await PLUGINS.textbundle(options, inputFiles, ctx)
   } else if (options.profile.writer === 'simple-pdf') {
     return await PLUGINS['simple-pdf'](options, inputFiles, ctx)
+  } else if (options.profile.writer === 'typst-pdf') {
+    return await PLUGINS['typst-pdf'](options, inputFiles, ctx)
   } else {
     // ... otherwise run the regular Pandoc exporter.
     return await PLUGINS.pandoc(options, inputFiles, ctx)

@@ -86,6 +86,17 @@ Focus on what matters to you.
 
 ## Getting Started
 
+The **Typst PDF** export profile converts documents with Pandoc and compiles them
+with the bundled `typst.ts` WASM compiler and installed system fonts, offline.
+No fonts are bundled or downloaded. Math requires an installed math font, such
+as Cambria Math, STIX Two Math, or Latin Modern Math. Customize `Typst PDF.yaml`
+in the assets manager for page settings, fonts, and a Pandoc Typst template.
+
+An additional font folder can be configured under **Preferences → Import and
+Export → Typst PDF**; its subfolders are searched too. Images and Typst includes
+resolve from the export working directory. Typst templates use Typst formatting;
+the CSS used by Simple PDF does not apply. Typst package imports are not supported.
+
 [Download the latest release](https://www.zettlr.com/download/) and install it
 as you would any other app. Currently supported are macOS, Windows, and most
 Linux distributions.

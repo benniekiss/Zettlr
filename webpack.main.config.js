@@ -28,6 +28,14 @@ module.exports = {
         { from: 'static/tutorial', to: 'tutorial' },
         // Keep process entry points beside main, matching source/app's directory layout.
         { from: 'source/app/processes/pandoc-process.cjs', to: '../processes/pandoc-process.cjs' },
+        { from: 'source/app/processes/typst-process.cjs', to: '../processes/typst-process.cjs' },
+        { from: 'source/app/processes/typst-fonts.cjs', to: '../processes/typst-fonts.cjs' },
+        { from: 'static/typst', to: 'assets/typst' },
+        { from: 'node_modules/@myriaddreamin/typst.ts/LICENSE', to: 'assets/typst/driver/LICENSE' },
+        { from: 'node_modules/@myriaddreamin/typst-ts-web-compiler/pkg', to: 'assets/typst/compiler' },
+        ...[ 'compiler', 'init', 'internal.types', 'options.init', 'wasm' ].map(name => ({
+          from: `node_modules/@myriaddreamin/typst.ts/dist/cjs/${name}.cjs`, to: `assets/typst/driver/${name}.cjs`
+        })),
         { from: 'source/app/processes/pandoc-filesystem-roots.cjs', to: '../processes/pandoc-filesystem-roots.cjs' },
         { from: 'static/dict', to: 'dict' },
         { from: 'static/lang', to: 'lang' },

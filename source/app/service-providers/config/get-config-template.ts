@@ -132,7 +132,6 @@ export interface ConfigOptions {
     stripLinks: 'full'|'unlink'|'no'
     cslLibrary: string
     cslStyle: string
-    useBundledPandoc: boolean
     exportQmdWithQuarto: boolean
     customCommands: Array<{ displayName: string, command: string }>
     selectedProfiles: Array<{ filePath: string, profile: string }>
@@ -360,7 +359,6 @@ export function getConfigTemplate (): ConfigOptions {
       stripLinks: 'full', // Strip internal links: "full" - remove completely, "unlink" - only remove brackets, "no" - don't alter
       cslLibrary: '', // Path to a CSL JSON library file
       cslStyle: '', // Path to a CSL Style file
-      useBundledPandoc: true, // Whether to use the bundled Pandoc
       exportQmdWithQuarto: false, // Whether .qmd-files should be exported with Quarto
       customCommands: [], // Custom commands that the user can use to run arbitrary exports
       selectedProfiles: [], // Remembers the last chosen exporter per file for easy re-exporting

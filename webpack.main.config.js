@@ -25,6 +25,9 @@ module.exports = {
         // These are all static files that simply need to be bundled with the
         // application; we'll just copy them over from the static folder.
         { from: 'static/tutorial', to: 'tutorial' },
+        // Keep process entry points beside main, matching source/app's directory layout.
+        { from: 'source/app/processes/pandoc-process.cjs', to: '../processes/pandoc-process.cjs' },
+        { from: 'source/app/processes/pandoc-filesystem-roots.cjs', to: '../processes/pandoc-filesystem-roots.cjs' },
         { from: 'static/dict', to: 'dict' },
         { from: 'static/lang', to: 'lang' },
         { from: 'static/csl-locales', to: 'assets/csl-locales' },

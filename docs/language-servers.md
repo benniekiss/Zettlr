@@ -24,7 +24,7 @@ For example:
   {
     "name": "yaml",
     "command": "yaml-language-server",
-    "args": ["--node-ipc"],
+    "args": ["--stdio"],
     "languages": ["yaml"],
     "settings": { "yaml": { "schemaStore": { "enable": false } } }
   },
@@ -64,7 +64,7 @@ Each server accepts these fields:
 | --- | --- |
 | `name` | Required unique name. |
 | `command` | Required executable name or path. |
-| `languages` | Required nonempty list of language IDs: `markdown`, `latex`, `yaml`, or `json`. |
+| `languages` | Required nonempty list of language IDs, such as `markdown`, `latex`, `yaml`, `json`, or `lua`. |
 | `args` | Optional array of command arguments. |
 | `enabled` | Set to `false` to disable this server. Defaults to `true`. |
 | `cwd` | Working directory and server root. Defaults to the containing open workspace, or the document's directory for standalone files. |
@@ -100,12 +100,13 @@ never applied to changed text. Edits to unopened files and file creation,
 renaming, or deletion are rejected without applying part of the edit.
 
 Editor views in the same window share one native CodeMirror LSP client per
-workspace and configuration. Its enabled servers initialize once; only servers
-matching a document's language receive that document. Multiple panes showing the
-same file share one open-document record and synchronized version. Closing a pane
-detaches it; processes stop after the last consumer closes. Configuration changes
-replace the shared session once for all affected views. Separate windows retain
-separate sessions and IPC ownership. A failed server does not disable other servers.
+workspace, configuration, and applicable server set. Only servers matching a
+document's language start for that session; Markdown also starts YAML for
+frontmatter. Multiple panes showing the same file share one open-document record
+and synchronized version. Closing a pane detaches it; processes stop after the
+last consumer closes. Configuration changes replace affected sessions. Separate
+windows retain separate sessions and IPC ownership. A failed server does not
+disable other servers.
 
 The root is the most specific open Zettlr workspace containing the document,
 falling back to the document's parent directory for standalone files. A server's

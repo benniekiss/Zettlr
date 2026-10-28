@@ -136,7 +136,10 @@ export default class LSPProvider extends ProviderContract {
           utilityChild.once('exit', () => owner.removeListener('destroyed', destroyed))
           waitForSpawn = new Promise<void>((resolve, reject) => {
             utilityChild.once('spawn', resolve)
-            utilityChild.once('error', (type, location, report) => reject(new Error(`${type}: ${location} ${report}`)))
+            utilityChild.once('error', (type, location, report) => {
+              this.stop(id)
+              reject(new Error(`${type}: ${location} ${report}`))
+            })
           })
         } else {
           const nodeChild = child as ChildProcessWithoutNullStreams
@@ -155,6 +158,7 @@ export default class LSPProvider extends ProviderContract {
         return { id, uri: pathToFileURL(payload.path).href, rootUri: pathToFileURL(cwd).href }
       }
       const session = this.sessions.get(payload.id)
+      if (session === undefined && payload.command === 'stop') {return}
       if (session === undefined || session.owner !== event.sender) {
         throw new Error('Unknown LSP session')
       }
@@ -190,7 +194,9 @@ export default class LSPProvider extends ProviderContract {
     this.sessions.delete(id)
     const shutdown = { jsonrpc: '2.0', id: 'zettlr-shutdown', method: 'shutdown' }
     if (session.utility) {
-      (session.process as UtilityProcess).postMessage(shutdown)
+      try { (session.process as UtilityProcess).postMessage(shutdown) } catch {
+        (session.process as UtilityProcess).kill()
+      }
     } else if ((session.process as ChildProcessWithoutNullStreams).stdin.writable) {
       (session.process as ChildProcessWithoutNullStreams).stdin.write(frameLSPMessage(JSON.stringify(shutdown)))
     }

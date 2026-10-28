@@ -50,6 +50,7 @@ export function languageServers (path: string, language: string): Extension {
         this.view.dispatch({ effects: compartment.reconfigure(lease.session.client.plugin(lease.uri, language)) })
         lease.session.client.sync()
         lease.session.replay(this.view)
+        forceLinting(this.view)
       } catch (err) {
         if (this.lease === lease) { lease.release(); this.lease = undefined }
         if (!this.destroyed && generation === this.generation) {throw err}

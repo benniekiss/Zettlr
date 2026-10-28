@@ -173,7 +173,8 @@ export class EditorSession {
     this.transport?.syncVirtualDocument(uri, 'yaml', '', true)
   }
 
-  private stop (id: string): void {
+  private stop (id: string, force = false): void {
+    if (!force && !this.receivers.has(id)) {return}
     this.receivers.delete(id)
     void this.ipc.invoke('lsp-provider', { command: 'stop', id }).catch(err => console.error('[LSP]', err))
   }
@@ -186,7 +187,7 @@ export class EditorSession {
       if (this.closed) {throw new Error('Language server session released')}
       try {
         const session = await this.ipc.invoke('lsp-provider', { command: 'start', name: server.name, path })
-        if (this.closed) { this.stop(session.id); throw new Error('Language server session released') }
+        if (this.closed) { this.stop(session.id, true); throw new Error('Language server session released') }
         const listeners = new Set<(message: string) => void>()
         const transport: Transport = {
           send: message => {
@@ -277,15 +278,19 @@ export function notifyLspDocumentSaved (path: string, savedContent: string): voi
   for (const session of sessions.values()) {session.notifySaved(path, savedContent)}
 }
 
+
 export async function acquireSession (view: EditorView, path: string, language: string, config: string, bundled: boolean, current: () => boolean): Promise<SessionLease|undefined> {
   const servers = parseLanguageServers(config).filter(server => server.enabled !== false)
-  if (!servers.some(server => server.languages.includes(language))) {return undefined}
+  // Markdown also needs the YAML server for its virtual frontmatter document.
+  const sessionServers = servers.filter(server => server.languages.includes(language) || language === 'markdown' && server.languages.includes('yaml'))
+  if (sessionServers.length === 0) {return undefined}
   const { uri, rootUri } = await window.ipc.invoke('lsp-provider', { command: 'resolve', path })
   if (!current()) {return undefined}
-  const key = JSON.stringify([ rootUri, config, bundled ])
+  const serverNames = sessionServers.map(server => server.name)
+  const key = JSON.stringify([ rootUri, config, bundled, serverNames ])
   let session = sessions.get(key)
   if (session === undefined) {
-    session = new EditorSession(key, servers, path, rootUri)
+    session = new EditorSession(key, sessionServers, path, rootUri)
     sessions.set(key, session)
   }
   const release = session.retain(view, uri, path, language)

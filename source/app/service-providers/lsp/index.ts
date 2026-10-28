@@ -1,7 +1,7 @@
 import { app, ipcMain, utilityProcess, type UtilityProcess, type WebContents } from 'electron'
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process'
 import { randomUUID } from 'crypto'
-import { join } from 'path'
+import path, { join } from 'path'
 import { pathToFileURL } from 'url'
 import ProviderContract from '../provider-contract'
 import type ConfigProvider from '../config'
@@ -10,12 +10,14 @@ import { parseLanguageServers, type LanguageServerConfig } from '@common/lsp/con
 import { frameLSPMessage, LSPMessageReader } from '@common/lsp/framing'
 import { resolveLanguageServerCommand } from './bundled-servers'
 import { languageServerRoot } from './workspace-root'
+import { withZettlrYamlSchemas } from './yaml-schema-settings'
 
 interface Session {
   process: ChildProcessWithoutNullStreams|UtilityProcess
   utility: boolean
   owner: WebContents
   config: LanguageServerConfig
+  settings: Record<string, unknown>
   rootUri: string
 }
 
@@ -38,6 +40,12 @@ export default class LSPProvider extends ProviderContract {
           throw new Error('Language server is not configured or enabled')
         }
         const cwd = server.cwd ?? languageServerRoot(payload.path, Array.isArray(workspaces) ? workspaces : [])
+        const serverSettings = withZettlrYamlSchemas(
+          server.command,
+          server.settings ?? {},
+          path.join(__dirname, 'assets', 'defaults'),
+          path.join(app.getPath('userData'), 'defaults')
+        )
         const roots = [join(global.process.resourcesPath, 'language-servers')]
         if (!app.isPackaged) {
           roots.push(join(__dirname, '../../resources/lsp', `${global.process.platform}-${global.process.arch}`, 'language-servers'))
@@ -52,7 +60,7 @@ export default class LSPProvider extends ProviderContract {
           : spawn(launcher.command, launcher.args, { cwd, env: childEnv, windowsHide: true, shell: false })
         const utility = launcher.utilityProcess === true
         const id = randomUUID()
-        this.sessions.set(id, { process: child, utility, owner, config: server, rootUri: pathToFileURL(cwd).href })
+        this.sessions.set(id, { process: child, utility, owner, config: server, settings: serverSettings, rootUri: pathToFileURL(cwd).href })
         const send = (message: string): void => {
           if (!owner.isDestroyed()) {owner.send('lsp-message', { id, message })}
         }
@@ -80,11 +88,13 @@ export default class LSPProvider extends ProviderContract {
           // CodeMirror doesn't implement server configuration requests.
           if (value.method === 'workspace/configuration' && value.id !== undefined) {
             const result = value.params.items.map((item: { section?: string }) => {
-              let settings: any = server.settings ?? {}
+              let sectionSettings: unknown = serverSettings
               for (const part of item.section?.split('.') ?? []) {
-                settings = settings?.[part]
+                sectionSettings = sectionSettings !== null && typeof sectionSettings === 'object'
+                  ? (sectionSettings as Record<string, unknown>)[part]
+                  : undefined
               }
-              return settings ?? null
+              return sectionSettings ?? null
             })
             write({ jsonrpc: '2.0', id: value.id, result })
           } else if (value.method === 'window/workDoneProgress/create') {
@@ -161,7 +171,7 @@ export default class LSPProvider extends ProviderContract {
           (session.process as ChildProcessWithoutNullStreams).stdin.write(frameLSPMessage(JSON.stringify(value)))
         }
         if (value.method === 'initialized') {
-          const settings = { jsonrpc: '2.0', method: 'workspace/didChangeConfiguration', params: { settings: session.config.settings ?? {} } }
+          const settings = { jsonrpc: '2.0', method: 'workspace/didChangeConfiguration', params: { settings: session.settings } }
           if (session.utility) {
             (session.process as UtilityProcess).postMessage(settings)
           } else {

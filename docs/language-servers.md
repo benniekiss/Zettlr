@@ -79,8 +79,10 @@ place the preferred formatter/completion provider first. The client enables
 completion, hover, signature help, formatting (Shift-Alt-F), rename (F2),
 definition (F12), and references (Shift-F12), subject to server capabilities.
 YAML files and asset import/export profiles use YAML Language Server diagnostics,
-completion, hover, and other advertised features. Schema-driven diagnostics require
-a schema association or an inline `$schema` modeline.
+completion, hover, and other advertised features. Zettlr automatically associates
+the bundled Pandoc metadata schema with Markdown frontmatter and the Pandoc defaults
+schema with YAML files in Zettlr's defaults directory. Other YAML files can still
+use a custom schema association or an inline `$schema` modeline.
 
 Load spelling fixes and other diagnostic code actions with the native
 **Show fixes** button: hover over an underlined diagnostic, or open the diagnostics

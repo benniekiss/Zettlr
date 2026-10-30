@@ -20,6 +20,17 @@ import type { ConfigOptions } from 'source/app/service-providers/config/get-conf
 export function getZettelkastenFields (_config: ConfigOptions): PreferencesFieldset[] {
   return [
     {
+      title: trans('Enable Zettelkasten System'),
+      infoString: trans('Allow Zettlr to parse and process zettelkasten IDs and internal links'),
+      group: PreferencesGroups.Zettelkasten,
+      help: undefined,
+      titleField: {
+        type: 'switch',
+        model: 'zkn.enableZkn'
+      },
+      fields: []
+    },
+    {
       title: trans('Zettelkasten IDs'),
       infoString: trans('Specify how Zettlr generates new file IDs for your Zettelkasten, and enable Zettlr to detect them.'),
       group: PreferencesGroups.Zettelkasten,
@@ -43,7 +54,7 @@ export function getZettelkastenFields (_config: ConfigOptions): PreferencesField
       ]
     },
     {
-      title: trans('Internal links'),
+      title: trans('Zettelkasten Links'),
       group: PreferencesGroups.Zettelkasten,
       help: undefined, // TODO
       fields: [
@@ -88,7 +99,7 @@ export function getZettelkastenFields (_config: ConfigOptions): PreferencesField
       ]
     },
     {
-      title: trans('Zettelkasten folder'),
+      title: trans('Zettelkasten Folder'),
       infoString: trans('Choosing a Zettelkasten folder allows Zettlr to automatically create files when following links to not-yet-existing files. This folder must be open as a Workspace in Zettlr.'),
       group: PreferencesGroups.Zettelkasten,
       fields: [

@@ -52,6 +52,7 @@ export interface DocumentsUpdateContext {
   windowId?: string
   leafId?: string
   filePath?: string
+  savedContent?: string
   direction?: 'horizontal'|'vertical'
   insertion?: 'after'|'before'
   newLeaf?: string
@@ -1597,7 +1598,7 @@ current contents from the editor somewhere else, and restart the application.`
 
     this._app.log.info(`[DocumentManager] File ${filePath} saved.`)
     this.broadcastEvent(DP_EVENTS.CHANGE_FILE_STATUS, { filePath, status: 'modification' })
-    this.broadcastEvent(DP_EVENTS.FILE_SAVED, { filePath })
+    this.broadcastEvent(DP_EVENTS.FILE_SAVED, { filePath, savedContent: content })
 
     return true
   }

@@ -46,7 +46,6 @@ const guardOptions = {
     [ 'window.nativeAppearance', false ],
     [ 'window.vibrancy', false ],
     [ 'watchdog.activatePolling', false ],
-    [ 'export.useBundledPandoc', false ],
     [ 'zkn.idRE', false ]
   ]),
   // The following options additionally require a clearing of the cache

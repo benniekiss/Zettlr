@@ -19,6 +19,7 @@ import getLanguageFile from '@common/util/get-language-file'
 import { recommendedLanguageServers } from '@common/lsp/config'
 import type { EditorShortcutName } from 'source/common/modules/markdown-editor/keymaps/shortcuts'
 import { type MenuShortcutName } from '../menu/shortcuts'
+import { DEFAULT_PANDOC_WASM_URL } from '@common/pandoc-util/pandoc-wasm-url'
 
 export type MarkdownTheme = 'berlin'|'frankfurt'|'bielefeld'|'karl-marx-stadt'|'bordeaux'
 
@@ -68,6 +69,7 @@ export interface ConfigOptions {
   openDirectory: string|null
   attachmentExtensions: string[]
   alwaysReloadFiles: boolean
+  confirmExportOverwrite: boolean
   muteLines: boolean
 
   // NOTE to everyone: These options (and possibly others) that pertain to the
@@ -106,13 +108,15 @@ export interface ConfigOptions {
     askLangFileDialog: string
   }
   export: {
+    pandocWasmUrl: string
+    pandocWasmSha256: string
+    typstFontPath: string
     dir: 'temp'|'cwd'|'ask'
     stripTags: boolean
     autoOpenExportedFiles: boolean
     stripLinks: 'full'|'unlink'|'no'
     cslLibrary: string
     cslStyle: string
-    useBundledPandoc: boolean
     exportQmdWithQuarto: boolean
     customCommands: Array<{ displayName: string, command: string }>
     selectedProfiles: Array<{ filePath: string, profile: string }>
@@ -300,6 +304,7 @@ export function getConfigTemplate (): ConfigOptions {
     darkMode: nativeTheme.shouldUseDarkColors,
     darkModeEditor: 'match', // Possible values: 'match', 'light', 'dark'
     alwaysReloadFiles: true, // Should Zettlr automatically load remote changes?
+    confirmExportOverwrite: true, // Ask before overwriting existing files on export?
     autoDarkMode: 'system', // Possible values: 'off', 'system', 'schedule', 'auto'
     autoDarkModeStart: '21:00', // Switch into dark mode at this time
     autoDarkModeEnd: '06:00', // Switch to light mode at this time
@@ -319,13 +324,15 @@ export function getConfigTemplate (): ConfigOptions {
     newFileNamePattern: '%id.md',
     newFileDontPrompt: false, // If true immediately creates files
     export: {
+      pandocWasmUrl: DEFAULT_PANDOC_WASM_URL,
+      pandocWasmSha256: '',
+      typstFontPath: '',
       dir: 'temp', // Can either be "temp", "cwd" (current working directory) or "ask"
       stripTags: false, // Strip tags a.k.a. #tag
       autoOpenExportedFiles: true,
       stripLinks: 'full', // Strip internal links: "full" - remove completely, "unlink" - only remove brackets, "no" - don't alter
       cslLibrary: '', // Path to a CSL JSON library file
       cslStyle: '', // Path to a CSL Style file
-      useBundledPandoc: true, // Whether to use the bundled Pandoc
       exportQmdWithQuarto: false, // Whether .qmd-files should be exported with Quarto
       customCommands: [], // Custom commands that the user can use to run arbitrary exports
       selectedProfiles: [], // Remembers the last chosen exporter per file for easy re-exporting

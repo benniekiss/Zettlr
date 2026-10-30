@@ -86,6 +86,17 @@ Focus on what matters to you.
 
 ## Getting Started
 
+The **Typst PDF** export profile converts documents with Pandoc and compiles them
+with the bundled `typst.ts` WASM compiler and installed system fonts, offline.
+No fonts are bundled or downloaded. Math requires an installed math font, such
+as Cambria Math, STIX Two Math, or Latin Modern Math. Customize `Typst PDF.yaml`
+in the assets manager for page settings, fonts, and a Pandoc Typst template.
+
+An additional font folder can be configured under **Preferences → Import and
+Export → Typst PDF**; its subfolders are searched too. Images and Typst includes
+resolve from the export working directory. Typst templates use Typst formatting;
+the CSS used by Simple PDF does not apply. Typst package imports are not supported.
+
 [Download the latest release](https://www.zettlr.com/download/) and install it
 as you would any other app. Currently supported are macOS, Windows, and most
 Linux distributions.
@@ -160,9 +171,6 @@ developing, you'll need to have the following installed on your computer:
    which will make many of the next steps easier.
 4. A few command-line utilities that various scripts require for running the
    development builds:
-    * [`cURL`](https://curl.se/download.html) (required by the Pandoc download
-      script)
-    * `unzip` (required by the Pandoc download script)
     * [`jq`](https://jqlang.github.io/jq/) (required by the i18n script)
 5. An appropriate build toolchain for your operating system, since Zettlr
    requires a few native C++-modules that must be compiled before running the
@@ -470,34 +478,85 @@ make sure this environment variable is *not* set, e.g., by running
 > flag if you know *exactly* what you're doing, and, if something goes wrong,
 > communicate proactively. Then, all is good.
 
-#### `BUNDLE_PANDOC`
+#### Pandoc WASM
 
-If this environment variable is present during build, this will cause the build
-script to **not** bundle the correct Pandoc binary into the final application
-bundle. This is useful if you are repackaging the app for distribution through a
-package manager and ensure that Pandoc gets installed as a dependency of Zettlr.
-The build script will emit a warning that the binary will not be bundled with
-Pandoc.
+Pandoc runs as WebAssembly directly in an Electron utility process, using
+Node's native WASI runtime. The parent owns the private IO
+directory and waits for the helper process to exit before completing a job.
+This also closes native WASI descriptors when a timed-out conversion is killed.
+Every WASI import has a JavaScript wrapper to avoid a Node 22/V8 GC crash with
+direct native imports. Set **Pandoc WASM download URL**
+under **Preferences → Import/Export → Pandoc download** to select its source.
+The default points directly to the Pandoc 3.12 WASM release in `jgm/pandoc`.
+HTTPS and local `file:` URLs are supported, with either a raw `.wasm` module
+or a ZIP containing `pandoc.wasm`. A custom module is executable code; only
+configure sources you trust. The built-in release is additionally pinned by
+the SHA-256 hash of its extracted module.
+For a custom source, an optional SHA-256 preference can pin the extracted
+`pandoc.wasm` module; leave it blank to skip hash verification. A hash entered
+while the URL is blank is ignored.
 
-To disable bundling of Pandoc, you need to set the environment variable to `0`,
-e.g.: `export BUNDLE_PANDOC=0`. This will cause the build script to neither
-download nor bundle Pandoc. (This also absolves your build environment from the
-specific requirements for the Pandoc download script identified above.)
+Zettlr bundles its default module and copies it into the user data cache on
+first use, so the first import or export works offline. Custom sources are
+downloaded on first use and cached there too. Changing the URL selects a separate cache entry
+on the next import or export; no restart is needed. Cached modules are reused
+without checking the source automatically. Preferences → Import/Export → Check
+for updates downloads the configured source again and compares the extracted
+module's SHA-256 digest with the installed copy. This also works for local file
+URLs. A configured hash continues to pin the module; to advance a pinned source,
+change its hash too. Replacements must compile, initialize, and return a valid
+Pandoc version before updating the cache. Failed checks or replacements report
+an error and preserve the previously installed module.
 
-> [!CAUTION]
-> Zettlr users expect Pandoc to be present, since otherwise they will not be
-> able to import or export files. Every version of Zettlr that is publicly
-> distributed must therefore either come bundled with Pandoc, or ensure through
-> another mechanism that Pandoc is installed on the computer. If you use this
-> build flag while repackaging the app and distribute it via some package
-> manager, you are **required** to ensure that Pandoc will be installed
-> alongside Zettlr via some other means (e.g., by marking Pandoc as a dependency
-> of Zettlr). We do not want users to start complaining that some Zettlr version
-> has non-functioning exports or imports.
-> **Failure to comply with these added requirements will result in our immediate termination of the implicit consent for you to distribute modified Zettlr versions.**
-> Thus, you will forfeit your allowance to distribute Zettlr indefinitely. In
-> short: Only use this build flag if you know *exactly* what you're doing. Then,
-> all is good.
+Filesystem access follows the OS account's permissions, like native Pandoc.
+Lua readers and filters can read resources and write side-effect files outside
+the working directory, including modifying source files. Reactor IO files stay
+private, and the WASI runtime receives a small environment-variable allowlist.
+The reactor reserves the guest root paths `/stdin`, `/stdout`, `/stderr`, and
+`/warnings`; files with these names in document directories remain ordinary
+resources.
+Downloads and extracted modules are limited to 512 MiB, including larger builds.
+
+The build downloads, extracts, and validates the default WASM module, then
+bundles it with the application. Build downloads are cached under
+`build/pandoc-wasm`. No native Pandoc installation is needed.
+
+To customize a build's defaults, set `PANDOC_WASM_URL` and
+`PANDOC_WASM_SHA256` when running the build command. For example:
+
+```sh
+PANDOC_WASM_URL=https://example.org/pandoc.wasm.zip \
+PANDOC_WASM_SHA256='replace-with-the-extracted-module-sha256' yarn package
+```
+
+The URL must use HTTPS or `file:`. The hash pins the extracted `pandoc.wasm`,
+not the ZIP archive. An omitted variable keeps its checked-in default; a URL-only
+override therefore supports mirrors of the official module. To use a different
+module, provide its matching hash as well. Invalid hashes fail the build.
+These values are compiled into both the main and renderer bundles; setting them
+when launching an already built app has no effect. Preferences → Import/Export
+can still override the download source.
+
+Set `PANDOC_WASM_URL=none` to build without a bundled module, default download source, or hash.
+Users must then configure a source in Preferences before using Pandoc.
+Set `PANDOC_WASM_SHA256=none` to omit the default integrity pin while retaining
+a default URL. An empty URL override still keeps the checked-in URL;
+an explicitly empty hash remains invalid. Existing saved preferences are kept.
+
+Developers
+can run the WASM conversion tests with an existing module by setting
+`PANDOC_TEST_WASM=/path/to/pandoc.wasm` when running `yarn test`; those tests
+are skipped when no module is supplied. Download/cache tests always run and
+do not require internet access.
+
+Import/export profiles, local resources, bibliographies, and Lua filters remain
+supported. External PDF engines and executable JSON filters are unsupported;
+use Simple PDF for PDF output. The WASM build cannot fetch remote resources or
+run commands from Lua filters.
+
+Lua filters that write buffered stdout with `io.stdout:write` should call
+`io.stdout:flush()` to include that output in the export log. The WASM reactor
+does not exit a process and therefore does not automatically flush that stream.
 
 #### `BUNDLE_LSP`, `BUNDLE_YAML_SERVER`, `BUNDLE_PANACHE`, `BUNDLE_CODEBOOK`, `BUNDLE_LTEX_PLUS`
 

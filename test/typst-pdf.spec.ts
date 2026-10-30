@@ -142,9 +142,11 @@ describe('Typst WASM PDF', function () {
     }, [input], {
       loadDefaults: async (_name, overrides) => ({ ...overrides }),
       runPandoc: async () => ({ code: 23, stdout: ['additional output'], stderr: ['reader failed'] }),
-      listDefaults: async () => []
+      listDefaults: async () => [],
+      resolveTargetPath: async target => path.resolve(directory, target),
+      confirmTargetOverwrite: async () => true
     })
-    assert.deepStrictEqual(result, { code: 23, stdout: ['additional output'], stderr: ['reader failed'], targetFile: target })
+    assert.deepStrictEqual(result, { status: 'completed', output: { code: 23, stdout: ['additional output'], stderr: ['reader failed'], targetFile: target } })
     assert.strictEqual(await fs.readFile(target, 'utf8'), 'previous PDF')
     assert.deepStrictEqual(await fs.readdir(directory), ['input.pdf'])
   })
@@ -170,12 +172,15 @@ describe('Typst WASM PDF', function () {
           await fs.writeFile(defaults['output-file'] as string, source)
           return { code: 0, stdout: ['additional output'], stderr: ['Pandoc warning'] }
         },
-        listDefaults: async () => []
+        listDefaults: async () => [],
+        resolveTargetPath: async target => path.resolve(directory, target),
+        confirmTargetOverwrite: async () => true
       })
-      assert.strictEqual(result.code, 1)
-      assert.deepStrictEqual(result.stdout, ['additional output'])
-      assert.strictEqual(result.stderr[0], 'Pandoc warning')
-      assert.match(result.stderr.join('\n'), /unknown_function|unknown font family/)
+      assert.strictEqual(result.status, 'completed')
+      assert.strictEqual(result.output.code, 1)
+      assert.deepStrictEqual(result.output.stdout, ['additional output'])
+      assert.strictEqual(result.output.stderr[0], 'Pandoc warning')
+      assert.match(result.output.stderr.join('\n'), /unknown_function|unknown font family/)
       assert.strictEqual(await fs.readFile(target, 'utf8'), 'previous PDF')
       assert.deepStrictEqual(await fs.readdir(directory), ['input.pdf'])
     }
@@ -201,11 +206,14 @@ describe('Typst WASM PDF', function () {
         return { ...profile, ...overrides, bibliography: ['refs.bib'], 'output-file': 'custom/report.pdf' }
       },
       runPandoc: async defaults => await runPandoc(defaults, directory),
-      listDefaults: async () => []
+      listDefaults: async () => [],
+      resolveTargetPath: async target => path.resolve(directory, target),
+      confirmTargetOverwrite: async () => true
     })
-    assert.strictEqual(result.code, 0, result.stderr.join('\n'))
-    assert.strictEqual(result.targetFile, path.join(directory, 'custom/report.pdf'))
-    assert.strictEqual((await fs.readFile(result.targetFile)).subarray(0, 5).toString(), '%PDF-')
+    assert.strictEqual(result.status, 'completed')
+    assert.strictEqual(result.output.code, 0, result.output.stderr.join('\n'))
+    assert.strictEqual(result.output.targetFile, path.join(directory, 'custom/report.pdf'))
+    assert.strictEqual((await fs.readFile(result.output.targetFile)).subarray(0, 5).toString(), '%PDF-')
     assert.ok(!(await fs.readdir(directory)).some(name => name.startsWith('.zettlr-typst-')))
   })
 })

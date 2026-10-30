@@ -286,14 +286,6 @@ export function getMarkdownExtensions (options: CoreExtensionOptions): Extension
   const mdLinterExtensions = [lintGutter()]
 
   let parser = markdownParser({
-    zknLinkParserConfig: { format: options.initialConfig.zknLinkFormat }
-  })
-
-  if (options.useJinja === true) {
-    parser = jinja({ base: parser })
-  }
-
-  let parser = markdownParser({
     zknLinkParserConfig: { format: options.initialConfig.zknLinkFormat },
     enableZkn: options.initialConfig.enableZkn,
   })
@@ -403,7 +395,7 @@ export function getJSONExtensions (options: CoreExtensionOptions): Extension[] {
  */
 export function getCSSExtensions (options: CoreExtensionOptions): Extension[] {
   return [
-    ...getGenericCodeExtensions(options),
+    ...getGenericCodeExtensions(options, 'css'),
     css(),
   ]
 }
@@ -419,7 +411,7 @@ export function getCSSExtensions (options: CoreExtensionOptions): Extension[] {
  */
 export function getLuaExtensions (options: CoreExtensionOptions): Extension[] {
   return [
-    ...getGenericCodeExtensions(options),
+    ...getGenericCodeExtensions(options, 'lua'),
     StreamLanguage.define(lua),
   ]
 }
@@ -435,7 +427,7 @@ export function getLuaExtensions (options: CoreExtensionOptions): Extension[] {
  */
 export function getShellExtensions (options: CoreExtensionOptions): Extension[] {
   return [
-    ...getGenericCodeExtensions(options),
+    ...getGenericCodeExtensions(options, 'shell'),
     StreamLanguage.define(shell),
   ]
 }

@@ -33,7 +33,7 @@ describe('Language server bundling', () => {
 
   it('supports independent global and per-server build switches', () => {
     assert.deepStrictEqual(enabledServers({ BUNDLE_LSP: '0' }), [])
-    assert.deepStrictEqual(enabledServers({ BUNDLE_PANDOC: '0' }), ['yaml', 'panache', 'codebook', 'ltex-plus'])
+    assert.deepStrictEqual(enabledServers({ PANDOC_WASM_URL: 'none' }), ['yaml', 'panache', 'codebook', 'ltex-plus'])
     assert.deepStrictEqual(enabledServers({ BUNDLE_CODEBOOK: '0', BUNDLE_LTEX_PLUS: '0' }), ['yaml', 'panache'])
     assert.deepStrictEqual(enabledServers({ BUNDLE_PANACHE: '0' }), ['yaml', 'codebook', 'ltex-plus'])
     assert.deepStrictEqual(enabledServers({ BUNDLE_YAML_SERVER: '0' }), ['panache', 'codebook', 'ltex-plus'])
@@ -77,7 +77,7 @@ describe('Language server bundling', () => {
 
   it('replaces its Forge resources on target changes and removes them when disabled', async () => {
     const forgeConfig = { packagerConfig: { extraResource: ['resources/icons/icon.icns'] } }
-    const options = { resourcesDirectory: temporary, env: { BUNDLE_YAML_SERVER: '0', BUNDLE_PANDOC: '0', BUNDLE_CODEBOOK: '0', BUNDLE_LTEX_PLUS: '0' }, download: archiveFixture }
+    const options = { resourcesDirectory: temporary, env: { BUNDLE_YAML_SERVER: '0', PANDOC_WASM_URL: 'none', BUNDLE_CODEBOOK: '0', BUNDLE_LTEX_PLUS: '0' }, download: archiveFixture }
     const first = await configureLanguageServerResources(forgeConfig, 'win32', 'x64', options)
     assert.deepStrictEqual(forgeConfig.packagerConfig.extraResource, ['resources/icons/icon.icns', first])
     const second = await configureLanguageServerResources(forgeConfig, 'win32', 'arm64', options)

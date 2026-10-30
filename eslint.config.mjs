@@ -19,6 +19,8 @@ export default defineConfig([
       'resources/**/*.js',
       // Ignore all generated code
       '.webpack/**/*',
+      // Downloaded language-server distributions and build caches
+      'resources/lsp/**',
     ]
   },
   // This extends the following configs:
@@ -200,6 +202,25 @@ export default defineConfig([
       'vue/no-v-html': 'error'
 
       ////////////////////////// END VUE RULES /////////////////////////////////
+    }
+  },
+  {
+    files: ['**/*.cjs'],
+    languageOptions: {
+      sourceType: 'commonjs'
+    },
+    rules: {
+      // These standalone JavaScript files use the default parser, so use its
+      // unused-variable rule instead of the TypeScript-specific version.
+      '@typescript-eslint/no-unused-vars': 'off',
+      'no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^(?:_|event)',
+          caughtErrors: 'none',
+          destructuredArrayIgnorePattern: '.*'
+        }
+      ]
     }
   }
 ])

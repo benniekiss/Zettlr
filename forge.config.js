@@ -38,58 +38,14 @@ module.exports = {
         console.warn('Detected the environment variable ZETTLR_DISABLE_UPDATE_CHECK. This build of Zettlr WILL NOT HAVE UPDATES ENABLED. Please ensure this was intended!')
       }
     },
-    generateAssets: async (forgeConfig, targetPlatform, targetrch) => {
+    generateAssets: async (forgeConfig, targetPlatform, targetArch) => {
       // This will be baked into the binary so that we know which commit this
       // build was based off on.
       process.env.GIT_COMMIT_HASH = await getGitHash()
 
-      // Language-server bundling is independent of the Pandoc build switch.
+      // Native language servers are target-specific extra resources. Pandoc WASM
+      // is bundled separately by BundlePandocPlugin in webpack.main.config.js.
       await configureLanguageServerResources(forgeConfig, targetPlatform, targetArch)
-
-      // Second, we need to make sure we can bundle Pandoc.
-      if (process.env.BUNDLE_PANDOC === '0') {
-        console.warn('Detected environment variable BUNDLE_PANDOC -- this build will not be bundled with Pandoc!')
-        return
-      }
-
-      const isMacOS = targetPlatform === 'darwin'
-      const isLinux = targetPlatform === 'linux'
-      const isWin32 = targetPlatform === 'win32'
-      const isArm64 = targetArch === 'arm64'
-      const is64Bit = targetArch === 'x64'
-
-      // macOS has Rosetta 2 built-in, so we can bundle Pandoc 64bit
-      const supportsPandoc = is64Bit || (isMacOS && isArm64) || (isLinux && isArm64)
-
-      if (supportsPandoc && isWin32) {
-        // Download Pandoc beforehand, if it's not yet there.
-        try {
-          await fs.lstat(path.join(__dirname, './resources/pandoc-win32-x64.exe'))
-        } catch (err) {
-          await downloadPandoc('win32', 'x64')
-        }
-
-        await fs.copyFile(path.join(__dirname, './resources/pandoc-win32-x64.exe'), path.join(__dirname, './resources/pandoc.exe'))
-
-        forgeConfig.packagerConfig.extraResource.push(path.join(__dirname, './resources/pandoc.exe'))
-      } else if (supportsPandoc && (isMacOS || isLinux)) {
-        // Download Pandoc either for macOS or Linux ...
-        const platform = isMacOS ? 'darwin' : 'linux'
-        // ... and the ARM or x64 version.
-        const arch = isArm64 ? 'arm' : 'x64'
-        try {
-          await fs.lstat(path.join(__dirname, `./resources/pandoc-${platform}-${arch}`))
-        } catch (err) {
-          await downloadPandoc(platform, arch)
-        }
-
-        await fs.copyFile(path.join(__dirname, `./resources/pandoc-${platform}-${arch}`), path.join(__dirname, './resources/pandoc'))
-
-        forgeConfig.packagerConfig.extraResource.push(path.join(__dirname, './resources/pandoc'))
-      } else {
-        // If someone is building this on an unsupported platform, drop a warning.
-        console.log(`\nBuilding for an unsupported platform/arch-combination ${targetPlatform}/${targetArch} - not bundling Pandoc.`)
-      }
     },
     postMake: async (forgeConfig, makeResults) => {
       const basePath = __dirname
@@ -187,8 +143,7 @@ module.exports = {
       : false,
     // On macOS, we need to provide the app icon so that it gets copied into the
     // resources directory. After the `generateAssets` step, this will also
-    // include Pandoc and language servers (this is why we cannot leave `extraResource`
-    // undefined).
+    // include language servers. Pandoc WASM is emitted into the Webpack assets.
     extraResource: process.platform === 'darwin' ? [
       'resources/icons/icon.code.icns',
       'resources/icons/Assets.car' // Contains the new Liquid Glass app icon

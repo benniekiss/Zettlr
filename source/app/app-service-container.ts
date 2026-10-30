@@ -125,7 +125,6 @@ export class AppServiceContainer {
     this._documentManager = new DocumentManager(this)
     this._tagProvider = new TagProvider(this._logProvider, this._documentManager, this._configProvider, this._fsal)
     this._windowProvider = new WindowProvider(this._logProvider, this._configProvider, this._documentManager)
-    this._dictionaryProvider = new DictionaryProvider(this._logProvider, this._configProvider, this._documentManager, this._fsal)
 
     this._citeprocProvider = new CiteprocProvider(this._logProvider, this._configProvider, this._windowProvider)
     this._trayProvider = new TrayProvider(this._logProvider, this._configProvider, this._windowProvider)

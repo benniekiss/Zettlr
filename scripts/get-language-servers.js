@@ -190,7 +190,14 @@ async function bundleLanguageServers ({ platform, arch, resourcesDirectory = pat
       const cached = name === 'yaml'
         ? await prepareYamlServer(platform, arch, targetDirectory)
         : await prepareServer(name, platform, arch, targetDirectory, download)
-      await fs.cp(cached, path.join(staging, name), { recursive: true, dereference: false, verbatimSymlinks: true })
+      // Materialize macOS resources before Packager copies and signs them.
+      // In particular, the JDK's shared legal notices must remain readable
+      // without symlinks that can become invalid when the bundle is relocated.
+      await fs.cp(cached, path.join(staging, name), {
+        recursive: true,
+        dereference: platform === 'darwin',
+        verbatimSymlinks: platform !== 'darwin'
+      })
     }
     // Assemble only enabled servers, even when an earlier build bundled more.
     await fs.rm(destination, { recursive: true, force: true })

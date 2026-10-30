@@ -5,6 +5,8 @@ import os from 'os'
 import { createRequire } from 'module'
 import { createHash } from 'crypto'
 import AdmZip from 'adm-zip'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { enabledServers, releaseFor, downloadArchive, bundleLanguageServers, configureLanguageServerResources } from '../scripts/get-language-servers'
 import { resolveLanguageServerCommand } from '../source/app/service-providers/lsp/bundled-servers'
 import type { LanguageServerConfig } from '../source/common/lsp/config'
@@ -66,6 +68,37 @@ describe('Language server bundling', () => {
     assert.strictEqual(downloads, 3)
     assert.deepStrictEqual(await fs.readdir(directory), ['panache', 'yaml'])
     assert.strictEqual((await resolveLanguageServerCommand(server('codebook-lsp', ['serve']), true, [directory], 'win32', 'x64')).bundled, false)
+  })
+
+  it('materializes macOS JDK license links on fresh and cached builds', async () => {
+    const fixture = path.join(temporary, 'fixture')
+    const root = path.join(fixture, 'distribution')
+    const legal = path.join(root, 'jdk/legal')
+    await fs.mkdir(path.join(root, 'jdk/bin'), { recursive: true })
+    await fs.mkdir(path.join(root, 'lib'), { recursive: true })
+    await fs.mkdir(path.join(legal, 'java.base'), { recursive: true })
+    await fs.mkdir(path.join(legal, 'java.management.rmi'), { recursive: true })
+    await fs.writeFile(path.join(root, 'jdk/bin/java'), 'executable', { mode: 0o755 })
+    await fs.writeFile(path.join(root, 'lib/ltexls-plus-18.7.0.jar'), 'server jar')
+    await fs.writeFile(path.join(legal, 'java.base/LICENSE'), 'Java license notice')
+    await fs.symlink('../java.base/LICENSE', path.join(legal, 'java.management.rmi/LICENSE'))
+    const options = {
+      platform: 'darwin', arch: 'arm64', resourcesDirectory: temporary,
+      env: { BUNDLE_YAML_SERVER: '0', BUNDLE_PANACHE: '0', BUNDLE_CODEBOOK: '0' },
+      download: async (_release: unknown, archive: string) => {
+        await promisify(execFile)('tar', ['-czf', archive, '-C', fixture, 'distribution'])
+      }
+    }
+    for (let build = 0; build < 2; build++) {
+      const directory = await bundleLanguageServers(options)
+      assert(directory !== undefined)
+      const license = path.join(directory, 'ltex-plus/jdk/legal/java.management.rmi/LICENSE')
+      assert.strictEqual((await fs.lstat(license)).isSymbolicLink(), false)
+      assert.strictEqual(await fs.readFile(license, 'utf8'), 'Java license notice')
+      const relocated = path.join(temporary, `relocated-${build}`)
+      await fs.rename(directory, relocated)
+      assert.strictEqual(await fs.readFile(path.join(relocated, 'ltex-plus/jdk/legal/java.management.rmi/LICENSE'), 'utf8'), 'Java license notice')
+    }
   })
 
   it('does not download when bundling is disabled or the target is unsupported', async () => {

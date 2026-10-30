@@ -13,7 +13,11 @@ import type { LanguageServerConfig } from '../source/common/lsp/config'
 
 const server = (command: string, args: string[] = []): LanguageServerConfig => ({ name: command, command, args, languages: ['markdown'] })
 
-describe('Language server bundling', () => {
+describe('Language server bundling', function () {
+  // Copying complete server dependency trees can exceed Mocha's default two
+  // seconds on CI. Allow the copies to finish before cleanup starts.
+  this.timeout(30000)
+
   let temporary: string
   beforeEach(async () => { temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'zettlr-lsp-bundle-test-')) })
   afterEach(async () => { await fs.rm(temporary, { recursive: true, force: true }) })

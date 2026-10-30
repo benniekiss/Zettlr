@@ -57,8 +57,10 @@ export default class FSALWatchdog {
     }
 
     if (this._config.get('watchdog.activatePolling') as boolean) {
+      options.backend = 'polling'
+
       let threshold: number = this._config.get('watchdog.stabilityThreshold')
-      if (typeof threshold !== 'number' || threshold < 0) {
+      if (!Number.isFinite(threshold) || threshold < 0) {
         threshold = 1000
       }
 
@@ -73,6 +75,9 @@ export default class FSALWatchdog {
     }
 
     this.process = new FSWatcher(options)
+    this.process.on('error', err => {
+      this._logger.error('[FSAL Watchdog] Filesystem watcher error', err)
+    })
   }
 
   /**

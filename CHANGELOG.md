@@ -6,7 +6,8 @@
 
 ## Under the Hood
 
-(Nothing here)
+- Upgrade Chokidar to v6 and remove obsolete native fsevents integration.
+- Make the watchdog polling preference select the polling backend.
 
 # 4.9.0
 

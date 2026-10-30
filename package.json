@@ -15,6 +15,9 @@
   "description": "Your One-Stop Publication Workbench",
   "main": ".webpack/main/index.cjs",
   "type": "commonjs",
+  "engines": {
+    "node": ">=22.22.0"
+  },
   "scripts": {
     "start": "cross-env NODE_ENV=develop node scripts/test-gui/index.mjs",
     "package": "cross-env NODE_ENV=production electron-forge package",
@@ -149,9 +152,6 @@
     "vue-virtual-scroller": "^3.0.5",
     "w3c-keyname": "^2.2.8",
     "yaml": "^2.9.1"
-  },
-  "optionalDependencies": {
-    "fsevents": "^2.3.3"
   },
   "resolutions": {
     "@electron/rebuild": "4.0.4",

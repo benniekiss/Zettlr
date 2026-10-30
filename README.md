@@ -149,7 +149,7 @@ setting up the Zettlr source code locally.
 Zettlr is an [Electron](https://www.electronjs.org/)-based app. To start
 developing, you'll need to have the following installed on your computer:
 
-1. [NodeJS](https://nodejs.org/). Make sure it's at least Node 22 (`lts/jod`).
+1. [NodeJS](https://nodejs.org/). Make sure it's at least Node 22.22 (`lts/jod`).
    To test what version you have, run `node -v`.
 2. [Yarn](https://yarnpkg.com/en/). This is the package manager for the project,
    as we do not commit `package-lock.json`-files and many commands require yarn.

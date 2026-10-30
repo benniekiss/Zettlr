@@ -598,7 +598,7 @@ process. Archive extraction requires `tar` for macOS and Linux targets.
 Set `BUNDLE_LSP=0` to disable all language server downloads and bundling, or set
 `BUNDLE_YAML_SERVER=0`, `BUNDLE_PANACHE=0`, `BUNDLE_CODEBOOK=0`, or
 `BUNDLE_LTEX_PLUS=0` to omit individual servers. These flags are independent of
-`BUNDLE_PANDOC`.
+`PANDOC_WASM_URL=none`, which disables Pandoc WASM bundling.
 
 Users can disable **Use bundled language servers** in Preferences → Language
 servers to use their installed versions. See [language server configuration](docs/language-servers.md)

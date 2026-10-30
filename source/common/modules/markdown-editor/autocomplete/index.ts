@@ -23,6 +23,7 @@ import {
   completionStatus,
   startCompletion
 } from '@codemirror/autocomplete'
+import type { EditorState } from '@codemirror/state'
 import { type StateField } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 import { codeBlocks } from './code-blocks'
@@ -73,30 +74,11 @@ function completionContext (ctx: CompletionContext): { plugin: AutocompletePlugi
     return null
   }
 
-  let plugin: AutocompletePlugin|undefined
-  let startpos = ctx.pos
-
   // NOTE: Headings has to be checked before tags
-  for (const p of [ codeBlocks, citations, files, headings, tags, snippets, words ]) {
-    const res = p.applies(ctx)
-    if (res !== false) {
-      plugin = p
-      startpos = res
-      break
-    }
-  }
-
-  if (plugin !== undefined) {
-    const initialOptions = plugin.entries(ctx, ctx.state.doc.sliceString(startpos, ctx.pos).toLowerCase())
-    return {
-      from: startpos,
-      options: initialOptions,
-      validFor: plugin.validFor,
-      update: (current, from, to, ctx) => {
-        const query = ctx.state.doc.sliceString(from, to).toLowerCase()
-        current.options = plugin!.entries(ctx, query)
-        return current
-      }
+  for (const plugin of [ codeBlocks, citations, files, headings, tags, snippets, words ]) {
+    const from = plugin.applies(ctx)
+    if (from !== false) {
+      return { plugin, from }
     }
   }
 

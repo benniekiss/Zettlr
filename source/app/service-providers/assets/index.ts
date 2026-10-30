@@ -67,12 +67,14 @@ export interface PandocProfileMetadata {
 
 export type AssetsProviderIPCAPI = IPCAPI<{
   'get-filter': { filename: string, dir?: string },
+  'get-filter-path': { filename: string },
   'set-filter': { filename: string, contents: string, dir?: string },
   'rename-filter': { oldName: string, newName: string, dir?: string },
   'remove-filter': { filename: string, dir?: string },
   'list-filter': { dir?: string },
   'list-protected-filter': unknown,
   'get-defaults-file': { filename: string, dir?: string }
+  'get-defaults-file-path': { filename: string }
   'set-defaults-file': { filename: string, contents: string, dir?: string }
   'rename-defaults-file': { oldName: string, newName: string, dir?: string }
   'remove-defaults-file': { filename: string, dir?: string }

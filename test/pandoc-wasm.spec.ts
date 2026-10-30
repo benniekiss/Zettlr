@@ -51,11 +51,14 @@ integration('Pandoc WASM integration', function () {
     }, [input], {
       loadDefaults: async (_name, overrides) => ({ ...overrides, reader: 'markdown', writer: 'html', 'output-file': 'custom/report.html' }),
       runPandoc: async defaults => await runPandoc(defaults, directory),
-      listDefaults: async () => []
+      listDefaults: async () => [],
+      resolveTargetPath: async target => path.resolve(directory, target),
+      confirmTargetOverwrite: async () => true
     })
-    assert.strictEqual(output.code, 0, output.stderr.join('\n'))
-    assert.strictEqual(output.targetFile, path.join(directory, 'custom/report.html'))
-    assert.match(await fs.readFile(output.targetFile, 'utf8'), /Custom profile output/)
+    assert.strictEqual(output.status, 'completed')
+    assert.strictEqual(output.output.code, 0, output.output.stderr.join('\n'))
+    assert.strictEqual(output.output.targetFile, path.join(directory, 'custom/report.html'))
+    assert.match(await fs.readFile(output.output.targetFile, 'utf8'), /Custom profile output/)
     await assert.rejects(fs.access(path.join(directory, 'input.html')))
     await assert.rejects(fs.access(path.join(directory, 'defaults.yml')))
   })

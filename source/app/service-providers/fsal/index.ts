@@ -14,6 +14,7 @@
  */
 
 import path from 'path'
+import { pathToFileURL } from 'url'
 import EventEmitter from 'events'
 import * as FSALFile from './fsal-file'
 import * as FSALCodeFile from './fsal-code-file'
@@ -191,6 +192,8 @@ export default class FSAL extends ProviderContract {
     }
 
     // Regardless of the event, it will invalidate that particular cache entry.
+    // LSP watchers also need hidden and non-editor files, before descriptor filtering.
+    broadcastIPCMessage('fsal-watch-event', { event, uri: pathToFileURL(absPath).href })
     this._cache.del(absPath)
       .catch(err => this._logger.error(`[FSAL Cache] Failed to delete key: ${absPath}`, err))
 

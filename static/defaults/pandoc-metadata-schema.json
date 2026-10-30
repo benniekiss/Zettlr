@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema",
+  "$id": "https://zettlr.com/schemas/pandoc-metadata.json",
+  "title": "Pandoc document metadata",
+  "description": "Common Pandoc YAML metadata fields. Pandoc permits arbitrary metadata, so additional properties are allowed.",
+  "type": "object",
+  "properties": {
+    "title": {
+      "description": "Document title.",
+      "type": "string"
+    },
+    "subtitle": {
+      "description": "Document subtitle.",
+      "type": "string"
+    },
+    "author": {
+      "description": "One author or a list of authors. Authors may also be objects when the output template supports structured author data.",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "oneOf": [ { "type": "string" }, { "type": "object" } ] } }
+      ]
+    },
+    "date": {
+      "description": "Document date.",
+      "type": "string"
+    },
+    "lang": {
+      "description": "Document language as a BCP 47 language tag.",
+      "type": "string"
+    },
+    "abstract": {
+      "description": "Document summary.",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" } }
+      ]
+    },
+    "keywords": {
+      "description": "Keywords associated with the document.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "bibliography": {
+      "description": "One or more bibliography files used by citeproc.",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" } }
+      ]
+    },
+    "csl": {
+      "description": "Citation Style Language file used by citeproc.",
+      "type": "string"
+    },
+    "nocite": {
+      "description": "Citation identifiers to include even when they are not cited in the document.",
+      "type": "string"
+    },
+    "link-citations": {
+      "description": "Whether citations link to their references.",
+      "type": "boolean"
+    },
+    "link-bibliography": {
+      "description": "Whether bibliography entries link to their citations.",
+      "type": "boolean"
+    },
+    "header-includes": {
+      "description": "Content to include in the document header.",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" } }
+      ]
+    },
+    "zettlr": {
+      "description": "Zettlr-specific document settings.",
+      "type": "object",
+      "properties": {
+        "pandoc_working_dir": {
+          "description": "Working directory to use when exporting this document with Pandoc.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

@@ -56,3 +56,6 @@ eslint_report.htm
 
 ### Idea ###
 .idea/*
+
+# Downloaded language-server distributions and build caches
+resources/lsp/

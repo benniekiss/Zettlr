@@ -16,10 +16,12 @@ import { app, nativeTheme } from 'electron'
 import * as bcp47 from 'bcp-47'
 import { v4 as uuid4 } from 'uuid'
 import getLanguageFile from '@common/util/get-language-file'
+import { recommendedLanguageServers } from '@common/lsp/config'
 import type { EditorShortcutName } from 'source/common/modules/markdown-editor/keymaps/shortcuts'
 import { type MenuShortcutName } from '../menu/shortcuts'
+import { DEFAULT_PANDOC_WASM_URL } from '@common/pandoc-util/pandoc-wasm-url'
 
-export type MarkdownTheme = 'berlin'|'frankfurt'|'bielefeld'|'karl-marx-stadt'|'bordeaux'
+export type MarkdownTheme = 'berlin' | 'frankfurt' | 'bielefeld' | 'karl-marx-stadt' | 'bordeaux'
 
 // This is a handy interface to add groups of file types to the settings in
 // order to allow users to display them in filemanager and/or sidebar, and open
@@ -27,7 +29,7 @@ export type MarkdownTheme = 'berlin'|'frankfurt'|'bielefeld'|'karl-marx-stadt'|'
 // NOTE: The generics are meant so that you can restrict certain groupings.
 // E.g., FileTypeSettings<true, false, 'zettlr'> enforces these values for the
 // three properties.
-interface FileTypeSettings<F = boolean, S = boolean, O = 'zettlr'|'system'> {
+interface FileTypeSettings<F = boolean, S = boolean, O = 'zettlr' | 'system'> {
   showInFilemanager: F
   showInSidebar: S
   openWith: O
@@ -45,59 +47,41 @@ export type ConfigurableEditorShortcuts = Extends<
   'tr-ensure-double-quotes'|'tr-italics-to-quotes'|'tr-quotes-to-italics'|
   'tr-quotes-to-magic'|'tr-remove-line-breaks'|'tr-sentence-case'|
   'tr-single-quotes-to-double'|'tr-straighten-quotes'|
-  'tr-strip-duplicate-spaces'|'tr-title-case'
+  'tr-strip-duplicate-spaces'|'tr-title-case'|'lsp-format-document'|'lsp-rename'|
+  'lsp-go-to-definition'|'lsp-find-references'
 >
-export type ConfigurableUIShortcuts = Extends<MenuShortcutName, 'previous-tab'|'next-tab'|'filter-files'>
-
-/**
- * This type describes an entry of the ignored rules array in the config. We
- * define this type here, and not in the LanguageTool command, because if we
- * change its structure, bad things could happen. By colocating it with the
- * config, it is harder for us to forget to write a migration rule if we ever
- * change this structure.
- */
-export interface LanguageToolIgnoredRuleEntry {
-  /**
-   * The description of the rule (usually localized).
-   */
-  description: string
-  /**
-   * The unique ID of this rule.
-   */
-  id: string
-  /**
-   * The category for this rule.
-   */
-  category: string
-}
+export type ConfigurableUIShortcuts = Extends<MenuShortcutName, 'previous-tab' | 'next-tab' | 'filter-files'>
 
 export interface ConfigOptions {
+  languageServers: string
+  useBundledLanguageServers: boolean
   version: string
   buildDate: string
   uuid: string
   appLang: string
 
   darkMode: boolean
-  darkModeEditor: 'match'|'light'|'dark'
-  autoDarkMode: 'off'|'system'|'schedule'
+  darkModeEditor: 'match' | 'light' | 'dark'
+  autoDarkMode: 'off' | 'system' | 'schedule'
   autoDarkModeStart: string
   autoDarkModeEnd: string
 
-  openDirectory: string|null
+  openDirectory: string | null
   attachmentExtensions: string[]
   alwaysReloadFiles: boolean
+  confirmExportOverwrite: boolean
   muteLines: boolean
 
   // NOTE to everyone: These options (and possibly others) that pertain to the
   // file manager should slowly be migrated into the fileManager group below.
-  fileManagerMode: 'thin'|'combined'|'expanded'
+  fileManagerMode: 'thin' | 'combined' | 'expanded'
   fileManagerShowFiles: boolean
   fileManagerShowWorkspaces: boolean
   fileMeta: boolean
-  fileMetaTime: 'modtime'|'creationtime'
-  sorting: 'natural'|'ascii'
+  fileMetaTime: 'modtime' | 'creationtime'
+  sorting: 'natural' | 'ascii'
   sortFoldersFirst: boolean
-  fileNameDisplay: 'filename'|'title'|'heading'|'title+heading'
+  fileNameDisplay: 'filename' | 'title' | 'heading' | 'title+heading'
 
   // NOTE to everyone: The various filemanager options (see above) should over
   // time be migrated into this group.
@@ -109,7 +93,6 @@ export interface ConfigOptions {
 
   newFileNamePattern: string
   newFileDontPrompt: boolean
-  selectedDicts: string[]
 
   debug: boolean
   checkForBeta: boolean
@@ -125,13 +108,15 @@ export interface ConfigOptions {
     askLangFileDialog: string
   }
   export: {
+    pandocWasmUrl: string
+    pandocWasmSha256: string
+    typstFontPath: string
     dir: 'temp'|'cwd'|'ask'
     stripTags: boolean
     autoOpenExportedFiles: boolean
-    stripLinks: 'full'|'unlink'|'no'
+    stripLinks: 'full' | 'unlink' | 'no'
     cslLibrary: string
     cslStyle: string
-    useBundledPandoc: boolean
     exportQmdWithQuarto: boolean
     customCommands: Array<{ displayName: string, command: string }>
     selectedProfiles: Array<{ filePath: string, profile: string }>
@@ -147,7 +132,7 @@ export interface ConfigOptions {
     idGen: string
     linkAddFileTitle: boolean
     linkWithIDIfPossible: boolean
-    linkFormat: 'link|title'|'title|link'
+    linkFormat: 'link|title' | 'title|link'
     autoSearch: boolean
     customDirectory: string
   }
@@ -156,8 +141,8 @@ export interface ConfigOptions {
     snippetAutocompleteTriggerCharacter: ':'
     autocompleteWithEnter: boolean
     autocompleteWithTab: boolean
-    autoSave: 'off'|'immediately'|'delayed'
-    citeStyle: 'in-text'|'in-text-suffix'|'regular'
+    autoSave: 'off' | 'immediately' | 'delayed'
+    citeStyle: 'in-text' | 'in-text-suffix' | 'regular'
     autoCloseBrackets: boolean
     showLinkPreviews: boolean
     showStatusbar: boolean
@@ -180,25 +165,6 @@ export interface ConfigOptions {
     highlightFormatting: 'span'|'=='
     customHighlighter: { pattern: string, style: string }[]
     readabilityAlgorithm: 'dale-chall'|'gunning-fog'|'coleman-liau'|'automated-readability'
-    lint: {
-      markdown: boolean
-      languageTool: {
-        active: boolean
-        level: 'picky'|'default'
-        motherTongue: string // e.g., en-US, de-DE
-        variants: {
-          en: string
-          de: string
-          pt: string
-          ca: string
-        }
-        ignoredRules: LanguageToolIgnoredRuleEntry[]
-        provider: 'official'|'custom'
-        customServer: string
-        username: string
-        apiKey: string
-      }
-    }
     autoCorrect: {
       active: boolean
       matchWholeWords: boolean
@@ -225,7 +191,7 @@ export interface ConfigOptions {
     previewModeShowSyntaxWhenCursorIsAdjacent: boolean
     imageWidth: number
     imageHeight: number
-    renderingMode: 'preview'|'raw'
+    renderingMode: 'preview' | 'raw'
     renderCitations: boolean
     renderIframes: boolean
     renderImages: boolean
@@ -262,7 +228,7 @@ export interface ConfigOptions {
     vibrancy: boolean
     sidebarVisible: boolean
     fileManagerVisible: boolean
-    currentSidebarTab: 'toc'|'references'|'relatedFiles'|'attachments'
+    currentSidebarTab: 'toc' | 'references' | 'relatedFiles' | 'attachments'
     recentGlobalSearches: string[]
   }
   ui: {
@@ -275,7 +241,7 @@ export interface ConfigOptions {
     avoidNewTabs: boolean
     iframeWhitelist: string[]
     checkForUpdates: boolean
-    zoomBehavior: 'gui'|'editor'
+    zoomBehavior: 'gui' | 'editor'
   }
   shortcuts: {
     editor: Record<ConfigurableEditorShortcuts, string>
@@ -296,6 +262,13 @@ export interface ConfigOptions {
     showDocumentInfoText: boolean
     showPomodoroButton: boolean
   }
+  workspaces: {
+    enableAssets: boolean
+    loadSnippets: boolean
+    loadCSS: boolean
+    loadExportProfiles: boolean
+    loadDictionary: boolean
+  }
 }
 
 export function getConfigTemplate (): ConfigOptions {
@@ -314,6 +287,11 @@ export function getConfigTemplate (): ConfigOptions {
 
   // Return the complete configuration object
   return {
+    // Panache is the default Markdown formatter and LSP provider; YAML gets
+    // language-server support for standalone YAML files and asset profiles.
+    // Other servers remain opt-in through the Language Servers preferences.
+    languageServers: JSON.stringify(recommendedLanguageServers.filter(server => server.name === 'panache' || server.name === 'yaml')),
+    useBundledLanguageServers: true,
     version: app.getVersion(), // Useful for migrating
     buildDate: __BUILD_DATE__,
     app: {
@@ -348,6 +326,7 @@ export function getConfigTemplate (): ConfigOptions {
     darkMode: nativeTheme.shouldUseDarkColors,
     darkModeEditor: 'match', // Possible values: 'match', 'light', 'dark'
     alwaysReloadFiles: true, // Should Zettlr automatically load remote changes?
+    confirmExportOverwrite: true, // Ask before overwriting existing files on export?
     autoDarkMode: 'system', // Possible values: 'off', 'system', 'schedule', 'auto'
     autoDarkModeStart: '21:00', // Switch into dark mode at this time
     autoDarkModeEnd: '06:00', // Switch to light mode at this time
@@ -367,13 +346,15 @@ export function getConfigTemplate (): ConfigOptions {
     newFileNamePattern: '%id.md',
     newFileDontPrompt: false, // If true immediately creates files
     export: {
+      pandocWasmUrl: DEFAULT_PANDOC_WASM_URL,
+      pandocWasmSha256: '',
+      typstFontPath: '',
       dir: 'temp', // Can either be "temp", "cwd" (current working directory) or "ask"
       stripTags: false, // Strip tags a.k.a. #tag
       autoOpenExportedFiles: true,
       stripLinks: 'full', // Strip internal links: "full" - remove completely, "unlink" - only remove brackets, "no" - don't alter
       cslLibrary: '', // Path to a CSL JSON library file
       cslStyle: '', // Path to a CSL Style file
-      useBundledPandoc: true, // Whether to use the bundled Pandoc
       exportQmdWithQuarto: false, // Whether .qmd-files should be exported with Quarto
       customCommands: [], // Custom commands that the user can use to run arbitrary exports
       selectedProfiles: [], // Remembers the last chosen exporter per file for easy re-exporting
@@ -424,28 +405,6 @@ export function getConfigTemplate (): ConfigOptions {
       showStatusbar: true,
       showFormattingToolbar: true,
       customHighlighter: [],
-      lint: {
-        markdown: true, // Should Markdown be linted?
-        languageTool: {
-          active: false, // Utilize languageTool?
-          level: 'default', // API: https://languagetool.org/http-api/#!/default/post_check
-          motherTongue: '', // Optional motherTongue property
-          variants: {
-            // These defaults are taken from LT's extension
-            en: 'en-US',
-            de: 'de-DE',
-            pt: 'pt-PT',
-            ca: 'ca-ES'
-          },
-          // This is an (initially empty) array of rules the user chose to
-          // ignore globally.
-          ignoredRules: [],
-          provider: 'official',
-          customServer: '',
-          username: '',
-          apiKey: ''
-        }
-      },
       autoCorrect: {
         active: true, // AutoCorrect is on by default
         matchWholeWords: false, // Whether to only autocorrect entire words, not parts
@@ -553,7 +512,6 @@ export function getConfigTemplate (): ConfigOptions {
       dotFiles: { showInFilemanager: false, showInSidebar: false, openWith: 'system' }
     },
     // Language
-    selectedDicts: [], // By default no spell checking is active to speed up first start.
     appLang: locale,
     debug: false,
     watchdog: {
@@ -608,8 +566,19 @@ export function getConfigTemplate (): ConfigOptions {
         'tr-straighten-quotes': '',
         'tr-strip-duplicate-spaces': '',
         'tr-title-case': '',
-        'tr-zap-gremlins': ''
+        'tr-zap-gremlins': '',
+        'lsp-format-document': '',
+        'lsp-rename': '',
+        'lsp-go-to-definition': '',
+        'lsp-find-references': ''
       }
+    },
+    workspaces: {
+      enableAssets: false,
+      loadSnippets: true,
+      loadCSS: true,
+      loadExportProfiles: true,
+      loadDictionary: true,
     },
     uuid: uuid4() // The app's unique anonymous identifier
   }

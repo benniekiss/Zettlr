@@ -16,7 +16,8 @@
  * END HEADER
  */
 
-import { closeBrackets } from '@codemirror/autocomplete'
+import { languageServers } from './plugins/lsp'
+import { closeBrackets, autocompletion } from '@codemirror/autocomplete'
 import { type Update } from '@codemirror/collab'
 import { history } from '@codemirror/commands'
 import { bracketMatching, codeFolding, foldGutter, indentOnInput, indentUnit, StreamLanguage } from '@codemirror/language'
@@ -39,8 +40,6 @@ import { defaultContextMenu } from './plugins/default-context-menu'
 import { readabilityMode } from './plugins/readability'
 import { hookDocumentAuthority } from './plugins/remote-doc'
 import { lintGutter, linter } from '@codemirror/lint'
-import { spellcheck } from './linters/spellcheck'
-import { mdLint } from './linters/md-lint'
 import { countField, countPlugin } from './plugins/statistics-fields'
 import { tocField } from './plugins/toc-field'
 import { typewriter } from './plugins/typewriter'
@@ -53,12 +52,10 @@ import { softwrapVisualIndent } from './plugins/visual-indent'
 import { backgroundLayers } from './plugins/code-background'
 import { emacs } from '@replit/codemirror-emacs'
 import { distractionFree } from './plugins/distraction-free'
-import { languageTool } from './linters/language-tool'
 import { statusbar } from './statusbar'
 import { renderers } from './renderers'
 import { mdPasteDropHandlers } from './plugins/md-paste-drop-handlers'
 import { footnoteGutter } from './plugins/footnote-gutter'
-import { yamlFrontmatterLint } from './linters/yaml-frontmatter-lint'
 import {
   mainThemes, darkMode, useDarkModeEditor,
   themeBerlinLight, themeBerlinDark,
@@ -76,8 +73,11 @@ import { projectInfoField } from './plugins/project-info-field'
 import { headingGutter } from './renderers/render-headings'
 import { citationTooltips } from './tooltips/citations'
 import { zettlrKeymap } from './keymaps'
-import { jinja } from '@codemirror/lang-jinja'
 import { customHighlighter } from './plugins/highlight-regex'
+import { lua } from '@codemirror/legacy-modes/mode/lua'
+import { shell } from '@codemirror/legacy-modes/mode/shell'
+import { css } from '@codemirror/lang-css'
+import { jinja } from '@codemirror/lang-jinja'
 
 /**
  * This interface describes the required properties which the extension sets
@@ -89,7 +89,7 @@ export interface CoreExtensionOptions {
   remoteConfig: {
     filePath: string
     startVersion: number
-    pullUpdates: (filePath: string, version: number) => Promise<Update[]|false>
+    pullUpdates: (filePath: string, version: number) => Promise<Update[] | false>
     pushUpdates: (filePath: string, version: number, updates: Update[]) => Promise<boolean>
   }
   updateListener: (update: ViewUpdate) => void
@@ -152,7 +152,7 @@ export function getMainEditorThemes (): Record<EditorConfiguration['theme'], { l
  *
  * @return  {Extension[]}                    An array of core extensions
  */
-function getCoreExtensions (options: CoreExtensionOptions): Extension[] {
+function getCoreExtensions (options: CoreExtensionOptions, language: string): Extension[] {
   const inputMode: Extension[] = []
   if (options.initialConfig.inputMode === 'vim') {
     inputMode.push(vimPlugin())
@@ -174,6 +174,7 @@ function getCoreExtensions (options: CoreExtensionOptions): Extension[] {
     inputModeCompartment.of(inputMode),
     // Then, include the default keymap
     zettlrKeymap(options.initialConfig.shortcuts, options.initialConfig),
+    languageServers(options.remoteConfig.filePath, language),
     darkMode({ darkMode: useDarkModeEditor(options.initialConfig.darkMode, options.initialConfig.darkModeEditor), ...themes[options.initialConfig.theme] }),
     // CODE FOLDING
     codeFolding(),
@@ -245,12 +246,13 @@ function getCoreExtensions (options: CoreExtensionOptions): Extension[] {
  *
  * @return  {Extension[]}                    An array of generic code extensions
  */
-function getGenericCodeExtensions (options: CoreExtensionOptions): Extension[] {
+function getGenericCodeExtensions (options: CoreExtensionOptions, language: string): Extension[] {
   return [
-    ...getCoreExtensions(options),
+    ...getCoreExtensions(options, language),
     lineNumbers(),
     bracketMatching(),
     indentOnInput(),
+    autocompletion(),
     codeSyntaxHighlighter(),
   ]
 }
@@ -274,43 +276,21 @@ function getGenericCodeExtensions (options: CoreExtensionOptions): Extension[] {
  * - Footnote previews on hover
  * - The paste handlers for image saving
  * - The default context menu with default Markdown formats
- * - A spellchecker
+ * - Configurable language servers
  *
  * @param   {CoreExtensionOptions}  options  The main config options
  *
  * @return  {Extension[]}                    An array of Markdown extensions
  */
 export function getMarkdownExtensions (options: CoreExtensionOptions): Extension[] {
-  // The following linters are always active: The spellcheck because that is
-  // turned on and off with the dictionary settings, and the yamlFrontmatterNode
-  // because if that thing has an error, that thing has an error.
-  const mdLinterExtensions = [
-    spellcheck,
-    yamlFrontmatterLint
-  ]
+  const mdLinterExtensions = [lintGutter()]
 
-  let hasLinters = false
+  let parser = markdownParser({
+    zknLinkParserConfig: { format: options.initialConfig.zknLinkFormat }
+  })
 
-  if (options.initialConfig.lintMarkdown) {
-    hasLinters = true
-    mdLinterExtensions.push(mdLint)
-  }
-
-  if (options.initialConfig.lintLanguageTool) {
-    hasLinters = true // We always add this linter
-  }
-
-  if (hasLinters) {
-    // If there's any linter (except the spellchecker), add a lint gutter
-    mdLinterExtensions.push(
-      lintGutter({
-        markerFilter (diagnostics) {
-          // Show any linter warnings and errors in the gutter *except* wrongly
-          // spelled words, since that would be weird.
-          return diagnostics.filter(d => d.source !== 'spellcheck' && d.source?.startsWith('language-tool') === false)
-        }
-      })
-    )
+  if (options.useJinja === true) {
+    parser = jinja({ base: parser })
   }
 
   let parser = markdownParser({
@@ -323,7 +303,7 @@ export function getMarkdownExtensions (options: CoreExtensionOptions): Extension
   }
 
   return [
-    ...getCoreExtensions(options),
+    ...getCoreExtensions(options, 'markdown'),
     // These handlers deal with Markdown specific stuff, for example, pasting
     // HTML should not add the verbatim HTML code, but rather convert it to
     // Markdown prior. Additionally, images should get preferential treatment.
@@ -337,7 +317,6 @@ export function getMarkdownExtensions (options: CoreExtensionOptions): Extension
     showLineNumbers(options.initialConfig.showMarkdownLineNumbers),
     mdLinterExtensions,
     headingGutter,
-    languageTool,
     // Some statistics we need for Markdown documents
     countPlugin,
     countField,
@@ -374,7 +353,7 @@ export function getMarkdownExtensions (options: CoreExtensionOptions): Extension
  */
 export function getTexExtensions (options: CoreExtensionOptions): Extension[] {
   return [
-    ...getGenericCodeExtensions(options),
+    ...getGenericCodeExtensions(options, 'latex'),
     StreamLanguage.define(stex)
   ]
 }
@@ -390,7 +369,7 @@ export function getTexExtensions (options: CoreExtensionOptions): Extension[] {
  */
 export function getYAMLExtensions (options: CoreExtensionOptions): Extension[] {
   return [
-    ...getGenericCodeExtensions(options),
+    ...getGenericCodeExtensions(options, 'yaml'),
     yaml()
   ]
 }
@@ -407,8 +386,56 @@ export function getYAMLExtensions (options: CoreExtensionOptions): Extension[] {
  */
 export function getJSONExtensions (options: CoreExtensionOptions): Extension[] {
   return [
-    ...getGenericCodeExtensions(options),
+    ...getGenericCodeExtensions(options, 'json'),
     json(),
     linter(jsonParseLinter())
+  ]
+}
+
+/**
+ * This public function returns a set of extensions required to display CSS
+ * files in Zettlr editors. These include the core extensions, the generic
+ * code extensions as well as the CSS syntax highlighter.
+ *
+ * @param   {CoreExtensionOptions}  options  The default options
+ *
+ * @return  {Extension[]}                    An array of options for CSS scripts
+ */
+export function getCSSExtensions (options: CoreExtensionOptions): Extension[] {
+  return [
+    ...getGenericCodeExtensions(options),
+    css(),
+  ]
+}
+
+/**
+ * This public function returns a set of extensions required to display Lua
+ * scripts in Zettlr editors. These include the core extensions, the generic
+ * code extensions as well as the Lua syntax highlighter.
+ *
+ * @param   {CoreExtensionOptions}  options  The default options
+ *
+ * @return  {Extension[]}                    An array of options for Lua scripts
+ */
+export function getLuaExtensions (options: CoreExtensionOptions): Extension[] {
+  return [
+    ...getGenericCodeExtensions(options),
+    StreamLanguage.define(lua),
+  ]
+}
+
+/**
+ * This public function returns a set of extensions required to display shell
+ * scripts in Zettlr editors. These include the core extensions, the generic
+ * code extensions as well as the shell syntax highlighter.
+ *
+ * @param   {CoreExtensionOptions}  options  The default options
+ *
+ * @return  {Extension[]}                    An array of options for shell scripts
+ */
+export function getShellExtensions (options: CoreExtensionOptions): Extension[] {
+  return [
+    ...getGenericCodeExtensions(options),
+    StreamLanguage.define(shell),
   ]
 }

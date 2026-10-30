@@ -177,6 +177,7 @@ interface FormText {
 interface FormButton {
   type: 'button'
   label: string
+  disabled?: boolean
   onClick: () => void
 }
 
@@ -206,6 +207,9 @@ interface TextOrShortcutField extends BasicInfo {
 
 interface TextField extends TextOrShortcutField {
   type: 'text'
+  multiline?: boolean
+  saveOnBlur?: boolean
+  validate?: (value: string) => string|undefined
 }
 
 interface ShortcutField extends TextOrShortcutField {

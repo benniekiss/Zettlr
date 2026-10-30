@@ -15,6 +15,9 @@
   "description": "Your One-Stop Publication Workbench",
   "main": ".webpack/main/index.cjs",
   "type": "commonjs",
+  "engines": {
+    "node": ">=22.22.0"
+  },
   "scripts": {
     "start": "cross-env NODE_ENV=develop node scripts/test-gui/index.mjs",
     "package": "cross-env NODE_ENV=production electron-forge package",
@@ -91,7 +94,7 @@
     "bcp-47": "^2.1.1",
     "biblatex-csl-converter": "^3.6.0",
     "chalk": "^6.0.1",
-    "chokidar": "^5.0.0",
+    "chokidar": "^6.0.0",
     "citeproc": "^2.4.63",
     "codemirror-lang-elixir": "^4.0.1",
     "codemirror-lang-hcl": "^0.2.0",
@@ -149,9 +152,6 @@
     "vue-virtual-scroller": "^3.0.5",
     "w3c-keyname": "^2.2.8",
     "yaml": "^2.9.1"
-  },
-  "optionalDependencies": {
-    "fsevents": "^2.3.3"
   },
   "resolutions": {
     "@electron/rebuild": "4.0.4",

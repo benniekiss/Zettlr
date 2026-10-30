@@ -4,6 +4,7 @@ const { FusesPlugin } = require('@electron-forge/plugin-fuses')
 const { FuseV1Options, FuseVersion } = require('@electron/fuses')
 const { getGitHash } = require('./scripts/get-git-hash.js')
 const { configureLanguageServerResources } = require('./scripts/get-language-servers.js')
+const { signLanguageServerJars } = require('./scripts/sign-language-server-jars.js')
 
 /**
  * Since all our renderers share the same static HTML file and the same preload
@@ -45,7 +46,13 @@ module.exports = {
 
       // Native language servers are target-specific extra resources. Pandoc WASM
       // is bundled separately by BundlePandocPlugin in webpack.main.config.js.
-      await configureLanguageServerResources(forgeConfig, targetPlatform, targetArch)
+      const languageServers = await configureLanguageServerResources(forgeConfig, targetPlatform, targetArch)
+      // The app signer cannot discover native libraries inside Java archives.
+      // Sign them in staging before the outer application signature is created.
+      const identity = forgeConfig.packagerConfig.osxSign?.identity
+      if (targetPlatform === 'darwin' && languageServers !== undefined && identity) {
+        await signLanguageServerJars(languageServers, identity)
+      }
     },
     postMake: async (forgeConfig, makeResults) => {
       const basePath = __dirname

@@ -97,6 +97,7 @@ describe('Language server bundling', function () {
       const directory = await bundleLanguageServers(options)
       assert(directory !== undefined)
       const license = path.join(directory, 'ltex-plus/jdk/legal/java.management.rmi/LICENSE')
+      assert.strictEqual((await fs.stat(path.join(directory, 'ltex-plus/jdk/bin/java'))).mode & 0o555, 0o555)
       assert.strictEqual((await fs.lstat(license)).isSymbolicLink(), false)
       assert.strictEqual(await fs.readFile(license, 'utf8'), 'Java license notice')
       const relocated = path.join(temporary, `relocated-${build}`)
@@ -137,6 +138,14 @@ describe('Language server bundling', function () {
   it('bundles YAML Language Server as a utility-process package without downloading an archive', async () => {
     const directory = await bundleLanguageServers({ platform: process.platform, arch: process.arch, resourcesDirectory: temporary, env: { BUNDLE_PANACHE: '0', BUNDLE_CODEBOOK: '0', BUNDLE_LTEX_PLUS: '0' } })
     assert(directory !== undefined)
+    if (process.platform !== 'win32') {
+      // Both the bundle root and YAML cache originate from private mkdtemp
+      // directories; packaging must not retain those owner-only permissions.
+      for (const folder of [directory, path.join(directory, 'yaml')]) {
+        assert.strictEqual((await fs.stat(folder)).mode & 0o555, 0o555)
+      }
+      assert.strictEqual((await fs.stat(path.join(directory, 'yaml', 'worker.cjs'))).mode & 0o444, 0o444)
+    }
     const worker = path.join(directory, 'yaml', 'worker.cjs')
     assert.strictEqual((await fs.stat(worker)).isFile(), true)
     const yamlPackage = path.join(directory, 'yaml', 'node_modules', 'yaml-language-server')

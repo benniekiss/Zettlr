@@ -69,7 +69,7 @@ describe('Shared editor LSP sessions', () => {
         }
         if (payload.command === 'send') {
           const message = JSON.parse(payload.message)
-          if (message.method === 'initialize' && initialize) queueMicrotask(() => emit(payload.id, { id: message.id, ...(failInit ? { error: { code: -32603, message: 'Failed initialization' } } : { result: { capabilities: { textDocumentSync: 1, hoverProvider: true, completionProvider: {}, codeActionProvider: true } } }) }))
+          if (message.method === 'initialize' && initialize) queueMicrotask(() => emit(payload.id, { id: message.id, ...(failInit ? { error: { code: -32603, message: 'Failed initialization' } } : { result: { capabilities: { textDocumentSync: { change: 1, openClose: true, save: processes.get(payload.id) === 'panache' ? { includeText: true } : false }, hoverProvider: true, completionProvider: {}, codeActionProvider: true } } }) }))
           if (message.method === 'textDocument/codeAction') queueMicrotask(() => emit(payload.id, { id: message.id, result: [{ title: 'Add word', command: { title: 'Add word', command: 'codebook.addWord' } }] }))
           if (message.method === 'textDocument/completion') queueMicrotask(() => emit(payload.id, { id: message.id, result: [{ label: processes.get(payload.id) }] }))
           if (message.method === '$/cancelRequest') {
@@ -161,6 +161,43 @@ describe('Shared editor LSP sessions', () => {
     assert.strictEqual(processes.get(sent('textDocument/hover')[0].id), 'json')
     const completions = await client.request<typeof params, any[]>('textDocument/completion', params)
     assert.deepStrictEqual(completions, [{ label: 'json' }])
+  })
+
+  it('sends current saves once per shared document and rejects snapshots superseded by edits', async () => {
+    const view = create('/workspace/shared.md')
+    create('/workspace/shared.md')
+    await settle()
+    view.dispatch({ changes: { from: 5, insert: '!more' } })
+    for (const listener of listeners.get('documents-update') ?? []) listener(undefined, { event: 'file-saved', context: { filePath: '/workspace/shared.md', savedContent: 'hello!' } })
+    await settle()
+    assert.strictEqual(sent('textDocument/didSave').length, 0)
+    for (const listener of listeners.get('documents-update') ?? []) listener(undefined, { event: 'file-saved', context: { filePath: '/workspace/shared.md', savedContent: 'hello!more' } })
+    await settle()
+    const saves = sent('textDocument/didSave')
+    assert.strictEqual(saves.length, 1)
+    assert.strictEqual(processes.get(saves[0].id), 'panache')
+    assert.strictEqual(saves[0].value.params.text, 'hello!more')
+    const methods = calls.filter(call => call.command === 'send' && call.id === saves[0].id).map(call => JSON.parse(call.message).method)
+    assert(methods.indexOf('textDocument/didChange') < methods.indexOf('textDocument/didSave'))
+  })
+
+  it('routes registered watcher events once per session and stops after unregistration', async () => {
+    create('/workspace/shared.md'); create('/workspace/shared.md')
+    await settle()
+    const id = [...processes].find(([, name]) => name === 'panache')![0]
+    emit(id, { id: 'register', method: 'client/registerCapability', params: { registrations: [{ id: 'configs', method: 'workspace/didChangeWatchedFiles', registerOptions: { watchers: [{ globPattern: '**/{panache,.panache}.toml' }] } }] } })
+    const change = (uri: string): void => { for (const listener of listeners.get('fsal-watch-event') ?? []) listener(undefined, { event: 'change', uri }) }
+    change('file:///workspace/.panache.toml')
+    change('file:///other/panache.toml')
+    change('file:///workspace/other.txt')
+    await settle()
+    assert.strictEqual(sent('workspace/didChangeWatchedFiles').length, 1)
+    assert.strictEqual(sent('workspace/didChangeWatchedFiles')[0].id, id)
+    assert.deepStrictEqual(sent('workspace/didChangeWatchedFiles')[0].value.params.changes, [{ uri: 'file:///workspace/.panache.toml', type: 2 }])
+    emit(id, { id: 'unregister', method: 'client/unregisterCapability', params: { unregisterations: [{ id: 'configs', method: 'workspace/didChangeWatchedFiles' }] } })
+    change('file:///workspace/.panache.toml')
+    await settle()
+    assert.strictEqual(sent('workspace/didChangeWatchedFiles').length, 1)
   })
 
   it('uses a current pane for native mappings and workspace edits while another pane lags', async () => {

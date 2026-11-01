@@ -97,6 +97,16 @@ describe('Multiple language servers', () => {
     first.receive({ id: first.sent.at(-1).id, result: [] })
   })
 
+  it('honors per-server save capabilities and omits text unless requested', () => {
+    transport.send(JSON.stringify({ id: 1, method: 'initialize', params: {} }))
+    first.receive({ id: first.sent[0].id, result: { capabilities: { textDocumentSync: { save: true } } } })
+    second.receive({ id: second.sent[0].id, result: { capabilities: { textDocumentSync: { save: { includeText: true } } } } })
+    const textDocument = { uri: 'file:///test.md' }
+    transport.send(JSON.stringify({ method: 'textDocument/didSave', params: { textDocument, text: 'persisted' } }))
+    assert.deepStrictEqual(first.sent.at(-1).params, { textDocument })
+    assert.deepStrictEqual(second.sent.at(-1).params, { textDocument, text: 'persisted' })
+  })
+
   it('combines diagnostics, removes disconnected contributions, and rejects stale versions', () => {
     const uri = 'file:///test.md'
     transport.send(JSON.stringify({ method: 'textDocument/didOpen', params: { textDocument: { uri, version: 0 } } }))

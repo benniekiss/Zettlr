@@ -174,6 +174,23 @@ async function copyPackageTree (source, destination, sourceModules, destinationM
   }
 }
 
+// mkdtemp creates private directories (0700). Release resources must be readable
+// and traversable by users other than the build or package installation owner.
+async function makeResourcesReadable (directory) {
+  const info = await fs.stat(directory)
+  await fs.chmod(directory, (info.mode & 0o777) | 0o555)
+  for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
+    const filename = path.join(directory, entry.name)
+    if (entry.isDirectory()) {
+      await makeResourcesReadable(filename)
+    } else if (entry.isFile()) {
+      const info = await fs.stat(filename)
+      const required = (info.mode & 0o111) !== 0 ? 0o555 : 0o444
+      await fs.chmod(filename, (info.mode & 0o777) | required)
+    }
+  }
+}
+
 async function bundleLanguageServers ({ platform, arch, resourcesDirectory = path.join(__dirname, '../resources'), env = process.env, download = downloadArchive }) {
   const enabled = enabledServers(env)
   if (enabled.length === 0) return undefined
@@ -190,8 +207,16 @@ async function bundleLanguageServers ({ platform, arch, resourcesDirectory = pat
       const cached = name === 'yaml'
         ? await prepareYamlServer(platform, arch, targetDirectory)
         : await prepareServer(name, platform, arch, targetDirectory, download)
-      await fs.cp(cached, path.join(staging, name), { recursive: true, dereference: false, verbatimSymlinks: true })
+      // Materialize macOS resources before Packager copies and signs them.
+      // In particular, the JDK's shared legal notices must remain readable
+      // without symlinks that can become invalid when the bundle is relocated.
+      await fs.cp(cached, path.join(staging, name), {
+        recursive: true,
+        dereference: platform === 'darwin',
+        verbatimSymlinks: platform !== 'darwin'
+      })
     }
+    if (platform !== 'win32') await makeResourcesReadable(staging)
     // Assemble only enabled servers, even when an earlier build bundled more.
     await fs.rm(destination, { recursive: true, force: true })
     await fs.rename(staging, destination)

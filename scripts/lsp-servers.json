@@ -1,38 +1,38 @@
 {
   "yaml": {
     "package": "yaml-language-server",
-    "version": "1.24.0",
+    "version": "2.0.0",
     "executable": "worker.cjs"
   },
   "panache": {
     "repository": "jolars/panache",
-    "version": "3.14.0",
-    "tag": "v3.14.0",
+    "version": "3.17.2",
+    "tag": "v3.17.2",
     "executable": "panache",
     "targets": {
       "darwin-x64": {
         "asset": "panache-x86_64-apple-darwin.tar.gz",
-        "sha256": "23462512b4937a2a22ec10e8302aa43cc10b3d638960f5b077de63fc69166704"
+        "sha256": "4b1258e404e4ce9af5376ba9c1c13466f7c079a16ac402d715f7ded0de89cae8"
       },
       "darwin-arm64": {
         "asset": "panache-aarch64-apple-darwin.tar.gz",
-        "sha256": "e76d367532b76dc8755e2c3fdddd4fe97a3aa43a920ac6deb33d18f47b7c371b"
+        "sha256": "82d80f3c276dd80ce1c34026ca0b17ee9981c050ab67123dc1810ee8793264d6"
       },
       "linux-x64": {
         "asset": "panache-x86_64-unknown-linux-musl.tar.gz",
-        "sha256": "3681c673dabf4540c2a2e1fca02a2fd1639bffd2d97fd3f9d3f7a908ef77c114"
+        "sha256": "33c089c2074dcce8db4922aa13c8528676c2323931777aa4fe4f1d9d4fc08cec"
       },
       "linux-arm64": {
         "asset": "panache-aarch64-unknown-linux-musl.tar.gz",
-        "sha256": "d0cd952116077116541f6fb2622cfefbefa91f9a3ac690cc62cca37bec14195a"
+        "sha256": "d3c315ab8fa0f31ab996dd34c60c14a65829276738be41dbf6d961fb2bc59ff0"
       },
       "win32-x64": {
         "asset": "panache-x86_64-pc-windows-msvc.zip",
-        "sha256": "d4acab514dafd33dc470cc03cd2f5fc5786d40e71696eb4ae8f4a3a775e0ebd2"
+        "sha256": "f85d53e7705e819986e31ab027208e661d53cbc4e07715a093aca2006f763140"
       },
       "win32-arm64": {
         "asset": "panache-aarch64-pc-windows-msvc.zip",
-        "sha256": "192a3712b1c365f5d518f92551a3067e94756af7038b3d8e508594f50692fbc0"
+        "sha256": "c7fd12a06526653bc3ea4d0f4c98cac1a73e3fefff4b084f8619b70986e356ff"
       }
     }
   },

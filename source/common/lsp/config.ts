@@ -58,7 +58,7 @@ export function getRecommendedLanguageServers (appLanguage = 'en-US'): LanguageS
         ltex: {
           language,
           additionalRules: { enablePickyRules: true },
-          disabledRules: { [language]: [ spellcheckRuleForLanguage(language) ] }
+          disabledRules: { [language]: [spellcheckRuleForLanguage(language)] }
         }
       }
     }

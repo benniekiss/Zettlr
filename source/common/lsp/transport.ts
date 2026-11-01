@@ -1,5 +1,6 @@
 import type { LSPClient, Transport } from '@codemirror/lsp-client'
 import type { Diagnostic, CodeAction, Command, WorkspaceEdit } from 'vscode-languageserver-types'
+import { matchesWatcher, type FileEvent, type FileSystemWatcher } from './file-watching'
 
 interface Message {
   jsonrpc: string
@@ -18,6 +19,8 @@ interface Peer {
   active: boolean
   languages?: readonly string[]
   documents: Set<string>
+  watchers: Map<string, FileSystemWatcher[]>
+  rootUri: string
 }
 
 const providers: Record<string, string> = {
@@ -46,9 +49,9 @@ export class MultiServerTransport implements Transport {
   private readonly initializations = new Map<number|string, { peer: Peer, respond: (message: Message) => void, timer: ReturnType<typeof setTimeout> }>()
   private readonly serverRequests = new Map<string, { peer: Peer, id: number|string }>()
 
-  constructor (transports: Transport[], private readonly applyEdit?: (params: { edit: WorkspaceEdit }) => { applied: boolean, failureReason?: string }, private readonly onClose?: (transport: Transport) => void, languages?: readonly (readonly string[])[]) {
+  constructor (transports: Transport[], private readonly applyEdit?: (params: { edit: WorkspaceEdit }) => { applied: boolean, failureReason?: string }, private readonly onClose?: (transport: Transport) => void, languages?: readonly (readonly string[])[], roots?: readonly string[]) {
     for (const [ index, transport ] of transports.entries()) {
-      const peer: Peer = { transport, capabilities: {}, diagnostics: new Map(), active: true, languages: languages?.[index], documents: new Set(), listener: message => this.receive(peer, JSON.parse(message)) }
+      const peer: Peer = { transport, capabilities: {}, diagnostics: new Map(), active: true, languages: languages?.[index], documents: new Set(), watchers: new Map(), rootUri: roots?.[index] ?? 'file:///', listener: message => this.receive(peer, JSON.parse(message)) }
       this.peers.push(peer)
       transport.subscribe(peer.listener)
     }
@@ -132,13 +135,27 @@ export class MultiServerTransport implements Transport {
         }
       }
       for (const peer of this.peers.filter(peer => peer.active)) {
+        if (message.method === 'workspace/didChangeWatchedFiles') {
+          const watchers = [...peer.watchers.values()].flat()
+          const changes = (message.params.changes as FileEvent[]).filter(event => watchers.some(watcher => matchesWatcher(event, watcher, peer.rootUri)))
+          if (changes.length > 0) {
+            try {peer.transport.send(JSON.stringify({ ...message, params: { changes } }))} catch {this.closePeer(peer.transport)}
+          }
+          continue
+        }
         const uri = message.params?.textDocument?.uri
         if (message.method === 'textDocument/didOpen') {
           if (peer.languages !== undefined && !peer.languages.includes(message.params.textDocument.languageId)) {continue}
           peer.documents.add(uri)
         } else if (uri !== undefined && peer.languages !== undefined && !peer.documents.has(uri)) {continue}
         if (message.method === 'textDocument/didClose') {peer.documents.delete(uri)}
-        try { peer.transport.send(json) } catch (err) {
+        let outgoing = json
+        if (message.method === 'textDocument/didSave') {
+          const save = peer.capabilities.textDocumentSync?.save
+          if (save !== true && (typeof save !== 'object' || save === null)) {continue}
+          outgoing = JSON.stringify({ ...message, params: { textDocument: message.params.textDocument, ...(save.includeText === true ? { text: message.params.text } : {}) } })
+        }
+        try { peer.transport.send(outgoing) } catch (err) {
           this.closePeer(peer.transport) 
         }
       }
@@ -206,7 +223,18 @@ export class MultiServerTransport implements Transport {
     if (!peer.active) {
       return
     }
-    if (message.method === 'workspace/applyEdit' && message.id !== undefined && this.applyEdit !== undefined) {
+    if (message.method === 'client/registerCapability' && message.id !== undefined) {
+      const registrations = message.params.registrations as Array<{ id: string, method: string, registerOptions: { watchers: FileSystemWatcher[] } }>
+      if (registrations.some(registration => registration.method !== 'workspace/didChangeWatchedFiles')) {
+        peer.transport.send(JSON.stringify({ jsonrpc: '2.0', id: message.id, error: { code: -32601, message: 'Only file-watcher registration is supported' } }))
+      } else {
+        for (const registration of registrations) {peer.watchers.set(registration.id, registration.registerOptions.watchers)}
+        peer.transport.send(JSON.stringify({ jsonrpc: '2.0', id: message.id, result: null }))
+      }
+    } else if (message.method === 'client/unregisterCapability' && message.id !== undefined) {
+      for (const registration of message.params.unregisterations as Array<{ id: string }>) {peer.watchers.delete(registration.id)}
+      peer.transport.send(JSON.stringify({ jsonrpc: '2.0', id: message.id, result: null }))
+    } else if (message.method === 'workspace/applyEdit' && message.id !== undefined && this.applyEdit !== undefined) {
       let result: { applied: boolean, failureReason?: string }
       try { result = this.applyEdit(message.params) } catch (err) {
         result = { applied: false, failureReason: err instanceof Error ? err.message : String(err) }
@@ -273,6 +301,7 @@ export class MultiServerTransport implements Transport {
       this.publishDiagnostics(uri)
     }
     peer.diagnostics.clear()
+    peer.watchers.clear()
     this.onClose?.(transport)
   }
 

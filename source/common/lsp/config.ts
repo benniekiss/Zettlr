@@ -11,6 +11,12 @@ export interface LanguageServerConfig {
   settings?: Record<string, unknown>
 }
 
+export const recommendedLanguageServers: LanguageServerConfig[] = [
+  { name: 'panache', command: 'panache', args: ['lsp'], languages: ['markdown'] },
+  { name: 'codebook', command: 'codebook-lsp', args: ['serve'], languages: ['markdown'] },
+  { name: 'ltex', command: 'ltex-ls-plus', languages: [ 'markdown', 'latex' ], settings: { ltex: { language: 'en-US' } } }
+]
+
 export function parseLanguageServers (json: string): LanguageServerConfig[] {
   const servers: unknown = JSON.parse(json)
   if (!Array.isArray(servers)) {

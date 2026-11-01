@@ -51,6 +51,7 @@ export type ConfigurableUIShortcuts = Extends<MenuShortcutName, 'previous-tab'|'
 
 export interface ConfigOptions {
   languageServers: string
+  useBundledLanguageServers: boolean
   version: string
   buildDate: string
   uuid: string
@@ -259,6 +260,7 @@ export function getConfigTemplate (): ConfigOptions {
   // Return the complete configuration object
   return {
     languageServers: '[]',
+    useBundledLanguageServers: true,
     version: app.getVersion(), // Useful for migrating
     buildDate: __BUILD_DATE__,
     app: {

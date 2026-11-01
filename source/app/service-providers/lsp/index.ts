@@ -1,13 +1,14 @@
-import { ipcMain, type WebContents } from 'electron'
+import { app, ipcMain, type WebContents } from 'electron'
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process'
 import { randomUUID } from 'crypto'
-import { dirname } from 'path'
+import { dirname, join } from 'path'
 import { pathToFileURL } from 'url'
 import ProviderContract from '../provider-contract'
 import type ConfigProvider from '../config'
 import type LogProvider from '../log'
 import { parseLanguageServers, type LanguageServerConfig } from '@common/lsp/config'
 import { frameLSPMessage, LSPMessageReader } from '@common/lsp/framing'
+import { resolveLanguageServerCommand } from './bundled-servers'
 
 interface Session {
   process: ChildProcessWithoutNullStreams
@@ -30,7 +31,13 @@ export default class LSPProvider extends ProviderContract {
           throw new Error('Language server is not configured or enabled')
         }
         const cwd = server.cwd ?? dirname(payload.path)
-        const process = spawn(server.command, server.args ?? [], {
+        const roots = [join(global.process.resourcesPath, 'language-servers')]
+        if (!app.isPackaged) {
+          roots.push(join(__dirname, '../../resources/lsp', `${global.process.platform}-${global.process.arch}`, 'language-servers'))
+        }
+        const launcher = await resolveLanguageServerCommand(server, this.config.get('useBundledLanguageServers') === true, roots)
+        this.logger.verbose(`[LSP ${server.name}] Starting ${launcher.bundled ? 'bundled' : 'configured'} server: ${launcher.command}`)
+        const process = spawn(launcher.command, launcher.args, {
           cwd, env: { ...global.process.env, ...server.env }, windowsHide: true, shell: false
         })
         const id = randomUUID()
@@ -41,6 +48,9 @@ export default class LSPProvider extends ProviderContract {
         }
         const reader = new LSPMessageReader(message => {
           const value = JSON.parse(message)
+          if (value.error !== undefined) {
+            this.logger.error(`[LSP ${server.name}] Server request failed`, value.error)
+          }
           if (value.id === 'zettlr-shutdown' && value.method === undefined) {
             process.stdin.end(frameLSPMessage(JSON.stringify({ jsonrpc: '2.0', method: 'exit' })))
             return
@@ -112,7 +122,7 @@ export default class LSPProvider extends ProviderContract {
     }
     this.sessions.delete(id)
     if (session.process.stdin.writable) {
-      session.process.stdin.write(frameLSPMessage(JSON.stringify({ jsonrpc: '2.0', id: 'zettlr-shutdown', method: 'shutdown', params: null })))
+      session.process.stdin.write(frameLSPMessage(JSON.stringify({ jsonrpc: '2.0', id: 'zettlr-shutdown', method: 'shutdown' })))
     }
     const timer = setTimeout(() => {
       if (session.process.exitCode === null && session.process.signalCode === null) {

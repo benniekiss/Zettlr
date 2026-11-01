@@ -26,7 +26,7 @@ export enum PreferencesGroups {
   General,
   ImportExport,
   Snippets,
-  Spellchecking,
+  LanguageServers,
   Zettelkasten,
   Shortcuts
 }

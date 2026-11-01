@@ -206,6 +206,9 @@ interface TextOrShortcutField extends BasicInfo {
 
 interface TextField extends TextOrShortcutField {
   type: 'text'
+  multiline?: boolean
+  saveOnBlur?: boolean
+  validate?: (value: string) => string|undefined
 }
 
 interface ShortcutField extends TextOrShortcutField {

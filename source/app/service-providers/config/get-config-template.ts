@@ -49,29 +49,8 @@ export type ConfigurableEditorShortcuts = Extends<
 >
 export type ConfigurableUIShortcuts = Extends<MenuShortcutName, 'previous-tab'|'next-tab'|'filter-files'>
 
-/**
- * This type describes an entry of the ignored rules array in the config. We
- * define this type here, and not in the LanguageTool command, because if we
- * change its structure, bad things could happen. By colocating it with the
- * config, it is harder for us to forget to write a migration rule if we ever
- * change this structure.
- */
-export interface LanguageToolIgnoredRuleEntry {
-  /**
-   * The description of the rule (usually localized).
-   */
-  description: string
-  /**
-   * The unique ID of this rule.
-   */
-  id: string
-  /**
-   * The category for this rule.
-   */
-  category: string
-}
-
 export interface ConfigOptions {
+  languageServers: string
   version: string
   buildDate: string
   uuid: string
@@ -109,7 +88,6 @@ export interface ConfigOptions {
 
   newFileNamePattern: string
   newFileDontPrompt: boolean
-  selectedDicts: string[]
 
   debug: boolean
   checkForBeta: boolean
@@ -175,25 +153,6 @@ export interface ConfigOptions {
     italicFormatting: '_'|'*'
     highlightFormatting: 'span'|'=='
     readabilityAlgorithm: 'dale-chall'|'gunning-fog'|'coleman-liau'|'automated-readability'
-    lint: {
-      markdown: boolean
-      languageTool: {
-        active: boolean
-        level: 'picky'|'default'
-        motherTongue: string // e.g., en-US, de-DE
-        variants: {
-          en: string
-          de: string
-          pt: string
-          ca: string
-        }
-        ignoredRules: LanguageToolIgnoredRuleEntry[]
-        provider: 'official'|'custom'
-        customServer: string
-        username: string
-        apiKey: string
-      }
-    }
     autoCorrect: {
       active: boolean
       magicQuotes: {
@@ -299,6 +258,7 @@ export function getConfigTemplate (): ConfigOptions {
 
   // Return the complete configuration object
   return {
+    languageServers: '[]',
     version: app.getVersion(), // Useful for migrating
     buildDate: __BUILD_DATE__,
     app: {
@@ -404,28 +364,6 @@ export function getConfigTemplate (): ConfigOptions {
       readabilityAlgorithm: 'dale-chall', // The algorithm to use with readability mode.
       showStatusbar: true,
       showFormattingToolbar: true,
-      lint: {
-        markdown: true, // Should Markdown be linted?
-        languageTool: {
-          active: false, // Utilize languageTool?
-          level: 'default', // API: https://languagetool.org/http-api/#!/default/post_check
-          motherTongue: '', // Optional motherTongue property
-          variants: {
-            // These defaults are taken from LT's extension
-            en: 'en-US',
-            de: 'de-DE',
-            pt: 'pt-PT',
-            ca: 'ca-ES'
-          },
-          // This is an (initially empty) array of rules the user chose to
-          // ignore globally.
-          ignoredRules: [],
-          provider: 'official',
-          customServer: '',
-          username: '',
-          apiKey: ''
-        }
-      },
       autoCorrect: {
         active: true, // AutoCorrect is on by default
         magicQuotes: {
@@ -523,7 +461,6 @@ export function getConfigTemplate (): ConfigOptions {
       dotFiles: { showInFilemanager: false, showInSidebar: false, openWith: 'system' }
     },
     // Language
-    selectedDicts: [], // By default no spell checking is active to speed up first start.
     appLang: locale,
     debug: false,
     watchdog: {

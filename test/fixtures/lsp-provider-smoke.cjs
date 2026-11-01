@@ -7,6 +7,7 @@ const handlers = new Map()
 const originalLoad = Module._load
 Module._load = function (name, ...args) {
   if (name === 'electron') return {
+    app: { isPackaged: true },
     ipcMain: {
       handle: (channel, handler) => handlers.set(channel, handler),
       removeHandler: channel => handlers.delete(channel)
@@ -14,6 +15,7 @@ Module._load = function (name, ...args) {
   }
   return originalLoad.call(this, name, ...args)
 }
+process.resourcesPath = '/tmp'
 const LSPProvider = require('../../source/app/service-providers/lsp').default
 Module._load = originalLoad
 

@@ -61,6 +61,7 @@ export class MultiServerTransport implements Transport {
   private readonly handlers = new Set<(message: string) => void>()
   private nextID = 1
   private readonly versions = new Map<string, number>()
+  private readonly virtualTexts = new Map<string, string>()
   private readonly initializations = new Map<number|string, { peer: Peer, respond: (message: Message) => void, timer: ReturnType<typeof setTimeout> }>()
   private readonly serverRequests = new Map<string, { peer: Peer, id: number|string }>()
   private readonly activeRequests = new Map<string, { peer: Peer, id: number|string }>()
@@ -112,6 +113,45 @@ export class MultiServerTransport implements Transport {
   resolveCodeAction (client: LSPClient, server: number, action: CodeAction): Promise<CodeAction> {
     if (this.peers[server]?.capabilities.codeActionProvider?.resolveProvider !== true) {return Promise.resolve(action)}
     return this.requestServer(client, server, 'codeAction/resolve', action)
+  }
+
+  /** Mirror a virtual document (such as Markdown frontmatter) to matching servers. */
+  syncVirtualDocument (uri: string, language: string, text: string, close = false): number {
+    if (close) {
+      for (const peer of this.peers) {
+        if (!peer.active || peer.languages?.includes(language) !== true) {continue}
+        const wasOpen = peer.documents.delete(uri)
+        peer.diagnostics.delete(uri)
+        if (wasOpen && peer.sync.openClose) {
+          try {peer.transport.send(JSON.stringify({ jsonrpc: '2.0', method: 'textDocument/didClose', params: { textDocument: { uri } } }))} catch {this.closePeer(peer.transport)}
+        }
+      }
+      this.versions.delete(uri)
+      this.virtualTexts.delete(uri)
+      this.publishDiagnostics(uri)
+      return 0
+    }
+    if (this.virtualTexts.get(uri) === text) {return this.versions.get(uri) ?? 0}
+    const version = (this.versions.get(uri) ?? 0) + 1
+    this.virtualTexts.set(uri, text)
+    for (const peer of this.peers) {
+      if (!peer.active || peer.languages?.includes(language) !== true) {continue}
+      const wasOpen = peer.documents.has(uri)
+      if (!wasOpen) {
+        peer.documents.add(uri)
+        this.versions.set(uri, version)
+        if (peer.sync.openClose) {
+          try {peer.transport.send(JSON.stringify({ jsonrpc: '2.0', method: 'textDocument/didOpen', params: { textDocument: { uri, languageId: language, version, text } } }))} catch {this.closePeer(peer.transport)}
+        }
+      } else {
+        this.versions.set(uri, version)
+        peer.diagnostics.delete(uri)
+        if (peer.sync.change > 0) {
+          try {peer.transport.send(JSON.stringify({ jsonrpc: '2.0', method: 'textDocument/didChange', params: { textDocument: { uri, version }, contentChanges: [{ text }] } }))} catch {this.closePeer(peer.transport)}
+        }
+      }
+    }
+    return version
   }
 
   executeCommand (client: LSPClient, server: number, command: Command): Promise<unknown> {
@@ -356,5 +396,6 @@ export class MultiServerTransport implements Transport {
     this.serverRequests.clear()
     this.activeRequests.clear()
     this.versions.clear()
+    this.virtualTexts.clear()
   }
 }

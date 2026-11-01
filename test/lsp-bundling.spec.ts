@@ -2,6 +2,7 @@ import assert from 'assert'
 import { promises as fs } from 'fs'
 import path from 'path'
 import os from 'os'
+import { createRequire } from 'module'
 import { createHash } from 'crypto'
 import AdmZip from 'adm-zip'
 import { enabledServers, releaseFor, downloadArchive, bundleLanguageServers, configureLanguageServerResources } from '../scripts/get-language-servers'
@@ -18,7 +19,7 @@ describe('Language server bundling', () => {
   it('pins checksummed archives for every supported OS and architecture', () => {
     for (const platform of ['darwin', 'linux', 'win32']) {
       for (const arch of ['x64', 'arm64']) {
-        for (const name of enabledServers({})) {
+        for (const name of enabledServers({}).filter(name => name !== 'yaml')) {
           const release = releaseFor(name, platform, arch)
           assert.match(release.sha256, /^[a-f0-9]{64}$/)
           assert(release.url.includes(`/releases/download/${release.tag}/`))
@@ -32,9 +33,10 @@ describe('Language server bundling', () => {
 
   it('supports independent global and per-server build switches', () => {
     assert.deepStrictEqual(enabledServers({ BUNDLE_LSP: '0' }), [])
-    assert.deepStrictEqual(enabledServers({ BUNDLE_PANDOC: '0' }), ['panache', 'codebook', 'ltex-plus'])
-    assert.deepStrictEqual(enabledServers({ BUNDLE_CODEBOOK: '0', BUNDLE_LTEX_PLUS: '0' }), ['panache'])
-    assert.deepStrictEqual(enabledServers({ BUNDLE_PANACHE: '0' }), ['codebook', 'ltex-plus'])
+    assert.deepStrictEqual(enabledServers({ BUNDLE_PANDOC: '0' }), ['yaml', 'panache', 'codebook', 'ltex-plus'])
+    assert.deepStrictEqual(enabledServers({ BUNDLE_CODEBOOK: '0', BUNDLE_LTEX_PLUS: '0' }), ['yaml', 'panache'])
+    assert.deepStrictEqual(enabledServers({ BUNDLE_PANACHE: '0' }), ['yaml', 'codebook', 'ltex-plus'])
+    assert.deepStrictEqual(enabledServers({ BUNDLE_YAML_SERVER: '0' }), ['panache', 'codebook', 'ltex-plus'])
   })
 
   async function archiveFixture (release: any, archive: string): Promise<void> {
@@ -53,7 +55,7 @@ describe('Language server bundling', () => {
     const directory = await bundleLanguageServers(options)
     assert(directory !== undefined)
     assert.strictEqual(downloads, 3)
-    for (const name of enabledServers({})) assert.strictEqual(await fs.readFile(path.join(directory, name, 'LICENSE'), 'utf8'), 'license notice')
+    for (const name of enabledServers({}).filter(name => name !== 'yaml')) assert.strictEqual(await fs.readFile(path.join(directory, name, 'LICENSE'), 'utf8'), 'license notice')
     const native = await resolveLanguageServerCommand(server('panache', ['lsp']), true, [directory], 'win32', 'x64')
     assert.strictEqual(native.command, path.join(directory, 'panache', 'panache.exe'))
     assert.deepStrictEqual(native.args, ['lsp'])
@@ -62,7 +64,7 @@ describe('Language server bundling', () => {
     assert.deepStrictEqual(ltex.args, [ `-Dapp.home=${path.join(directory, 'ltex-plus')}`, '-cp', path.join(directory, 'ltex-plus', 'lib', '*'), 'org.bsplines.ltexls.LtexLanguageServerLauncher', '--help' ])
     await bundleLanguageServers({ ...options, env: { BUNDLE_CODEBOOK: '0', BUNDLE_LTEX_PLUS: '0' } })
     assert.strictEqual(downloads, 3)
-    assert.deepStrictEqual(await fs.readdir(directory), ['panache'])
+    assert.deepStrictEqual(await fs.readdir(directory), ['panache', 'yaml'])
     assert.strictEqual((await resolveLanguageServerCommand(server('codebook-lsp', ['serve']), true, [directory], 'win32', 'x64')).bundled, false)
   })
 
@@ -75,7 +77,7 @@ describe('Language server bundling', () => {
 
   it('replaces its Forge resources on target changes and removes them when disabled', async () => {
     const forgeConfig = { packagerConfig: { extraResource: ['resources/icons/icon.icns'] } }
-    const options = { resourcesDirectory: temporary, env: { BUNDLE_PANDOC: '0', BUNDLE_CODEBOOK: '0', BUNDLE_LTEX_PLUS: '0' }, download: archiveFixture }
+    const options = { resourcesDirectory: temporary, env: { BUNDLE_YAML_SERVER: '0', BUNDLE_PANDOC: '0', BUNDLE_CODEBOOK: '0', BUNDLE_LTEX_PLUS: '0' }, download: archiveFixture }
     const first = await configureLanguageServerResources(forgeConfig, 'win32', 'x64', options)
     assert.deepStrictEqual(forgeConfig.packagerConfig.extraResource, ['resources/icons/icon.icns', first])
     const second = await configureLanguageServerResources(forgeConfig, 'win32', 'arm64', options)
@@ -93,6 +95,26 @@ describe('Language server bundling', () => {
     assert.strictEqual((await resolveLanguageServerCommand(server('custom-server'), true, [directory], 'win32', 'x64')).command, 'custom-server')
     assert.strictEqual((await resolveLanguageServerCommand(server('panache'), true, [directory], 'win32', 'arm64')).bundled, false)
     assert.strictEqual((await resolveLanguageServerCommand(server('PANACHE.EXE'), true, [directory], 'win32', 'x64')).bundled, true)
+  })
+
+  it('bundles YAML Language Server as a utility-process package without downloading an archive', async () => {
+    const directory = await bundleLanguageServers({ platform: process.platform, arch: process.arch, resourcesDirectory: temporary, env: { BUNDLE_PANACHE: '0', BUNDLE_CODEBOOK: '0', BUNDLE_LTEX_PLUS: '0' } })
+    assert(directory !== undefined)
+    const worker = path.join(directory, 'yaml', 'worker.cjs')
+    assert.strictEqual((await fs.stat(worker)).isFile(), true)
+    const yamlPackage = path.join(directory, 'yaml', 'node_modules', 'yaml-language-server')
+    const yamlMetadata = JSON.parse(await fs.readFile(path.join(yamlPackage, 'package.json'), 'utf8'))
+    const bundledRequire = createRequire(path.join(yamlPackage, 'package.json'))
+    for (const dependency of Object.keys(yamlMetadata.dependencies)) {
+      assert.doesNotThrow(() => bundledRequire.resolve(dependency), `Missing bundled dependency ${dependency}`)
+    }
+    const metadata = JSON.parse(await fs.readFile(path.join(directory, 'yaml', 'bundle.json'), 'utf8'))
+    assert.strictEqual(metadata.runtime, 'utility-process')
+    assert.strictEqual(metadata.version, '1.24.0')
+    const bundled = await resolveLanguageServerCommand(server('yaml-language-server', ['--node-ipc']), true, [directory], process.platform, process.arch)
+    assert.strictEqual(bundled.bundled, true)
+    assert.strictEqual(bundled.utilityProcess, true)
+    assert.deepStrictEqual(bundled.args, ['--node-ipc'])
   })
 
   it('ignores incomplete or invalid bundles and never traverses outside their directory', async () => {

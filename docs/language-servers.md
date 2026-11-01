@@ -3,14 +3,15 @@
 Zettlr uses the official [CodeMirror LSP client](https://github.com/codemirror/lsp-client).
 Configure language servers in **Preferences → Language servers**.
 The configuration is a JSON array; valid edits apply when the field loses focus.
-An empty array disables language servers. Use **Add panache, codebook, and LTeX+**
-to add the configurations below while preserving existing entries.
+An empty array disables language servers. Use **Add Panache, YAML Language Server, Codebook, and LTeX+** to add the configurations below while preserving existing entries.
 
-Official builds bundle [panache](https://github.com/jolars/panache),
+Official builds bundle the [YAML Language Server](https://github.com/redhat-developer/yaml-language-server),
+[Panache](https://github.com/jolars/panache),
 [codebook](https://github.com/blopker/codebook), and
 [LTeX+](https://ltex-plus.github.io/ltex-plus/installation-usage.html), including
-LTeX+'s Java runtime. **Use bundled language servers** defaults to enabled:
-the bare commands `panache`, `codebook-lsp`, and `ltex-ls-plus` select the bundled
+LTeX+'s Java runtime. YAML Language Server runs in an Electron utility process;
+the renderer remains sandboxed. **Use bundled language servers** defaults to enabled:
+the bare commands `yaml-language-server`, `panache`, `codebook-lsp`, and `ltex-ls-plus` select the bundled
 versions when available. Explicit executable paths always select that installation.
 Disable this option to use system installations for all servers. If a build omits
 a server, its configured command is used instead. Changing the option restarts
@@ -20,6 +21,13 @@ For example:
 
 ```json
 [
+  {
+    "name": "yaml",
+    "command": "yaml-language-server",
+    "args": ["--node-ipc"],
+    "languages": ["yaml"],
+    "settings": { "yaml": { "schemaStore": { "enable": false } } }
+  },
   {
     "name": "panache",
     "command": "panache",
@@ -70,7 +78,9 @@ Interactive requests use the first matching server that advertises the feature;
 place the preferred formatter/completion provider first. The client enables
 completion, hover, signature help, formatting (Shift-Alt-F), rename (F2),
 definition (F12), and references (Shift-F12), subject to server capabilities.
-YAML validation remains available locally.
+YAML files and asset import/export profiles use YAML Language Server diagnostics,
+completion, hover, and other advertised features. Schema-driven diagnostics require
+a schema association or an inline `$schema` modeline.
 
 Load spelling fixes and other diagnostic code actions with the native
 **Show fixes** button: hover over an underlined diagnostic, or open the diagnostics
@@ -126,8 +136,10 @@ settings or configuration files; existing dictionary files are not deleted.
 ## Building with language servers
 
 Forge downloads and bundles pinned, checksummed distributions for the target
-platform and architecture. Set `BUNDLE_LSP=0` to disable all three, or use
-`BUNDLE_PANACHE=0`, `BUNDLE_CODEBOOK=0`, and `BUNDLE_LTEX_PLUS=0` individually.
+platform and architecture. It also packages the pinned YAML Language Server npm
+package and its runtime dependencies. Set `BUNDLE_LSP=0` to disable all four, or use
+`BUNDLE_YAML_SERVER=0`, `BUNDLE_PANACHE=0`, `BUNDLE_CODEBOOK=0`, and
+`BUNDLE_LTEX_PLUS=0` individually.
 Disabling Pandoc bundling does not affect language servers.
 
 For development, run `node scripts/get-language-servers.js` to prepare bundles

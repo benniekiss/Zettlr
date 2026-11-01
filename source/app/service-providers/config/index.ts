@@ -14,7 +14,7 @@
  */
 
 import path from 'path'
-import { parseLanguageServers } from '@common/lsp/config'
+import { parseLanguageServers, recommendedLanguageServers } from '@common/lsp/config'
 import EventEmitter from 'events'
 import { ValidationRule, VALIDATE_RULES, VALIDATE_PROPERTIES } from './config-validation'
 import PersistentDataContainer from '@common/modules/persistent-data-container'
@@ -31,6 +31,7 @@ import { hasMdOrCodeExt } from '@common/util/file-extention-checks'
 import { ignorePath } from '@common/util/ignore-path'
 import { showOnboardingWindow } from './onboarding-window'
 import { DateTime } from 'luxon'
+import semver from 'semver'
 
 const ZETTLR_VERSION = app.getVersion()
 
@@ -258,6 +259,25 @@ export default class ConfigProvider extends ProviderContract {
     * @param  {any}  readConfig  The read config from disk.
     */
   private runMigrations (readConfig: any): void {
+    // Add YAML support for existing installations that still use the original
+    // Panache default. An intentionally empty or fully custom server list is
+    // left alone.
+    try {
+      const oldVersion: unknown = readConfig.version
+      const languageServers: unknown = readConfig.languageServers
+      if (this._newVersion && typeof oldVersion === 'string' && semver.valid(oldVersion) !== null && semver.lt(oldVersion, ZETTLR_VERSION) && typeof languageServers === 'string') {
+        const servers = parseLanguageServers(languageServers)
+        const hasPanache = servers.some(server => server.name === 'panache' && server.enabled !== false)
+        const yaml = recommendedLanguageServers.find(server => server.name === 'yaml')
+        if (hasPanache && yaml !== undefined && !servers.some(server => server.name === yaml.name)) {
+          servers.push(yaml)
+          readConfig.languageServers = JSON.stringify(servers)
+        }
+      }
+    } catch (err) {
+      this._logger.warning('Could not migrate the YAML language server configuration', err)
+    }
+
     // After version 4.0.0, we have split up `openPaths` into separate file and
     // workspaces arrays.
     if (('openPaths' in readConfig)) {

@@ -13,10 +13,10 @@ export function getLanguageServerFields (): PreferencesFieldset[] {
       type: 'checkbox',
       model: 'useBundledLanguageServers',
       label: trans('Use bundled language servers'),
-      info: trans('Prefer bundled panache, codebook, and LTeX+ for their standard commands. If a server is not bundled, use the installed version. Explicit executable paths always take precedence. Changes restart active servers.')
+      info: trans('Prefer bundled Panache, YAML Language Server, Codebook, and LTeX+ for their standard commands. If a server is not bundled, use the installed version. Explicit executable paths always take precedence. Changes restart active servers.')
     }, {
       type: 'button',
-      label: trans('Add panache, codebook, and LTeX+'),
+      label: trans('Add Panache, YAML Language Server, Codebook, and LTeX+'),
       onClick: () => {
         const servers = parseLanguageServers(window.config.get('languageServers'))
         for (const preset of recommendedLanguageServers) {

@@ -33,7 +33,6 @@ import { lua } from '@codemirror/legacy-modes/mode/lua'
 import { EditorState, type Extension } from '@codemirror/state'
 import { css } from '@codemirror/lang-css'
 import markdownParser from '@common/modules/markdown-editor/parser/markdown-parser'
-import { yamlLint } from '@common/modules/markdown-editor/linters/yaml-lint'
 import { lintGutter } from '@codemirror/lint'
 import { showStatusbarEffect, statusbar } from '@common/modules/markdown-editor/statusbar'
 import { search } from '@codemirror/search'
@@ -118,8 +117,7 @@ function getExtensions (mode: SupportedLanguage): Extension[] {
       return [
         ...extensions,
         ...(props.filePath === undefined ? [] : [languageServers(props.filePath, 'yaml')]),
-        yaml(),
-        yamlLint
+        yaml()
       ]
     case 'css':
       return [

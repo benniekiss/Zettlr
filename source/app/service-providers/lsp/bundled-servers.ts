@@ -9,18 +9,20 @@ interface BundleMetadata {
   executable: string
   libraryDirectory?: string
   mainClass?: string
+  runtime?: string
 }
 
 export interface LanguageServerCommand {
   command: string
   args: string[]
   bundled: boolean
+  utilityProcess?: boolean
 }
 
 /** Resolve only bare known commands; explicit paths always take precedence. */
 function bundledID (command: string, platform: string): string|undefined {
   const bare = platform === 'win32' ? command.toLowerCase().replace(/\.(exe|bat|cmd)$/, '') : command
-  return ({ panache: 'panache', 'codebook-lsp': 'codebook', 'ltex-ls-plus': 'ltex-plus' } as Record<string, string>)[bare]
+  return ({ panache: 'panache', 'codebook-lsp': 'codebook', 'ltex-ls-plus': 'ltex-plus', 'yaml-language-server': 'yaml' } as Record<string, string>)[bare]
 }
 
 function bundlePath (root: string, relative: string): string|undefined {
@@ -66,7 +68,8 @@ export async function resolveLanguageServerCommand (
         // Launch the bundled JRE directly; Windows batch scripts require a shell.
         args = [ `-Dapp.home=${root}`, '-cp', path.join(libraries, '*'), metadata.mainClass, ...args ]
       }
-      return { command, args, bundled: true }
+      const utility = metadata.runtime === 'utility-process'
+      return { command, args: utility ? ['--node-ipc'] : args, bundled: true, utilityProcess: utility }
     } catch (err) {
       // Builds may omit any or all servers. Use the configured system command.
     }

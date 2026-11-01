@@ -10,7 +10,7 @@ const { promisify } = require('node:util')
 const AdmZip = require('adm-zip')
 const releases = require('./lsp-servers.json')
 
-const switches = { panache: 'BUNDLE_PANACHE', codebook: 'BUNDLE_CODEBOOK', 'ltex-plus': 'BUNDLE_LTEX_PLUS' }
+const switches = { yaml: 'BUNDLE_YAML_SERVER', panache: 'BUNDLE_PANACHE', codebook: 'BUNDLE_CODEBOOK', 'ltex-plus': 'BUNDLE_LTEX_PLUS' }
 
 function enabledServers (env = process.env) {
   return env.BUNDLE_LSP === '0' ? [] : Object.keys(releases).filter(name => env[switches[name]] !== '0')
@@ -113,6 +113,67 @@ async function prepareServer (name, platform, arch, targetDirectory, download) {
   }
 }
 
+async function prepareYamlServer (platform, arch, targetDirectory) {
+  const release = releases.yaml
+  const packageRoot = findPackageRoot(path.join(__dirname, '..', 'node_modules'), release.package)
+  const packageJson = JSON.parse(await fs.readFile(path.join(packageRoot, 'package.json'), 'utf8'))
+  if (packageJson.version !== release.version) throw new Error(`Expected ${release.package}@${release.version}, found ${packageJson.version}`)
+  const worker = path.join(__dirname, '..', 'source/app/service-providers/lsp/yaml-worker.cjs')
+  const packageHash = createHash('sha256')
+  packageHash.update(await fs.readFile(path.join(__dirname, '..', 'yarn.lock')))
+  packageHash.update(await fs.readFile(worker))
+  const sha256 = packageHash.digest('hex')
+  const cache = path.join(targetDirectory, 'cache', `yaml-${release.version}`)
+  if (await validCache(cache, { version: release.version, sha256, platform, arch })) return cache
+  const staging = await fs.mkdtemp(path.join(targetDirectory, 'yaml-'))
+  const nodeModules = path.join(staging, 'node_modules')
+  await fs.mkdir(nodeModules, { recursive: true })
+  try {
+    await copyPackageTree(packageRoot, path.join(nodeModules, release.package), path.join(__dirname, '..', 'node_modules'), nodeModules)
+    await fs.copyFile(worker, path.join(staging, release.executable))
+    await fs.writeFile(path.join(staging, 'bundle.json'), JSON.stringify({
+      version: release.version, sha256, platform, arch,
+      executable: release.executable, runtime: 'utility-process'
+    }, null, 2) + '\n')
+    await fs.mkdir(path.dirname(cache), { recursive: true })
+    await fs.rm(cache, { recursive: true, force: true })
+    await fs.rename(staging, cache)
+    return cache
+  } finally { await fs.rm(staging, { recursive: true, force: true }) }
+}
+
+function findPackageRoot (nodeModules, packageName, from = nodeModules) {
+  const resolved = require.resolve(packageName, { paths: [from] })
+  let current = path.dirname(resolved)
+  while (current !== path.dirname(current)) {
+    try {
+      const metadata = require(path.join(current, 'package.json'))
+      if (metadata.name === packageName) return current
+    } catch (err) {}
+    current = path.dirname(current)
+  }
+  throw new Error(`Could not find package root for ${packageName}`)
+}
+
+async function copyPackageTree (source, destination, sourceModules, destinationModules, copied = new Set()) {
+  const metadata = JSON.parse(await fs.readFile(path.join(source, 'package.json'), 'utf8'))
+  const key = `${source}:${metadata.version}`
+  if (copied.has(key)) return
+  copied.add(key)
+  await fs.mkdir(path.dirname(destination), { recursive: true })
+  await fs.cp(source, destination, { recursive: true, dereference: true, filter: file => path.basename(file) !== 'node_modules' })
+  for (const dependency of Object.keys({ ...metadata.dependencies, ...metadata.optionalDependencies })) {
+    try {
+      const dependencyRoot = findPackageRoot(sourceModules, dependency, source)
+      const relative = path.relative(sourceModules, dependencyRoot)
+      if (relative.startsWith('..')) throw new Error(`Dependency ${dependency} is outside node_modules`)
+      await copyPackageTree(dependencyRoot, path.join(destinationModules, relative), sourceModules, destinationModules, copied)
+    } catch (err) {
+      if (metadata.optionalDependencies?.[dependency] === undefined) throw err
+    }
+  }
+}
+
 async function bundleLanguageServers ({ platform, arch, resourcesDirectory = path.join(__dirname, '../resources'), env = process.env, download = downloadArchive }) {
   const enabled = enabledServers(env)
   if (enabled.length === 0) return undefined
@@ -126,7 +187,9 @@ async function bundleLanguageServers ({ platform, arch, resourcesDirectory = pat
   const destination = path.join(targetDirectory, 'language-servers')
   try {
     for (const name of enabled) {
-      const cached = await prepareServer(name, platform, arch, targetDirectory, download)
+      const cached = name === 'yaml'
+        ? await prepareYamlServer(platform, arch, targetDirectory)
+        : await prepareServer(name, platform, arch, targetDirectory, download)
       await fs.cp(cached, path.join(staging, name), { recursive: true, dereference: false, verbatimSymlinks: true })
     }
     // Assemble only enabled servers, even when an earlier build bundled more.
@@ -147,7 +210,7 @@ async function configureLanguageServerResources (forgeConfig, platform, arch, op
   return directory
 }
 
-module.exports = { enabledServers, releaseFor, downloadArchive, extractArchive, bundleLanguageServers, configureLanguageServerResources }
+module.exports = { enabledServers, releaseFor, downloadArchive, extractArchive, bundleLanguageServers, configureLanguageServerResources, findPackageRoot, copyPackageTree }
 
 if (require.main === module) {
   const [ platform = process.platform, arch = process.arch ] = process.argv.slice(2)

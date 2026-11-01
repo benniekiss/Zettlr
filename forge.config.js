@@ -5,6 +5,7 @@ const { FusesPlugin } = require('@electron-forge/plugin-fuses')
 const { FuseV1Options, FuseVersion } = require('@electron/fuses')
 const { getGitHash } = require('./scripts/get-git-hash.js')
 const { configureLanguageServerResources } = require('./scripts/get-language-servers.js')
+const { signLanguageServerJars } = require('./scripts/sign-language-server-jars.js')
 
 /**
  * This function runs the get-pandoc script in order to download the requested
@@ -101,7 +102,12 @@ module.exports = {
       process.env.GIT_COMMIT_HASH = await getGitHash()
 
       // Language-server bundling is independent of the Pandoc build switch.
-      await configureLanguageServerResources(forgeConfig, targetPlatform, targetArch)
+      const languageServers = await configureLanguageServerResources(forgeConfig, targetPlatform, targetArch)
+      // Sign native libraries inside JARs before signing the outer application.
+      const identity = forgeConfig.packagerConfig.osxSign?.identity
+      if (targetPlatform === 'darwin' && languageServers !== undefined && identity) {
+        await signLanguageServerJars(languageServers, identity)
+      }
 
       // Second, we need to make sure we can bundle Pandoc.
       if (process.env.BUNDLE_PANDOC === '0') {

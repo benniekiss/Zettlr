@@ -5,13 +5,19 @@ import os from 'os'
 import { createRequire } from 'module'
 import { createHash } from 'crypto'
 import AdmZip from 'adm-zip'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { enabledServers, releaseFor, downloadArchive, bundleLanguageServers, configureLanguageServerResources } from '../scripts/get-language-servers'
 import { resolveLanguageServerCommand } from '../source/app/service-providers/lsp/bundled-servers'
 import type { LanguageServerConfig } from '../source/common/lsp/config'
 
 const server = (command: string, args: string[] = []): LanguageServerConfig => ({ name: command, command, args, languages: ['markdown'] })
 
-describe('Language server bundling', () => {
+describe('Language server bundling', function () {
+  // Copying complete server dependency trees can exceed Mocha's default two
+  // seconds on CI. Allow the copies to finish before cleanup starts.
+  this.timeout(30000)
+
   let temporary: string
   beforeEach(async () => { temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'zettlr-lsp-bundle-test-')) })
   afterEach(async () => { await fs.rm(temporary, { recursive: true, force: true }) })
@@ -68,6 +74,38 @@ describe('Language server bundling', () => {
     assert.strictEqual((await resolveLanguageServerCommand(server('codebook-lsp', ['serve']), true, [directory], 'win32', 'x64')).bundled, false)
   })
 
+  it('materializes macOS JDK license links on fresh and cached builds', async () => {
+    const fixture = path.join(temporary, 'fixture')
+    const root = path.join(fixture, 'distribution')
+    const legal = path.join(root, 'jdk/legal')
+    await fs.mkdir(path.join(root, 'jdk/bin'), { recursive: true })
+    await fs.mkdir(path.join(root, 'lib'), { recursive: true })
+    await fs.mkdir(path.join(legal, 'java.base'), { recursive: true })
+    await fs.mkdir(path.join(legal, 'java.management.rmi'), { recursive: true })
+    await fs.writeFile(path.join(root, 'jdk/bin/java'), 'executable', { mode: 0o755 })
+    await fs.writeFile(path.join(root, 'lib/ltexls-plus-18.7.0.jar'), 'server jar')
+    await fs.writeFile(path.join(legal, 'java.base/LICENSE'), 'Java license notice')
+    await fs.symlink('../java.base/LICENSE', path.join(legal, 'java.management.rmi/LICENSE'))
+    const options = {
+      platform: 'darwin', arch: 'arm64', resourcesDirectory: temporary,
+      env: { BUNDLE_YAML_SERVER: '0', BUNDLE_PANACHE: '0', BUNDLE_CODEBOOK: '0' },
+      download: async (_release: unknown, archive: string) => {
+        await promisify(execFile)('tar', ['-czf', archive, '-C', fixture, 'distribution'])
+      }
+    }
+    for (let build = 0; build < 2; build++) {
+      const directory = await bundleLanguageServers(options)
+      assert(directory !== undefined)
+      const license = path.join(directory, 'ltex-plus/jdk/legal/java.management.rmi/LICENSE')
+      assert.strictEqual((await fs.stat(path.join(directory, 'ltex-plus/jdk/bin/java'))).mode & 0o555, 0o555)
+      assert.strictEqual((await fs.lstat(license)).isSymbolicLink(), false)
+      assert.strictEqual(await fs.readFile(license, 'utf8'), 'Java license notice')
+      const relocated = path.join(temporary, `relocated-${build}`)
+      await fs.rename(directory, relocated)
+      assert.strictEqual(await fs.readFile(path.join(relocated, 'ltex-plus/jdk/legal/java.management.rmi/LICENSE'), 'utf8'), 'Java license notice')
+    }
+  })
+
   it('does not download when bundling is disabled or the target is unsupported', async () => {
     const download = async (): Promise<never> => { throw new Error('Unexpected download') }
     assert.strictEqual(await bundleLanguageServers({ platform: 'linux', arch: 'arm64', resourcesDirectory: temporary, env: { BUNDLE_LSP: '0' }, download }), undefined)
@@ -100,6 +138,14 @@ describe('Language server bundling', () => {
   it('bundles YAML Language Server as a utility-process package without downloading an archive', async () => {
     const directory = await bundleLanguageServers({ platform: process.platform, arch: process.arch, resourcesDirectory: temporary, env: { BUNDLE_PANACHE: '0', BUNDLE_CODEBOOK: '0', BUNDLE_LTEX_PLUS: '0' } })
     assert(directory !== undefined)
+    if (process.platform !== 'win32') {
+      // Both the bundle root and YAML cache originate from private mkdtemp
+      // directories; packaging must not retain those owner-only permissions.
+      for (const folder of [directory, path.join(directory, 'yaml')]) {
+        assert.strictEqual((await fs.stat(folder)).mode & 0o555, 0o555)
+      }
+      assert.strictEqual((await fs.stat(path.join(directory, 'yaml', 'worker.cjs'))).mode & 0o444, 0o444)
+    }
     const worker = path.join(directory, 'yaml', 'worker.cjs')
     assert.strictEqual((await fs.stat(worker)).isFile(), true)
     const yamlPackage = path.join(directory, 'yaml', 'node_modules', 'yaml-language-server')
@@ -110,7 +156,7 @@ describe('Language server bundling', () => {
     }
     const metadata = JSON.parse(await fs.readFile(path.join(directory, 'yaml', 'bundle.json'), 'utf8'))
     assert.strictEqual(metadata.runtime, 'utility-process')
-    assert.strictEqual(metadata.version, '1.24.0')
+    assert.strictEqual(metadata.version, yamlMetadata.version)
     const configured = server('yaml-language-server', ['--stdio'])
     const system = await resolveLanguageServerCommand(configured, false, [directory], process.platform, process.arch)
     assert.deepStrictEqual(system.args, ['--stdio'])

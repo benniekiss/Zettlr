@@ -1,4 +1,4 @@
-import { parseLanguageServers, recommendedLanguageServers } from '@common/lsp/config'
+import { getRecommendedLanguageServers, parseLanguageServers } from '@common/lsp/config'
 import { trans } from '@common/i18n-renderer'
 import { type PreferencesFieldset } from '../App.vue'
 import { PreferencesGroups } from './_preferences-groups'
@@ -19,7 +19,8 @@ export function getLanguageServerFields (): PreferencesFieldset[] {
       label: trans('Add Panache, YAML Language Server, Codebook, and LTeX+'),
       onClick: () => {
         const servers = parseLanguageServers(window.config.get('languageServers'))
-        for (const preset of recommendedLanguageServers) {
+        const appLanguage = String(window.config.get('appLang') ?? 'en-US')
+        for (const preset of getRecommendedLanguageServers(appLanguage)) {
           if (!servers.some(server => server.name === preset.name || server.command === preset.command)) {
             servers.push(preset)
           }

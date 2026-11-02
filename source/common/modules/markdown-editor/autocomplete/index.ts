@@ -99,6 +99,7 @@ const autocompleteSource: CompletionSource = function (ctx): CompletionResult|nu
     from: startPos,
     options: initialOptions,
     filter: false,
+    validFor: plugin.validFor,
     update: (current, from, to, ctx) => {
       const context = completionContext(ctx)
       if (context === null || context.plugin !== plugin || context.from !== from) {

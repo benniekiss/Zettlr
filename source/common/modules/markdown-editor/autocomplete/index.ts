@@ -58,6 +58,8 @@ export interface AutocompletePlugin {
    * @return  {Completion[]}              The list of available completions
    */
   entries: (ctx: CompletionContext, query: string) => Completion[]
+  /** Set to false when entries handles filtering beyond completion labels. */
+  filter?: boolean
   fields?: Array<StateField<unknown>>
   validFor?: RegExp | ((text: string, from: number, to: number, state: EditorState) => boolean)
 }
@@ -98,7 +100,7 @@ const autocompleteSource: CompletionSource = function (ctx): CompletionResult|nu
   return {
     from: startPos,
     options: initialOptions,
-    filter: false,
+    filter: plugin.filter ?? true,
     validFor: plugin.validFor,
     update: (current, from, to, ctx) => {
       const context = completionContext(ctx)
@@ -134,7 +136,7 @@ export const autocomplete = [
     // produce backticks. (See issue #5517)
     defaultKeymap: false,
     updateSyncTime: 1000,
-    filterStrict: true
+    filterStrict: false
   }),
   // Make sure any configuration fields will be inserted into the state so that
   // the plugins can look them up and function correctly. These fields are not

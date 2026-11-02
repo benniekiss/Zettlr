@@ -467,6 +467,9 @@ export const autocompleteTriggerCharacter: Facet<string, string> = Facet.define(
 })
 
 export const snippets: AutocompletePlugin = {
+  // Emoji labels contain the glyph, while queries match their names and tags.
+  // Do not let CodeMirror filter these results by label a second time.
+  filter: false,
   applies (ctx) {
     const trigger = ctx.state.facet(autocompleteTriggerCharacter)
     if (trigger === '') {
@@ -488,7 +491,7 @@ export const snippets: AutocompletePlugin = {
     const entries = getSnippetEntries(ctx.state)
 
     return entries.filter(entry => {
-      if (entry.section === undefined) { // Snippets don't have a section
+      if (entry.apply === applySnippet) {
         return entry.label.toLowerCase().includes(query)
       }
 

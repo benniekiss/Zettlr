@@ -1,60 +1,9 @@
-const { spawn } = require('child_process')
 const fs = require('fs').promises
 const path = require('path')
 const { FusesPlugin } = require('@electron-forge/plugin-fuses')
 const { FuseV1Options, FuseVersion } = require('@electron/fuses')
 const { getGitHash } = require('./scripts/get-git-hash.js')
-
-/**
- * This function runs the get-pandoc script in order to download the requested
- * version of Pandoc. This way we can guarantee that the correct Pandoc version
- * will be present when packaging the application.
- *
- * @param   {string}  platform  The platform for which to download.
- * @param   {string}  arch      The architecture for which to download.
- */
-async function downloadPandoc (platform, arch) {
-  // Check we have a valid platform ...
-  if (![ 'darwin', 'linux', 'win32' ].includes(platform)) {
-    throw new Error(`Cannot download Pandoc: Platform ${platform} is not recognised!`)
-  }
-
-  // ... and a valid architecture.
-  if (![ 'x64', 'arm' ].includes(arch)) {
-    throw new Error(`Cannot download Pandoc: Architecture ${arch} is not supported!`)
-  }
-
-  // Now run the script and wait for it to finish.
-  await new Promise((resolve, reject) => {
-    const argWin = [ 'bash.exe', [ './scripts/get-pandoc.sh', platform, arch ] ]
-    const argUnix = [ './scripts/get-pandoc.sh', [ platform, arch ] ]
-    // Use the spread operator to spawn the process using the correct arguments.
-    const shellProcess = (process.platform === 'win32') ? spawn(...argWin) : spawn(...argUnix)
-
-    // To not mess with Electron forge's output, suppress this processes output.
-    // But we should reject if there's any error output.
-    let shouldReject = false
-    let stderrDetails = ""
-    shellProcess.stderr.on('data', (_data) => {
-      shouldReject = true
-      stderrDetails += _data
-    })
-
-    // Resolve or reject once the process has finished.
-    shellProcess.on('close', (code, _signal) => {
-      if (code !== 0 || shouldReject) {
-        reject(new Error(`Failed to download Pandoc: Process quit with code ${code}. If the code is 0, then there was error output. ${stderrDetails ? ("Error output: " + stderrDetails) : ""}`))
-      } else {
-        resolve()
-      }
-    })
-
-    // Reject on errors.
-    shellProcess.on('error', (err) => {
-      reject(err)
-    })
-  })
-}
+const { configureLanguageServerResources } = require('./scripts/get-language-servers.js')
 
 /**
  * Since all our renderers share the same static HTML file and the same preload
@@ -89,12 +38,15 @@ module.exports = {
         console.warn('Detected the environment variable ZETTLR_DISABLE_UPDATE_CHECK. This build of Zettlr WILL NOT HAVE UPDATES ENABLED. Please ensure this was intended!')
       }
     },
-    generateAssets: async (forgeConfig, targetPlatform, targetArch) => {
+    generateAssets: async (forgeConfig, targetPlatform, targetrch) => {
       // This will be baked into the binary so that we know which commit this
       // build was based off on.
       process.env.GIT_COMMIT_HASH = await getGitHash()
 
-      // Make sure we can bundle Pandoc.
+      // Language-server bundling is independent of the Pandoc build switch.
+      await configureLanguageServerResources(forgeConfig, targetPlatform, targetArch)
+
+      // Second, we need to make sure we can bundle Pandoc.
       if (process.env.BUNDLE_PANDOC === '0') {
         console.warn('Detected environment variable BUNDLE_PANDOC -- this build will not be bundled with Pandoc!')
         return
@@ -235,7 +187,7 @@ module.exports = {
       : false,
     // On macOS, we need to provide the app icon so that it gets copied into the
     // resources directory. After the `generateAssets` step, this will also
-    // include the Pandoc binary (this is why we cannot leave `extraResource`
+    // include Pandoc and language servers (this is why we cannot leave `extraResource`
     // undefined).
     extraResource: process.platform === 'darwin' ? [
       'resources/icons/icon.code.icns',
@@ -309,7 +261,7 @@ module.exports = {
           // size: 500, // NOTE: Estimate, need to refine
           description: 'Your one-stop publication workbench.',
           productDescription: 'Your one-stop publication workbench.',
-          recommends: [ 'quarto', 'pandoc', 'texlive | texlive-base | texlive-full' ],
+          recommends: [ 'quarto' ],
           genericName: 'Markdown Editor',
           // Electron forge recommends 512px
           icon: './resources/icons/png/512x512.png',

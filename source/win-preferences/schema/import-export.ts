@@ -16,10 +16,82 @@ import { trans } from '@common/i18n-renderer'
 import { type PreferencesFieldset } from '../App.vue'
 import { PreferencesGroups } from './_preferences-groups'
 import { ProgrammaticallyOpenableWindows } from '@providers/commands/open-aux-window'
+import { DEFAULT_PANDOC_WASM_URL } from '@common/pandoc-util/pandoc-wasm-url'
+import { ref } from 'vue'
 const ipcRenderer = window.ipc
+const checkingPandoc = ref(false)
+const pandocUpdateMessage = ref('')
 
 export function getImportExportFields (): PreferencesFieldset[] {
   return [
+    {
+      title: trans('Typst PDF'),
+      group: PreferencesGroups.ImportExport,
+      infoString: trans('Typst PDF uses a bundled WebAssembly compiler and installed system fonts. Customize its layout in the Typst export profile.'),
+      fields: [{
+        type: 'text',
+        label: trans('Additional Typst fonts folder'),
+        model: 'export.typstFontPath',
+        reset: '',
+        info: trans('Optional folder containing TTF, OTF, TTC, or OTC fonts, in addition to installed system fonts. Subfolders are included.')
+      }]
+    },
+    {
+      title: trans('Pandoc download'),
+      group: PreferencesGroups.ImportExport,
+      infoString: trans('Pandoc is cached for offline use. Use Check for updates to download and verify the configured source again. Changing the URL applies to the next import or export.'),
+      fields: [
+        {
+          type: 'text',
+          label: trans('Pandoc WASM download URL'),
+          model: 'export.pandocWasmUrl',
+          reset: DEFAULT_PANDOC_WASM_URL,
+          info: trans('Use a trusted HTTPS URL pointing to a .wasm file or a Pandoc release ZIP archive. Local file URLs are also supported. WASM modules are executable code.')
+        },
+        {
+          type: 'text',
+          label: trans('Pandoc WASM SHA-256 (optional)'),
+          model: 'export.pandocWasmSha256',
+          reset: '',
+          info: trans('Optionally verify the SHA-256 hash of the downloaded WASM module. For ZIP archives, use the hash of the extracted pandoc.wasm file. Leave blank to skip verification for custom URLs; the built-in release remains pinned.')
+        },
+        {
+          type: 'button',
+          label: checkingPandoc.value ? trans('Checking for updates…') : trans('Check for updates'),
+          disabled: checkingPandoc.value,
+          onClick: async () => {
+            if (checkingPandoc.value) {
+              return
+            }
+            checkingPandoc.value = true
+            pandocUpdateMessage.value = ''
+            try {
+              const result = await ipcRenderer.invoke('application', { command: 'check-pandoc-updates' })
+              if (result?.error !== undefined) {
+                pandocUpdateMessage.value = trans('Could not check for Pandoc updates: %s', result.error)
+              } else if (result?.status === 'updated') {
+                pandocUpdateMessage.value = trans('Pandoc was updated. The next import or export will use the new module.')
+              } else if (result?.status === 'downloaded') {
+                pandocUpdateMessage.value = trans('Pandoc was downloaded and is ready to use.')
+              } else if (result?.status === 'unchanged') {
+                pandocUpdateMessage.value = trans('Pandoc is up to date.')
+              } else {
+                pandocUpdateMessage.value = trans('Could not check for Pandoc updates.')
+              }
+            } catch (error) {
+              pandocUpdateMessage.value = trans('Could not check for Pandoc updates: %s', error instanceof Error ? error.message : String(error))
+            } finally {
+              checkingPandoc.value = false
+            }
+          }
+        },
+        {
+          type: 'form-text',
+          display: 'info',
+          contents: pandocUpdateMessage.value || trans('Manual checks redownload the module if the server provides no update information. Configured SHA-256 hashes still apply.')
+        }
+      ]
+    },
     {
       title: trans('Import and export profiles'),
       group: PreferencesGroups.ImportExport,
@@ -61,11 +133,6 @@ export function getImportExportFields (): PreferencesFieldset[] {
       help: undefined, // TODO
       fields: [
         {
-          type: 'checkbox', // TODO: Must be radio; second option "Use system-wide Pandoc for exports"
-          label: trans('Use Zettlr\'s internal Pandoc for exports'),
-          model: 'export.useBundledPandoc'
-        },
-        {
           type: 'checkbox',
           label: trans('Automatically open successfully exported files'),
           model: 'export.autoOpenExportedFiles'
@@ -103,7 +170,12 @@ export function getImportExportFields (): PreferencesFieldset[] {
           type: 'form-text',
           display: 'info',
           contents: trans('Warning! Files in the temporary folder are regularly deleted. Choosing the same location as the file overwrites files with identical filenames if they already exist.')
-        }
+        },
+        {
+          type: 'checkbox',
+          label: trans('Always warn if exports would overwrite a file.'),
+          model: 'confirmExportOverwrite'
+        },
       ]
     },
     {

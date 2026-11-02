@@ -24,16 +24,15 @@
 // import { trans } from '@common/i18n-renderer'
 
 import { drawSelection, dropCursor, EditorView, lineNumbers } from '@codemirror/view'
-import { onMounted, ref, toRef, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, toRef, watch } from 'vue'
 import { autocompletion, closeBrackets } from '@codemirror/autocomplete'
 import { bracketMatching, codeFolding, foldGutter, indentOnInput, indentUnit, StreamLanguage } from '@codemirror/language'
 import { codeSyntaxHighlighter, markdownSyntaxHighlighter } from '@common/modules/markdown-editor/theme/syntax'
 import { yaml } from '@codemirror/lang-yaml'
+import { css } from '@codemirror/lang-css'
 import { lua } from '@codemirror/legacy-modes/mode/lua'
 import { EditorState, type Extension } from '@codemirror/state'
-import { css } from '@codemirror/lang-css'
 import markdownParser from '@common/modules/markdown-editor/parser/markdown-parser'
-import { yamlLint } from '@common/modules/markdown-editor/linters/yaml-lint'
 import { lintGutter } from '@codemirror/lint'
 import { showStatusbarEffect, statusbar } from '@common/modules/markdown-editor/statusbar'
 import { search } from '@codemirror/search'
@@ -45,6 +44,8 @@ import { darkMode, darkModeEffect } from '../modules/markdown-editor/theme/dark-
 import { highlightWhitespace, highlightWhitespaceEffect } from '../modules/markdown-editor/plugins/highlight-whitespace'
 import { zettlrKeymap } from '../modules/markdown-editor/keymaps'
 import { type CustomEditorShortcut } from '../modules/markdown-editor/keymaps/shortcuts'
+import { languageServers } from '../modules/markdown-editor/plugins/lsp'
+import { notifyLspDocumentSaved } from '@common/lsp/session'
 
 const configStore = useConfigStore()
 
@@ -115,13 +116,18 @@ function getExtensions (mode: SupportedLanguage): Extension[] {
     case 'yaml':
       return [
         ...extensions,
-        yaml(),
-        yamlLint
+        ...(props.filePath === undefined ? [] : [languageServers(props.filePath, 'yaml')]),
+        yaml()
       ]
     case 'css':
       return [
         ...extensions,
-        css(),
+        css()
+      ]
+    case 'lua':
+      return [
+        ...extensions,
+        StreamLanguage.define(lua)
       ]
     case 'markdown-snippets':
       return [
@@ -140,6 +146,7 @@ function getExtensions (mode: SupportedLanguage): Extension[] {
     case 'lua':
       return [
         ...extensions,
+        ...(props.filePath === undefined ? [] : [languageServers(props.filePath, 'lua')]),
         StreamLanguage.define(lua)
       ]
   }
@@ -159,6 +166,7 @@ function setContents (contents: string, mode: SupportedLanguage): void {
 interface Props {
   modelValue: string
   mode: SupportedLanguage
+  filePath?: string
   readonly?: boolean
 }
 
@@ -183,6 +191,10 @@ watch(toRef(props, 'modelValue'), () => {
   }
 })
 
+watch(toRef(props, 'filePath'), () => {
+  setContents(cmInstance.state.doc.toString(), props.mode)
+})
+
 onMounted(() => {
   const wrapper = document.getElementById(wrapperId.value)
 
@@ -191,6 +203,11 @@ onMounted(() => {
   }
 
   setContents(props.modelValue, props.mode)
+})
+
+onBeforeUnmount(() => {
+  // Tear down any LSP session held by the reusable auxiliary editor view.
+  cmInstance.setState(EditorState.create({ doc: '' }))
 })
 
 // Utility functions for those accessing this module
@@ -202,7 +219,11 @@ function markClean (): void {
   cleanFlag.value = true
 }
 
-defineExpose({ markClean, isClean })
+function notifySaved (contents: string): void {
+  if (props.filePath !== undefined) {notifyLspDocumentSaved(props.filePath, contents)}
+}
+
+defineExpose({ markClean, isClean, notifySaved })
 </script>
 
 <style lang="less">

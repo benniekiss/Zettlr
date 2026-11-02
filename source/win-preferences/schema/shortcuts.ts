@@ -155,6 +155,37 @@ export function getShortcutFields (config: ConfigOptions): PreferencesFieldset[]
       ]
     },
     {
+      title: trans('Language Server Shortcuts'),
+      infoString: trans('Customize shortcuts for actions provided by configured language servers.') + disclaimer,
+      group: PreferencesGroups.Shortcuts,
+      help: undefined,
+      fields: [{
+        type: 'shortcut',
+        label: trans('Format document'),
+        model: 'shortcuts.editor.lsp-format-document',
+        defaultShortcut: defaultEditorShortcut('lsp-format-document'),
+        conflicts: conflicts('lsp-format-document')
+      }, {
+        type: 'shortcut',
+        label: trans('Rename symbol'),
+        model: 'shortcuts.editor.lsp-rename',
+        defaultShortcut: defaultEditorShortcut('lsp-rename'),
+        conflicts: conflicts('lsp-rename')
+      }, {
+        type: 'shortcut',
+        label: trans('Go to definition'),
+        model: 'shortcuts.editor.lsp-go-to-definition',
+        defaultShortcut: defaultEditorShortcut('lsp-go-to-definition'),
+        conflicts: conflicts('lsp-go-to-definition')
+      }, {
+        type: 'shortcut',
+        label: trans('Find references'),
+        model: 'shortcuts.editor.lsp-find-references',
+        defaultShortcut: defaultEditorShortcut('lsp-find-references'),
+        conflicts: conflicts('lsp-find-references')
+      }]
+    },
+    {
       title: trans('Transform Shortcuts'),
       infoString: trans('Assign shortcuts to your frequently used text transformations here.') + disclaimer,
       group: PreferencesGroups.Shortcuts,

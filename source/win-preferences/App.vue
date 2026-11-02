@@ -74,10 +74,10 @@ import { getGeneralFields } from './schema/general'
 import { getEditorFields } from './schema/editor'
 import { getCitationFields } from './schema/citations'
 import { getZettelkastenFields } from './schema/zettelkasten'
-import { getSpellcheckingFields } from './schema/spellchecking'
+import { getLanguageServerFields } from './schema/language-servers'
 import { getAutocorrectFields } from './schema/autocorrect'
 import { getAdvancedFields } from './schema/advanced'
-import { ref, computed, watch, onMounted, onBeforeMount } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { resolveLangCode } from '@common/util/map-lang-code'
 import SplitView from '@common/vue/window/SplitView.vue'
 import SelectableList, { type SelectableListItem } from '@common/vue/form/elements/SelectableList.vue'
@@ -99,10 +99,6 @@ const hasVibrancy = computed(() => configStore.config.window.vibrancy && process
 
 const currentGroup = ref(0)
 const query = ref('')
-// Will be populated afterwards, contains the user dict
-const userDictionaryContents = ref<string[]>([])
-// Will be populated afterwards, contains all dictionaries
-const availableDictionaries = ref<Array<{ selected: boolean, value: string, key: string }>>([])
 // Will be populated afterwards, contains the available languages
 const appLangOptions = ref<Record<string, string>>({})
 
@@ -145,7 +141,7 @@ const fieldsets = computed<Fieldset[]>(() => {
     ...getImportExportFields(),
     ...getShortcutFields(configStore.config),
     ...getSnippetsFields(),
-    ...getSpellcheckingFields(configStore.config),
+    ...getLanguageServerFields(),
     ...getZettelkastenFields(configStore.config)
   ]
 })
@@ -214,9 +210,9 @@ const groups = computed<Array<SelectableListItem & { id: PreferencesGroups }>>((
       id: PreferencesGroups.Editor
     },
     {
-      displayText: trans('Spellchecking'),
+      displayText: trans('Language servers'),
       icon: 'text',
-      id: PreferencesGroups.Spellchecking
+      id: PreferencesGroups.LanguageServers
     },
     {
       displayText: trans('Autocorrect'),
@@ -272,8 +268,6 @@ const model = computed(() => {
   // these values without risking to overwrite the model (which we have
   // done in a previous iteration of the preferences ...)
   return {
-    userDictionaryContents: userDictionaryContents.value,
-    availableDictionaries: availableDictionaries.value,
     ...config.value
   }
 })
@@ -301,50 +295,14 @@ onMounted(() => {
 })
 
 /**
-   * Listen to events in order to adapt display.
-   */
-onBeforeMount(() => {
-  ipcRenderer.on('dictionary-provider', (event, message) => {
-    const { command } = message
-    if (command === 'invalidate-dict') {
-      populateDynamicValues()
-    }
-  })
-})
-
-/**
  * Called whenever a form value changes, and updates that specific setting.
  *
  * @param   {string}  prop  The property that has changed
  * @param   {any}     val   The value of that property.
  */
 function handleInput (prop: string, val: unknown): void {
-  // We do have an easy time here
-  if (prop === 'userDictionaryContents') {
-    // The user dictionary is not handled by the config
-    ipcRenderer.invoke('dictionary-provider', {
-      command: 'set-user-dictionary',
-      payload: val
-    })
-      .catch(err => console.error(err))
-  } else if (prop === 'availableDictionaries') {
-    // We have to extract the selected dictionaries and send their keys only
-    const enabled = (val as Array<{ selected: boolean, value: string, key: string }>)
-      .filter(elem => elem.selected).map(elem => elem.key)
-    configStore.setConfigValue('selectedDicts', enabled)
-    // Additionally, we have to backpropagate the new stuff down the pipe
-    // so that the list view has them again
-  } else {
-    // By default, we should have the correct value already, we just need to
-    // treat (complex) lists as special (not even token inputs).
-
-    // NOTE: Due to Vue 3 we MUST deproxy anything here. Since config values
-    // are always either dictionaries, lists, or primitives, we can safely
-    // do it the brute-force-way and stringify it. This will basically read
-    // out every value from the proxy and store it in vanilla objects/arrays
-    // again.
-    configStore.setConfigValue(prop, JSON.parse(JSON.stringify(val)))
-  }
+  // Deproxy values before sending them over IPC.
+  configStore.setConfigValue(prop, JSON.parse(JSON.stringify(val)))
 }
 
 /**
@@ -374,34 +332,6 @@ function populateDynamicValues (): void {
         return null
       })
       appLangOptions.value = options
-    })
-    .catch(err => console.error(err))
-
-  // Also, get a list of all available dictionaries
-  ipcRenderer.invoke('application', {
-    command: 'get-available-dictionaries'
-  })
-    .then((dictionaries) => {
-      const values: Array<{ selected: boolean, value: string, key: string }> = []
-      dictionaries.map((dict: string) => {
-        values.push({
-          selected: model.value.selectedDicts.includes(dict),
-          value: resolveLangCode(dict, 'name'),
-          key: dict
-        })
-        return null
-      })
-
-      availableDictionaries.value = values
-    })
-    .catch(err => console.error(err))
-
-  // Retrieve the user dictionary
-  ipcRenderer.invoke('dictionary-provider', {
-    command: 'get-user-dictionary'
-  })
-    .then((dictionary) => {
-      userDictionaryContents.value = dictionary
     })
     .catch(err => console.error(err))
 }

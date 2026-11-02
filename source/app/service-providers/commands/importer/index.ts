@@ -14,17 +14,16 @@
 
 import { promises as fs } from 'fs'
 import path from 'path'
-import { spawn } from 'child_process'
-import YAML from 'yaml'
+import { runPandoc } from '../../../util/run-pandoc'
 
 // Module utilities
 import checkImportIntegrity from './check-import-integrity'
 import importTextbundle from './import-textbundle'
 import type { DirDescriptor } from '@dts/common/fsal'
-import { app, dialog } from 'electron'
+import { dialog } from 'electron'
 import { trans } from '@common/i18n-main'
 import type AssetsProvider from '@providers/assets'
-import { SUPPORTED_READERS } from '@common/pandoc-util/pandoc-maps'
+import getImportProfiles from './get-import-profiles'
 import { hasMarkdownExt } from '@common/util/file-extention-checks'
 
 export default async function makeImport (
@@ -37,9 +36,7 @@ export default async function makeImport (
   const files = await checkImportIntegrity(fileList)
   const failedFiles: string[] = []
 
-  // This for loop will initiate all pandoc instances at once. The return of
-  // these processes will come in asynchronously, so we can let chokidar handle
-  // the detection.
+  // Import files sequentially, preserving per-file callbacks.
   for (const file of files) {
     if ([ '.textbundle', '.textpack' ].includes(path.extname(file.path))) {
       // We need to import using a special importer.
@@ -73,10 +70,7 @@ export default async function makeImport (
       const newName = path.join(dirToImport.path, path.basename(file.path, path.extname(file.path))) + '.md'
 
       // Retrieve the corresponding defaults file ...
-      const allDefaults = (await assetsProvider.listDefaults()).filter(e => SUPPORTED_READERS.includes(e.writer))
-      const potentialProfiles = allDefaults
-        .filter(profile => !profile.isInvalid)
-        .filter(profile => file.availableReaders.includes(profile.reader))
+      const potentialProfiles = getImportProfiles(await assetsProvider.listDefaults(), file.availableReaders)
 
       // Case 1: Not a single defaults file found. We require one so that users
       // can properly import them.
@@ -106,42 +100,18 @@ export default async function makeImport (
         profileToUse = potentialProfiles[response.response]
       }
 
-      const defaults = await assetsProvider.getDefaultsFile(profileToUse.name)
+      const defaults: Record<string, unknown> = await assetsProvider.getDefaultsFile(profileToUse.name)
 
       // ... supply our file paths ...
       defaults['input-files'] = [file.path]
       defaults['output-file'] = newName
 
-      // ... get a temporary file name ...
-      const defaultsFile = path.join(app.getPath('temp'), 'defaults.yml')
-
-      // ... cast the defaults to string ...
-      const YAMLOptions = {
-        indent: 4,
-        simpleKeys: false
-      }
-
-      // ... write to disk ...
-      await fs.writeFile(defaultsFile, YAML.stringify(defaults, YAMLOptions), { encoding: 'utf8' })
-
-      // ... and finally run pandoc, providing the file.
-      const pandocProcess = spawn('pandoc', [ '--defaults', `"${defaultsFile}"` ], { shell: true })
-
+      // Run the WASM conversion directly with the parsed defaults.
       try {
-        await new Promise<void>((resolve, reject) => {
-          pandocProcess.on('message', (message, _handle) => {
-            console.log(message)
-          })
-          pandocProcess.on('close', (code, _signal) => {
-            if (code === 0) {
-              resolve()
-            } else {
-              reject(new Error(`Could not import file: Pandoc exited with code ${String(code)}`))
-            }
-          })
-
-          pandocProcess.on('error', (err) => { reject(err) })
-        })
+        const result = await runPandoc(defaults)
+        if (result.code !== 0) {
+          throw new Error(`Could not import file: ${result.stderr.join('\n')}`)
+        }
         if (successCallback !== null) {
           successCallback(file.path)
         }

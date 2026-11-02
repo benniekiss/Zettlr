@@ -9,7 +9,20 @@
       }"
     >
       <cds-icon v-if="searchIcon === true" shape="search" class="input-text-button-group-icon"></cds-icon>
+      <textarea
+        v-if="multiline"
+        v-bind:id="fieldID"
+        ref="textField"
+        v-model="inputValue"
+        rows="12"
+        style="grid-area: text; width: 100%; font-family: monospace; resize: vertical;"
+        v-bind:disabled="disabled"
+        v-bind:placeholder="placeholder"
+        v-on:input="handleInput"
+        v-on:blur="handleBlur"
+      ></textarea>
       <input
+        v-else
         v-bind:id="fieldID"
         ref="textField"
         v-model="inputValue"
@@ -18,10 +31,10 @@
         v-bind:placeholder="placeholder"
         v-bind:autofocus="props.autofocus"
         v-bind:disabled="disabled"
-        v-on:input="emit('update:modelValue', inputValue)"
+        v-on:input="handleInput"
         v-on:keyup.enter="emit('confirm', inputValue)"
         v-on:keyup.esc="emit('escape', inputValue)"
-        v-on:blur="emit('blur', inputValue)"
+        v-on:blur="handleBlur"
       >
       <button
         v-if="reset !== undefined"
@@ -33,6 +46,9 @@
         <cds-icon shape="times"></cds-icon>
       </button>
     </div>
+    <p v-if="validationError !== undefined" role="alert" class="info">
+      {{ validationError }}
+    </p>
     <p v-if="info !== undefined" class="info">
       {{ info }}
     </p>
@@ -57,6 +73,9 @@ import { trans } from '@common/i18n-renderer'
 import { computed, ref, watch, toRef, onMounted } from 'vue'
 
 const props = defineProps<{
+  multiline?: boolean
+  saveOnBlur?: boolean
+  validate?: (value: string) => string|undefined
   autofocus?: boolean
   modelValue: string
   disabled?: boolean
@@ -77,9 +96,19 @@ const emit = defineEmits<{
 }>()
 
 const fieldID = computed<string>(() => 'field-input-' + (props.name ?? ''))
-const textField = ref<HTMLInputElement|null>(null)
+const textField = ref<HTMLInputElement|HTMLTextAreaElement|null>(null)
 
 const inputValue = ref<string>(props.modelValue)
+const validationError = computed(() => props.validate?.(inputValue.value))
+
+function handleInput (): void {
+  if (!props.saveOnBlur && validationError.value === undefined) {emit('update:modelValue', inputValue.value)}
+}
+
+function handleBlur (): void {
+  if (props.saveOnBlur && validationError.value === undefined) {emit('update:modelValue', inputValue.value)}
+  emit('blur', inputValue.value)
+}
 
 watch(toRef(props, 'modelValue'), () => {
   inputValue.value = props.modelValue

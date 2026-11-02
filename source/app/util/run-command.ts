@@ -58,6 +58,5 @@ export async function runCommand (command: string, argv?: string[], shell: boole
     })
   })
 
-  // First line is the "pandoc 2.19.2" or any other version string
   return { code, stdout, stderr }
 }

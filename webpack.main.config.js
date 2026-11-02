@@ -2,6 +2,8 @@ const CopyWebpackPlugin = require('copy-webpack-plugin')
 const { DefinePlugin } = require('webpack')
 const path = require('path')
 const rules = require('./webpack.rules')
+const { getPandocBuildDefines } = require('./scripts/pandoc-build-defines')
+const { BundlePandocPlugin } = require('./scripts/bundle-pandoc')
 
 module.exports = {
   // Main entry point: the file that runs in the main process
@@ -9,11 +11,23 @@ module.exports = {
   mode: process.env.NODE_ENV === 'production' ? 'production' : 'development',
   module: { rules },
   plugins: [
+    new BundlePandocPlugin(),
     new CopyWebpackPlugin({
       patterns: [
         // These are all static files that simply need to be bundled with the
         // application; we'll just copy them over from the static folder.
         { from: 'static/tutorial', to: 'tutorial' },
+        // Keep process entry points beside main, matching source/app's directory layout.
+        { from: 'source/app/processes/pandoc-process.cjs', to: '../processes/pandoc-process.cjs' },
+        { from: 'source/app/processes/typst-process.cjs', to: '../processes/typst-process.cjs' },
+        { from: 'source/app/processes/typst-fonts.cjs', to: '../processes/typst-fonts.cjs' },
+        { from: 'static/typst', to: 'assets/typst' },
+        { from: 'node_modules/@myriaddreamin/typst.ts/LICENSE', to: 'assets/typst/driver/LICENSE' },
+        { from: 'node_modules/@myriaddreamin/typst-ts-web-compiler/pkg', to: 'assets/typst/compiler' },
+        ...[ 'compiler', 'init', 'internal.types', 'options.init', 'wasm' ].map(name => ({
+          from: `node_modules/@myriaddreamin/typst.ts/dist/cjs/${name}.cjs`, to: `assets/typst/driver/${name}.cjs`
+        })),
+        { from: 'source/app/processes/pandoc-filesystem-roots.cjs', to: '../processes/pandoc-filesystem-roots.cjs' },
         { from: 'static/dict', to: 'dict' },
         { from: 'static/lang', to: 'lang' },
         { from: 'static/csl-locales', to: 'assets/csl-locales' },
@@ -26,6 +40,7 @@ module.exports = {
       ]
     }),
     new DefinePlugin({
+      ...getPandocBuildDefines(),
       __GIT_COMMIT_HASH__: JSON.stringify(process.env.GIT_COMMIT_HASH),
       __BUILD_DATE__: JSON.stringify((new Date()).toISOString()),
       __UPDATES_DISABLED__: JSON.stringify(process.env.ZETTLR_DISABLE_UPDATE_CHECK !== undefined ? '1' : '0')

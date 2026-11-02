@@ -16,12 +16,16 @@
   </template>
   <Button
     v-if="props.field.type === 'button'"
+    v-bind:disabled="props.field.disabled"
     v-bind:label="props.field.label"
     v-bind:inline="true"
     v-on:click="props.field.onClick()"
   ></Button>
   <TextInput
     v-else-if="props.field.type === 'text'"
+    v-bind:multiline="props.field.multiline"
+    v-bind:save-on-blur="props.field.saveOnBlur"
+    v-bind:validate="props.field.validate"
     v-bind:model-value="model"
     v-bind:disabled="props.field.disabled"
     v-bind:placeholder="props.field.placeholder"

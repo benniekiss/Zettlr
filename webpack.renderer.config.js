@@ -1,5 +1,17 @@
 const rules = require('./webpack.rules')
+const { getPandocBuildDefines } = require('./scripts/pandoc-build-defines')
 const path = require('path')
+
+// Application TypeScript emits require(), while the ESM-only LSP client uses import.
+// Both must resolve to the same CodeMirror/Lezer instances: their extensions
+// and facets rely on object identity and cannot cross module copies. Without
+// these aliases the application renderer rejects LSP extensions at runtime.
+const editorAliases = Object.fromEntries([
+  '@codemirror/state', '@codemirror/view', '@codemirror/language',
+  '@codemirror/autocomplete', '@codemirror/lint', '@codemirror/commands',
+  '@codemirror/search', '@codemirror/collab',
+  '@lezer/common', '@lezer/highlight', '@lezer/lr', '@lezer/markdown'
+].map(name => [`${name}$`, require.resolve(name)]))
 
 const { VueLoaderPlugin } = require('vue-loader')
 const { DefinePlugin } = require('webpack')
@@ -10,6 +22,7 @@ const plugins = [
 
   // Set a few Vue 3 options; see: http://link.vuejs.org/feature-flags
   new DefinePlugin({
+    ...getPandocBuildDefines(),
     __VUE_OPTIONS_API__: true,
     __VUE_PROD_DEVTOOLS__: false,
     __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: false, // New in Vue 3.4
@@ -50,6 +63,7 @@ module.exports = {
       '.css', '.less', '.vue'
     ],
     alias: {
+      ...editorAliases,
       source: [path.resolve(__dirname, 'source')],
       '@common': [path.resolve(__dirname, 'source/common')],
       '@providers': [path.resolve(__dirname, 'source/app/service-providers')],

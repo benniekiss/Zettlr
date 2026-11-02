@@ -12,9 +12,11 @@
  * END HEADER
  */
 
+import { parseLanguageServers } from '@common/lsp/config'
 import { trans } from '@common/i18n-main'
 
 const RULES = {
+  useBundledLanguageServers: 'required|boolean|default:true',
   darkMode: 'required|boolean|default:false',
   darkModeEditor: 'required|string|in:match,light,dark|default:match',
   autoDarkMode: 'required|string|in:off,system,schedule,auto|default:off',
@@ -57,6 +59,11 @@ export function validate (data: any): ValidationError[] {
   }
 
   const unvalidated: ValidationError[] = []
+  if ('languageServers' in data) {
+    try { parseLanguageServers(data.languageServers) } catch (err) {
+      unvalidated.push({ key: 'languageServers', reason: err instanceof Error ? err.message : String(err) })
+    }
+  }
   for (const key in data) {
     if (VALIDATE_PROPERTIES.includes(key)) {
       const rule = VALIDATE_RULES[VALIDATE_PROPERTIES.indexOf(key)]

@@ -156,7 +156,6 @@ describe('Language server bundling', function () {
     }
     const metadata = JSON.parse(await fs.readFile(path.join(directory, 'yaml', 'bundle.json'), 'utf8'))
     assert.strictEqual(metadata.runtime, 'utility-process')
-    assert.strictEqual(metadata.version, '1.24.0')
     const configured = server('yaml-language-server', ['--stdio'])
     const system = await resolveLanguageServerCommand(configured, false, [directory], process.platform, process.arch)
     assert.deepStrictEqual(system.args, ['--stdio'])

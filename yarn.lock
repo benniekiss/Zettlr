@@ -13959,20 +13959,20 @@ __metadata:
   languageName: node
   linkType: hard
 
-"vscode-jsonrpc@npm:8.2.0":
-  version: 8.2.0
-  resolution: "vscode-jsonrpc@npm:8.2.0"
-  checksum: 10/6d57c3aed591d0bc89d1c226061d265b04de528582bef183f5998cac5de78a736887e5238fe48b9f6a14ec32f05d8fda71599f92862ac5dacc7f26bf7399b532
+"vscode-jsonrpc@npm:9.0.3":
+  version: 9.0.3
+  resolution: "vscode-jsonrpc@npm:9.0.3"
+  checksum: 10/af981d95491a5648cfa24642c0dd0a81888ddf25f462b399109e67690757fb4aed7e3631ca0be84c5e9de09063450fecaa6ece7a04bea63f41682e4a4d2335ec
   languageName: node
   linkType: hard
 
-"vscode-languageserver-protocol@npm:3.17.5":
-  version: 3.17.5
-  resolution: "vscode-languageserver-protocol@npm:3.17.5"
+"vscode-languageserver-protocol@npm:3.18.4":
+  version: 3.18.4
+  resolution: "vscode-languageserver-protocol@npm:3.18.4"
   dependencies:
-    vscode-jsonrpc: "npm:8.2.0"
-    vscode-languageserver-types: "npm:3.17.5"
-  checksum: 10/aeb9c190184c365fa6b835e5aa7574c86cb3ecb2789386bcff76a09b22bc8b8e0d5da47c28193a9c73cfb32c10a12a91191779280324a38efb401e3ef7bad294
+    vscode-jsonrpc: "npm:9.0.3"
+    vscode-languageserver-types: "npm:3.18.4"
+  checksum: 10/6cbbe25a67e78e57d9ca735809d6342992d10f3f13d1fe0a1156c155f75291d85ea54ef7f198854d81942df73165dfcdbff9ab1f1310166f16c58068af8fdedb
   languageName: node
   linkType: hard
 
@@ -13993,10 +13993,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"vscode-languageserver-types@npm:3.17.5, vscode-languageserver-types@npm:~3.17.5":
-  version: 3.17.5
-  resolution: "vscode-languageserver-types@npm:3.17.5"
-  checksum: 10/900d0b81df5bef8d90933e75be089142f6989cc70fdb2d5a3a5f11fa20feb396aaea23ccffc8fbcc83a2f0e1b13c6ee48ff8151f236cbd6e61a4f856efac1a58
+"vscode-languageserver-types@npm:3.18.4":
+  version: 3.18.4
+  resolution: "vscode-languageserver-types@npm:3.18.4"
+  checksum: 10/e399241413ab69e35e422862f935e6bdfe312834dd6202342c15418ea76f44d60e933fb343fc157a8905bd63f334be3b57f74f8fd4234b94179ac476068ac822
   languageName: node
   linkType: hard
 
@@ -14007,14 +14007,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"vscode-languageserver@npm:^9.0.0":
-  version: 9.0.1
-  resolution: "vscode-languageserver@npm:9.0.1"
+"vscode-languageserver@npm:^10.1.2":
+  version: 10.1.2
+  resolution: "vscode-languageserver@npm:10.1.2"
   dependencies:
-    vscode-languageserver-protocol: "npm:3.17.5"
+    vscode-languageserver-protocol: "npm:3.18.4"
   bin:
     installServerIntoExtension: bin/installServerIntoExtension
-  checksum: 10/1cb643b1b1f41a620aaf4a62e152acad694c22b4d98de73fa614a0bddf3b4b4832460465bdbc43f27ba23dad7e61aba533e77b8bfac74cc8de310c39623a7ba1
+  checksum: 10/b72ac1878c2f539be8cdb9575f2dc8936ac93e236ebc0207e738678a9fca4c1f336160f6c82edd9d33cac5d2d95c85d56585cb0e8841239158adc4f3066c9fb6
   languageName: node
   linkType: hard
 
@@ -14598,9 +14598,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"yaml-language-server@npm:1.24.0":
-  version: 1.24.0
-  resolution: "yaml-language-server@npm:1.24.0"
+"yaml-language-server@npm:2.0.0":
+  version: 2.0.0
+  resolution: "yaml-language-server@npm:2.0.0"
   dependencies:
     "@vscode/l10n": "npm:^0.0.18"
     ajv: "npm:^8.17.1"
@@ -14610,14 +14610,14 @@ __metadata:
     picomatch: "npm:^4.0.4"
     prettier: "npm:^3.8.1"
     request-light: "npm:^0.5.7"
-    vscode-languageserver: "npm:^9.0.0"
+    vscode-languageserver: "npm:^10.1.2"
     vscode-languageserver-textdocument: "npm:^1.0.1"
-    vscode-languageserver-types: "npm:~3.17.5"
+    vscode-languageserver-types: "npm:^3.18.4"
     vscode-uri: "npm:^3.0.2"
     yaml: "npm:2.8.3"
   bin:
     yaml-language-server: bin/yaml-language-server
-  checksum: 10/de279bd3152e79e24d4808bad953cd2c95e16894c068f2083c769a7b81d3a2e1b206c870f4182c20ea0d23a984ace6d84bca7c09ce1f5a49cff7bc711ef4c06d
+  checksum: 10/60f191f11bc670b31a37fa1dcffd35ffc0a4645937d8c258700014ebb81f0dadd3730cd9ee0cc4fc2775aca7413e66a7917c214f79dc93351926688c5a428f77
   languageName: node
   linkType: hard
 
@@ -14866,7 +14866,7 @@ __metadata:
     w3c-keyname: "npm:^2.2.8"
     webpack: "npm:^5.112.2"
     yaml: "npm:^2.9.1"
-    yaml-language-server: "npm:1.24.0"
+    yaml-language-server: "npm:2.0.0"
   languageName: unknown
   linkType: soft
 

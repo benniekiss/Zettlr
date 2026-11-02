@@ -19,9 +19,12 @@ import {
   type CompletionSource,
   type CompletionResult,
   autocompletion,
-  type CompletionContext
+  CompletionContext,
+  completionStatus,
+  startCompletion
 } from '@codemirror/autocomplete'
 import { type StateField } from '@codemirror/state'
+import { EditorView } from '@codemirror/view'
 import { codeBlocks } from './code-blocks'
 import { citations } from './citations'
 import { snippets } from './snippets'
@@ -53,7 +56,7 @@ export interface AutocompletePlugin {
    * @return  {Completion[]}              The list of available completions
    */
   entries: (ctx: CompletionContext, query: string) => Completion[]
-  fields?: Array<StateField<any>>
+  fields?: Array<StateField<unknown>>
 }
 
 const forbiddenTokens = [
@@ -63,48 +66,57 @@ const forbiddenTokens = [
   'MathEquation'
 ]
 
-const autocompleteSource: CompletionSource = function (ctx): CompletionResult|null {
-  // This function is called for every keystroke and shall determine whether to
-  // actually start the autocomplete.
-
-  // With this function we check whether we are currently within "forbidden"
-  // tokens (i.e. codeblocks, YAML stuff, etc.)
+function completionContext (ctx: CompletionContext): { plugin: AutocompletePlugin, from: number } | null {
   if (ctx.tokenBefore(forbiddenTokens) !== null) {
     return null
   }
 
-  let plugin: AutocompletePlugin|undefined
-  let startpos = ctx.pos
-
-  // NOTE: Headings has to be checked before tags
-  for (const p of [ codeBlocks, citations, files, headings, tags, snippets ]) {
-    const res = p.applies(ctx)
-    if (res !== false) {
-      plugin = p
-      startpos = res
-      break
+  // Headings must be checked before tags.
+  for (const plugin of [ codeBlocks, citations, files, headings, tags, snippets ]) {
+    const from = plugin.applies(ctx)
+    if (from !== false) {
+      return { plugin, from }
     }
   }
 
-  if (plugin !== undefined) {
-    const initialOptions = plugin.entries(ctx, ctx.state.doc.sliceString(startpos, ctx.pos).toLowerCase())
-    return {
-      from: startpos,
-      options: initialOptions,
-      filter: false,
-      update: (current, from, to, ctx) => {
-        const query = ctx.state.doc.sliceString(from, to).toLowerCase()
-        current.options = plugin!.entries(ctx, query)
-        return current
-      }
-    }
-  }
-
-  // Return null to indicate that autocomplete does not apply.
   return null
 }
 
+const autocompleteSource: CompletionSource = function (ctx): CompletionResult|null {
+  const context = completionContext(ctx)
+  if (context === null) {
+    return null
+  }
+
+  const { plugin, from: startPos } = context
+  const initialOptions = plugin.entries(ctx, ctx.state.sliceDoc(startPos, ctx.pos))
+
+  return {
+    from: startPos,
+    options: initialOptions,
+    filter: false,
+    update: (current, from, to, ctx) => {
+      const context = completionContext(ctx)
+      if (context === null || context.plugin !== plugin || context.from !== from) {
+        return null
+      }
+      return { ...current, from, to, options: plugin.entries(ctx, ctx.state.sliceDoc(from, to)) }
+    }
+  }
+}
+
 export const autocomplete = [
+  EditorView.updateListener.of(update => {
+    // CodeMirror deactivates completion when there are no matches. Typing
+    // starts it again automatically, but backspacing does not.
+    if (update.transactions.some(transaction => transaction.isUserEvent('delete.backward')) &&
+      completionStatus(update.state) === null) {
+      const ctx = new CompletionContext(update.state, update.state.selection.main.head, false)
+      if (completionContext(ctx) !== null) {
+        startCompletion(update.view)
+      }
+    }
+  }),
   autocompletion({
     activateOnTyping: true, // Always show immediately
     selectOnOpen: true, // But never pre-select anything

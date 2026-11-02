@@ -19,7 +19,7 @@ import { displayDirContext } from './dir-item-context'
 import { useConfigStore, useDocumentTreeStore, useWindowStateStore, useWorkspaceStore } from 'source/pinia'
 import type { AnyDescriptor } from 'source/types/common/fsal'
 import { ref, computed, type Ref, watch, nextTick } from 'vue'
-import { hasImageExt, hasPDFExt } from 'source/common/util/file-extention-checks'
+import { hasHTMLExt, hasImageExt, hasPDFExt } from 'source/common/util/file-extention-checks'
 import makeValidUri from 'source/common/util/make-valid-uri'
 import type { DocumentManagerIPCAPI } from 'source/app/service-providers/documents'
 
@@ -178,7 +178,8 @@ export function useItemComposable (
       // Determine if we can open the file in Zettlr
       if (
         (hasImageExt(obj.value.path) && files.images.openWith === 'zettlr') ||
-        (hasPDFExt(obj.value.path) && files.pdf.openWith === 'zettlr')
+        (hasPDFExt(obj.value.path) && files.pdf.openWith === 'zettlr') ||
+        (hasHTMLExt(obj.value.path) && files.html.openWith === 'zettlr')
       ) {
         ipcRenderer.invoke('documents-provider', {
           command: 'open-file',

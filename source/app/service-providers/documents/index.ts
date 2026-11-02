@@ -35,7 +35,7 @@ import { markdownToAST } from '@common/modules/markdown-utils'
 import isFile from '@common/util/is-file'
 import { trans } from '@common/i18n-main'
 import type FSALWatchdog from '@providers/fsal/fsal-watchdog'
-import { getDocumentTypeForExtension, hasImageExt, hasMdOrCodeExt, hasPDFExt } from 'source/common/util/file-extention-checks'
+import { hasHTMLExt, getDocumentTypeForExtension, hasImageExt, hasMdOrCodeExt, hasPDFExt } from 'source/common/util/file-extention-checks'
 import isDir from 'source/common/util/is-dir'
 
 type DocumentWindows = Record<string, DocumentTree>
@@ -190,7 +190,7 @@ export default class DocumentManager extends ProviderContract {
   /**
    * The process that watches currently opened files for remote changes
    *
-   * @var {chokidar.FSWatcher}
+   * @var {FSALWatchdog}
    */
   private readonly _watcher: FSALWatchdog
 
@@ -600,10 +600,7 @@ export default class DocumentManager extends ProviderContract {
   }
 
   async shutdown (): Promise<void> {
-    // We MUST under all circumstances properly call the close() function on
-    // every chokidar process we utilize. Otherwise, the fsevents dylib will
-    // still hold on to some memory after the Electron process itself shuts down
-    // which will result in a crash report appearing on macOS.
+    // Release filesystem watchers before Electron exits.
     await this._watcher.shutdown()
     this._config.shutdown()
   }
@@ -823,6 +820,8 @@ current contents from the editor somewhere else, and restart the application.`
       if (hasImageExt(filePath) && files.images.openWith === 'zettlr') {
         shouldOpenExternally = false
       } else if (hasPDFExt(filePath) && files.pdf.openWith === 'zettlr') {
+        shouldOpenExternally = false
+      } else if (hasHTMLExt(filePath) && files.html.openWith === 'zettlr') {
         shouldOpenExternally = false
       }
 

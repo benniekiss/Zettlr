@@ -29,7 +29,7 @@ function generate (infoString: string): (view: EditorView, completion: Completio
     // This apply function basically just makes sure that, after the actual
     // insertion, we can add a blank line, add the end of the block delimiters,
     // and position the cursor correctly.
-    const delim = view.state.doc.sliceString(from - 3, from)
+    const delim = view.state.sliceDoc(from - 3, from)
     view.dispatch({
       changes: [{ from, to, insert: infoString + '\n\n' + delim }],
       selection: { anchor: from + infoString.length + 1 }
@@ -37,7 +37,7 @@ function generate (infoString: string): (view: EditorView, completion: Completio
   }
 }
 
-function getEntries (): Completion[] {
+function getCodeEntries (): Completion[] {
   return [
     { apply: generate(''), label: trans('No highlighting') },
     { apply: generate('bash'), label: 'Bash' },
@@ -122,7 +122,8 @@ export const codeBlocks: AutocompletePlugin = {
   },
   entries (ctx, query) {
     query = query.toLowerCase()
-    return getEntries().filter(entry => {
+    const entries = getCodeEntries()
+    return entries.filter(entry => {
       return entry.label.toLowerCase().includes(query)
     })
   }

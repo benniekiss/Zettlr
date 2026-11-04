@@ -50,8 +50,9 @@ import {
 
 import { nextSnippet, abortSnippet, abortSnippetRemoveContent } from '../autocomplete/snippets'
 import {
-  handleBackspace,
-  handleQuote,
+  handleAutocorrectBackspace,
+  handleAutoCorrectPrimaryQuote,
+  handleAutoCorrectSecondaryQuote,
   handleAutocorrectEnter,
   handleAutocorrectSpace
 } from '../commands/autocorrect'
@@ -135,7 +136,7 @@ export function mainEditorKeybindings (customShortcutMap: CustomEditorShortcut[]
 
     // Backspace
     { key: 'Backspace', run: selectFootnoteBeforeDelete },
-    { key: 'Backspace', run: handleBackspace },
+    { key: 'Backspace', run: handleAutocorrectBackspace },
     { key: 'Backspace', run: deleteMarkupBackward },
     { key: 'Backspace', run: deleteBracketPair },
     { key: 'Backspace', run: deleteCharBackward },
@@ -237,8 +238,8 @@ export function mainEditorKeybindings (customShortcutMap: CustomEditorShortcut[]
     { key: 'Space', run: handleAutocorrectSpace },
     { key: 'Mod-Shift-v', run: view => { pasteAsPlain(view); return true } },
     { key: 'Mod-Alt-c', run: view => { copyAsHTML(view); return true } },
-    { key: '"', run: handleQuote('"') },
-    { key: "'", run: handleQuote("'") },
+    { key: '"', run: handleAutoCorrectPrimaryQuote },
+    { key: "'", run: handleAutoCorrectSecondaryQuote },
 
     { key: 'Mod-a', run: selectAll },
 

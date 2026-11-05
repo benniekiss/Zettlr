@@ -1,6 +1,17 @@
 import { PROTECTED_NODES, type AutocorrectPlugin } from '.'
 import { nodeAtPos } from '../../util/node-in-selection'
 
+// Maximum string search length for replacements.
+// This is likely far outside of what a user would
+// input as an autocorrect target.
+const MAX_SEARCH_LENGTH = 200
+
+// A cache of computed regexes
+const REGEX_CACHE: { whole: Map<string, RegExp>, partial: Map<string, RegExp> } = {
+  whole: new Map,
+  partial: new Map,
+}
+
 /**
  * Parse a string into a RegExp. If the string is in the form  of
  * `/pattern/flags`, then the returned RegExp will be created based on the
@@ -8,11 +19,18 @@ import { nodeAtPos } from '../../util/node-in-selection'
  * within slashes (`/`), then the string is escaped and appended with a
  * line-ending assertion and converted into a RegExp object.
  *
- * @param {string}    key   The string to parse
+ * @param {string}    key               The string to parse
+ * @param {boolean}   matchWholeWords   Whether the regex should match whole words
  *
- * @returns {RegExp}        The newly created regex from `key`.
+ * @returns {RegExp}                    The newly created regex from `key`.
  */
 function parseAutocorrectKey (key: string, matchWholeWords: boolean): RegExp|undefined {
+  const cache = matchWholeWords ? REGEX_CACHE.whole : REGEX_CACHE.partial
+  const cached_re = cache.get(key)
+  if (cached_re) {
+    return cached_re
+  }
+
   // Using `\b` (word boundary) checks here would produce unexpected results for
   // non-word character replacements, such as `-->` to `→`. In those instances,
   // `matchWholeWords` would only match if the replacement is preceded by a word
@@ -49,32 +67,40 @@ function parseAutocorrectKey (key: string, matchWholeWords: boolean): RegExp|und
   }
 
   try {
-    return new RegExp(body, flags)
+    const re = new RegExp(body, flags)
+    cache.set(key, re)
+
+    return re
   } catch (err: unknown) {
     console.info('[autocorrect] Failed to parse string as `RegExp`: ', key, err instanceof Error ? err : 'unknown error')
   }
 }
 
+// Autocorrect replacement plugin
 export const autoReplacePlugin: AutocorrectPlugin = {
-  correct (options, view, range, tree) {
-    if (!range.empty) { return null }
+  correct (options, state, range, tree) {
+    if (!range.empty) {
+      return
+    }
 
     const pos = range.from - 1
 
-    if (nodeAtPos(pos, tree, PROTECTED_NODES, -1)) { return null }
+    if (nodeAtPos(pos, tree, PROTECTED_NODES, -1)) {
+      return
+    }
 
-    const line = view.state.doc.lineAt(pos)
-
-    // Make a deep copy of the autocorrect (to not mess with the order), sort by
-    // key length descending.
+    const line = state.doc.lineAt(pos)
     const endPos = pos - line.from
-    // Limit test strings to 200 characters. This is likely far outside
-    // of what a user would input as an autocorrect target.
-    const startPos = Math.max(0, endPos - 200)
-
+    const startPos = Math.max(0, endPos - MAX_SEARCH_LENGTH)
     const slice = line.text.slice(startPos, endPos)
 
-    for (let { key, value } of options.replacements) {
+    // Make a deep copy of the autocorrect (to not mess with the order),
+    // sort by key length descending.
+    const replacements = options.replacements
+      .map(e => { return { ...e } })
+      .sort((a, b) => b.key.length - a.key.length)
+
+    for (let { key, value } of replacements) {
       const re = parseAutocorrectKey(key, options.matchWholeWords)
 
       // The regex could not be parsed
@@ -91,13 +117,12 @@ export const autoReplacePlugin: AutocorrectPlugin = {
 
       const start = line.from + startPos + slice.search(re)
 
+      // `range.from` is not in a protected area, but start is.
       if (nodeAtPos(start, tree, PROTECTED_NODES, -1) !== null) {
-        continue // `range.from` is not in a protected area, but start is.
+        continue
       }
 
       return { from: line.from + startPos, to: pos, insert: value }
     }
-
-    return null
   }
 }

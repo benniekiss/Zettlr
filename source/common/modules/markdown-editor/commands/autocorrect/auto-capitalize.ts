@@ -1,41 +1,39 @@
 import { PROTECTED_NODES, type AutocorrectPlugin } from '.'
 import { nodeAtPos } from '../../util/node-in-selection'
 
+// Matches the last word of the string if it starts with a lowercase letter
 const LOWERCASE_RE = /\b(\p{Ll})\p{L}+\p{P}*$/vd
 
-/**
- * Autocapitalize words at the start of sentences.
- *
- * @param   {string}    text    The text to correct. Will only affect the last word.
- * @param   {number}    pos     The document-relative start position of `text`.
- *
- * @returns {ChangeSpec|null}   A ChangeSpec representing the replacement, or null
- *                              if no replacement was made.
- */
+// Capitalize words at the start of sentences.
 export const autoCapitalizePlugin: AutocorrectPlugin =  {
-  correct (options, view, range, tree) {
-    if (!options.capitalization.autoCapitalize) { return null }
+  correct (options, state, range, tree) {
+    if (!options.capitalization.autoCapitalize) {
+      return
+    }
 
-    if (!range.empty) { return null }
+    if (!range.empty) {
+      return
+    }
 
     const pos = range.from - 1
 
-    if (nodeAtPos(pos, tree, PROTECTED_NODES, -1)) { return null }
+    if (nodeAtPos(pos, tree, PROTECTED_NODES, -1)) {
+      return
+    }
 
-    const line = view.state.doc.lineAt(pos)
-    const text = view.state.sliceDoc(line.from, pos)
+    const line = state.doc.lineAt(pos)
+    const text = state.sliceDoc(line.from, pos)
 
     const locale: string = window.config.get('appLang')
     const segmenter = new Intl.Segmenter(locale, { granularity: 'sentence' })
 
-    // Matches the last word of the string if it starts with a lowercase letter
     const match = LOWERCASE_RE.exec(text)
     if (match?.indices && match.indices[1] !== undefined) {
       const [ from, to ] = match.indices[1]
 
       const isProtected = nodeAtPos(line.from + from, tree, PROTECTED_NODES, -1) ?? nodeAtPos(line.from + to, tree, PROTECTED_NODES, -1)
       if (isProtected !== null) {
-        return null
+        return
       }
 
       // Capitalize the found word, then segment the text into sentences.
@@ -51,7 +49,5 @@ export const autoCapitalizePlugin: AutocorrectPlugin =  {
         return { from: line.from + from, to: line.from + to, insert: match[1].toLocaleUpperCase(locale) }
       }
     }
-
-    return null
   }
 }

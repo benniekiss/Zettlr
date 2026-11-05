@@ -13,15 +13,14 @@ const START_CHARS = ' ([{-–—\n\r\t\v\f/\\'
  */
 function getMagicQuotePlugin (quote: '"' | "'"): AutocorrectPlugin {
   return {
-    correct (options, view, range,tree) {
+    correct (options, state, range,tree) {
       // NOTE we're running through the hassle of definitely inserting quotes as
       // otherwise the quote character would be swallowed, even in "protected"
       // areas of the document.
-      const isFromProtected = nodeAtPos(range.from, tree, PROTECTED_NODES, -1) !== null
-      const isToProtected = nodeAtPos(range.to, tree, PROTECTED_NODES, -1) !== null
+      const isProtected = nodeAtPos(range.from, tree, PROTECTED_NODES, -1) ?? nodeAtPos(range.to, tree, PROTECTED_NODES, -1)
 
-      if (isFromProtected || isToProtected) {
-        return null
+      if (isProtected) {
+        return
       }
 
       const primary = options.magicQuotes.primary.split('…')
@@ -32,37 +31,48 @@ function getMagicQuotePlugin (quote: '"' | "'"): AutocorrectPlugin {
 
       if (range.empty) {
       // Check the character before and insert an appropriate quote
-        const charBefore = view.state.sliceDoc(range.from - 1, range.from)
+        const charBefore = state.sliceDoc(range.from - 1, range.from)
         insert = START_CHARS.includes(charBefore) ? quotes[0] : quotes[1]
       } else {
       // Wrap the selection in quotes
-        const text = view.state.sliceDoc(range.from, range.to)
+        const text = state.sliceDoc(range.from, range.to)
         insert = `${quotes[0]}${text}${quotes[1]}`
       }
 
-      return insert ? {
+      if (!insert) {
+        return
+      }
+
+      return {
         from: range.from,
         to: range.to,
         insert
-      } : null
+      }
     }
   }
 }
 
+// Replace primary straight quotes with curly quotes
 export const primaryMagicQuotePlugin: AutocorrectPlugin = getMagicQuotePlugin('"')
 
+// Replace secondary straight quotes with curly quotes
 export const secondaryMagicQuotePlugin: AutocorrectPlugin = getMagicQuotePlugin("'")
 
+// Replace curly quotes with straight quotes
 export const undoMagicQuotePlugin: AutocorrectPlugin = {
-  correct (options, view, range, tree) {
-    if (!range.empty) { return null }
+  correct (options, state, range, tree) {
+    if (!range.empty) {
+      return
+    }
 
-    if (nodeAtPos(range.from, tree, PROTECTED_NODES, -1)) { return null }
+    if (nodeAtPos(range.from, tree, PROTECTED_NODES, -1)) {
+      return
+    }
 
     const primaryMagicQuotes = options.magicQuotes.primary.split('…')
     const secondaryMagicQuotes = options.magicQuotes.secondary.split('…')
 
-    const slice = view.state.sliceDoc(range.from - 1, range.from)
+    const slice = state.sliceDoc(range.from - 1, range.from)
 
     if (primaryMagicQuotes.includes(slice) && slice !== '"') {
       return { from: range.from - 1, to: range.from, insert: '"' }
@@ -71,7 +81,5 @@ export const undoMagicQuotePlugin: AutocorrectPlugin = {
     if (secondaryMagicQuotes.includes(slice) && slice !== "'") {
       return { from: range.from - 1, to: range.from, insert: "'" }
     }
-
-    return null
   }
 }

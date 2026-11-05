@@ -1,5 +1,5 @@
 import { syntaxTree } from '@codemirror/language'
-import type { SelectionRange, TransactionSpec } from '@codemirror/state'
+import type { EditorState, SelectionRange } from '@codemirror/state'
 import type { ChangeSpec } from '@codemirror/state'
 import type { Command, EditorView } from '@codemirror/view'
 import type { Tree } from '@lezer/common'
@@ -11,6 +11,7 @@ import { insertNewlineContinueMarkup } from '@codemirror/lang-markdown'
 import { configField, type AutocorrectOptions } from '../../util/configuration'
 import { primaryMagicQuotePlugin, secondaryMagicQuotePlugin, undoMagicQuotePlugin } from './magic-quotes'
 
+// Nodes where autocorrect should not happen.
 export const PROTECTED_NODES = [
   'InlineCode', // `code`
   'Comment', 'CommentBlock', // <!-- comment -->
@@ -21,53 +22,62 @@ export const PROTECTED_NODES = [
   'PandocAttribute',
 ]
 
+// Autocorrect API
 export interface AutocorrectPlugin {
-  correct: (options: AutocorrectOptions, view: EditorView, range: SelectionRange, tree: Tree) => ChangeSpec | null
+  // Return a `ChangeSpec` with the text correction, or `null` if no replacement occurred.
+  correct: (options: AutocorrectOptions, state: EditorState, range: SelectionRange, tree: Tree) => ChangeSpec | undefined
 }
 
-// If Autocorrect is active, handles the potential text replacement
-function handleReplacement (target: EditorView, plugins: AutocorrectPlugin[]): TransactionSpec | null {
+/* Dispatch autocorrect text replacement.
+ *
+ * Given a list of autocorrect plugins, this function operates on
+ * all available ranges and dispatches the correction from the first
+ * successful plugin replacement.
+ *
+ * @param {EditorView}            target
+ * @param {AutocorrectPlugin[]}   plugins
+ *
+ * @return {boolean}
+ */
+function handleAutocorrectReplacement (target: EditorView, plugins: AutocorrectPlugin[]): boolean {
   // The config field is only present in the main editor, not in the assets
   // manager code editors or elsewhere.
   const config = target.state.field(configField, false)
   if (config === undefined) {
-    return null
+    return false
   }
 
   let { autocorrect } = config
   if (!autocorrect.active) {
-    return null
+    return false
   }
 
-  // Make a deep copy of the autocorrect (to not mess with the order), sort by
-  // key length descending.
-  autocorrect = {
-    ...autocorrect,
-    replacements: autocorrect.replacements
-      .map(e => { return { ...e } })
-      .sort((a, b) => b.key.length - a.key.length)
-    ,
-  }
 
   const tree = syntaxTree(target.state)
 
   const transaction = target.state.changeByRange((range) => {
     for (const p of plugins) {
-      const changes =  p.correct(autocorrect, target, range, tree) ?? undefined
+      const changes =  p.correct(autocorrect, target.state, range, tree)
 
       if (changes) {
         const desc = target.state.changes(changes).desc
 
+        // Return so that no other plugin applies changes.
         return { range: range.map(desc, 1), changes }
       }
     }
 
+    // No plugin was successful, so return the unchanged range.
     return { range }
   })
 
-  if (transaction.changes.empty) { return null }
+  if (transaction.changes.empty) {
+    return false
+  }
 
-  return { ...transaction, annotations: isolateHistory.of('full') }
+  target.dispatch({ ...transaction, annotations: isolateHistory.of('full') })
+
+  return true
 }
 
 // Space key handling for autocorrect
@@ -76,15 +86,11 @@ export const handleAutocorrectSpace: Command = (target: EditorView) => {
   // appears after it in the undo history, providing better undo UX.
   target.dispatch(target.state.replaceSelection(' '))
 
-  const tr = handleReplacement(target, [
+  handleAutocorrectReplacement(target, [
     autoReplacePlugin,
     autoCapitalizePlugin,
     normalizeCapitalsPlugin,
   ])
-
-  if (tr) {
-    target.dispatch(tr)
-  }
 
   // Always return `true` due to dispatching `replaceSelection`
   // even if `handleReplacement` fails.
@@ -99,15 +105,11 @@ export const handleAutocorrectEnter: Command = (target: EditorView) => {
   // returns false, immediately invoke `insertNewlineAndIndent` to mimick the
   // Enter overloads in the default keymap and ensure lists are continued.
   if (insertNewlineContinueMarkup(target) || insertNewlineAndIndent(target)) {
-    const tr = handleReplacement(target, [
+    handleAutocorrectReplacement(target, [
       autoReplacePlugin,
       autoCapitalizePlugin,
       normalizeCapitalsPlugin,
     ])
-
-    if (tr) {
-      target.dispatch(tr)
-    }
 
     // Always return `true` due to dispatching `insertNewlineContinueMarkup`,
     // even if `handleReplacement` fails.
@@ -117,55 +119,18 @@ export const handleAutocorrectEnter: Command = (target: EditorView) => {
   return false
 }
 
-/**
- * Handles backspace presses that turn magic quotes into regular quotes
- *
- * @param   {EditorView}  view  The editor view
- *
- * @return  {boolean}           Whether the function has replaced a quote
- */
+// Handles backspace presses that turn magic quotes into regular quotes
 export const handleAutocorrectBackspace: Command = (target: EditorView) => {
-  const tr = handleReplacement(target, [undoMagicQuotePlugin])
-
-  if (tr) {
-    target.dispatch(tr)
-
-    return true
-  }
-
-  return false
+  return handleAutocorrectReplacement(target, [undoMagicQuotePlugin])
 }
 
-/**
- * Adds magic quotes instead of simple quotes, if applicable
- *
- * @param   {string}  quote  The quote to replace, either ' or "
- *
- * @return  {Command}        Returns a Command function
- */
+// Adds primary magic quotes instead of simple quotes, if applicable
 export const handleAutoCorrectPrimaryQuote: Command = (target: EditorView) => {
-  const tr = handleReplacement(target, [primaryMagicQuotePlugin])
-
-  if (tr) {
-    target.dispatch(tr)
-
-    return true
-  }
-
-  return false
-
+  return handleAutocorrectReplacement(target, [primaryMagicQuotePlugin])
 }
 
+// Adds secondary magic quotes instead of simple quotes, if applicable
 export const handleAutoCorrectSecondaryQuote: Command = (target: EditorView) => {
-  const tr = handleReplacement(target, [secondaryMagicQuotePlugin])
-
-  if (tr) {
-    target.dispatch(tr)
-
-    return true
-  }
-
-  return false
-
+  return handleAutocorrectReplacement(target, [secondaryMagicQuotePlugin])
 }
 

@@ -52,7 +52,7 @@ function parseAutocorrectKey (key: string, matchWholeWords: boolean): RegExp|und
       flags = key.slice(lastSlash + 1)
 
       // Validate flags
-      if (!/^[gimsuy]*$/.test(flags)) {
+      if (!/^[gimsuy]+$/.test(flags)) {
         flags = ''
       }
     }

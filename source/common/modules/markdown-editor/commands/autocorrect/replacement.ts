@@ -96,8 +96,7 @@ export const autoReplacePlugin: AutocorrectPlugin = {
 
     // Make a deep copy of the autocorrect (to not mess with the order),
     // sort by key length descending.
-    const replacements = options.replacements
-      .map(e => { return { ...e } })
+    const replacements = [...options.replacements]
       .sort((a, b) => b.key.length - a.key.length)
 
     for (let { key, value } of replacements) {

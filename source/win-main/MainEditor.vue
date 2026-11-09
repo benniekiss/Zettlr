@@ -4,9 +4,11 @@
     class="main-editor-wrapper"
     role="region"
     v-bind:aria-label="`Markdown Editor: Currently editing file ${pathBasename(props.file.path)}`"
-    v-bind:style="{ 'font-size': `${fontSize}px` }"
+    v-bind:style="{ 'font-size': `${fontSize}px`, '--min-page-size': `${pageSize}px`, '--max-page-size': `${pageSize > 0 ? pageSize + 'px' : 'initial'}` }"
     v-bind:class="{
       'code-file': !isMarkdown,
+      'page-border': pageBorder,
+      'page-center': pageCenter,
       fullscreen: distractionFree
     }"
   >
@@ -223,6 +225,10 @@ const mainEditorWrapper = ref<HTMLDivElement|null>(null)
 const useH1 = computed<boolean>(() => configStore.config.fileNameDisplay.includes('heading'))
 const useTitle = computed<boolean>(() => configStore.config.fileNameDisplay.includes('title'))
 const fontSize = computed<number>(() => configStore.config.editor.fontSize)
+const pageSize = computed<number>(() => configStore.config.editor.pageSize)
+const pageBorder = computed<boolean>(() => configStore.config.editor.pageBorder)
+const pageCenter = computed<boolean>(() => configStore.config.editor.pageCenter)
+
 const globalSearchResults = computed(() => windowStateStore.searchResults)
 const snippets = computed(() => windowStateStore.snippets)
 const tags = computed(() => tagStore.tags)
@@ -688,11 +694,12 @@ function maybeHighlightSearchResults (): void {
 .main-editor-wrapper {
   /* Editor margins left and right for all breakpoints in both fullscreen and
   normal mode. */
-  --editor-margin-fullscreen-sm:  50px;
-  --editor-margin-fullscreen-md:   5vw;
-  --editor-margin-fullscreen-lg:  10vw;
-  --editor-margin-fullscreen-xl:  20vw;
-  --editor-margin-fullscreen-xxl: 30vw;
+  --editor-margin-fullscreen-sm:  calc(100vw - 100px);
+  --editor-margin-fullscreen-md:   90vw;
+  --editor-margin-fullscreen-lg:  80vw;
+  --editor-margin-fullscreen-xl:  60vw;
+  --editor-margin-fullscreen-xxl: 40vw;
+
   width: 100%;
   height: 100%;
   overflow-x: hidden;
@@ -701,39 +708,103 @@ function maybeHighlightSearchResults (): void {
   transition: 0.2s background-color ease;
   position: relative;
 
-  .cm-editor {
-    .cm-scroller { padding: 50px 50px; }
-    .cm-content { min-width: 0; }
+  > .cm-editor > .cm-scroller {
+    padding: 50px 20px 50px 0px;
+  }
+
+  /* Page geometry belongs only to the main editor, not table cell subviews. */
+  > .cm-editor > .cm-scroller > .cm-content {
+    min-width: var(--min-page-size);
+    max-width: var(--max-page-size);
+  }
+
+  > .cm-editor > .cm-scroller > .cm-gutters-before {
+    position: static !important;
   }
 
   /* If a code file is loaded, we need to display the editor contents in monospace. */
-  &.code-file .cm-editor {
+  &.code-file > .cm-editor {
     font-family: Inconsolata, monospace;
 
-    /* Reset the margins for code files */
-    .cm-scroller { padding: 0px; }
+    /* Remove the margins for code files */
+    > .cm-scroller { padding: 0px !important; }
+
+    /* Remove page border and width settings */
+    > .cm-scroller > .cm-content {
+      outline: none;
+      min-width: 0;
+      max-width: 100%;
+    }
   }
 
-  &.fullscreen {
-    /* This makes the editor pane show "fullscreen" on top over the rest of the UI
-    except the toolbar (due to a position: relative on the window content div). */
-    position: absolute;
-    z-index: 300;
-    top: 0;
+  &.page-center > .cm-editor > .cm-scroller > .cm-content {
+    margin-inline-end: auto;
+  }
 
-    .cm-scroller {
-      @media(min-width: 1301px) { padding: 0 var(--editor-margin-fullscreen-xxl); }
-      @media(max-width: 1300px) { padding: 0 var(--editor-margin-fullscreen-xl); }
-      @media(max-width: 1100px) { padding: 0 var(--editor-margin-fullscreen-lg); }
-      @media(max-width: 1000px) { padding: 0 var(--editor-margin-fullscreen-md); }
-      @media(max-width:  800px) { padding: 0 var(--editor-margin-fullscreen-sm); }
+  &.page-center > .cm-editor > .cm-scroller > .cm-gutters-before {
+    margin-inline-start: auto;
+  }
 
-    }
+  &.page-border > .cm-editor > .cm-scroller > .cm-content {
+    outline-width: 1px;
+    outline-style: solid;
+    outline-offset: 5px;
+    z-index: 300; /* higher than .cm-gutters-before */
   }
 }
 
 body.dark .main-editor-wrapper {
   background-color: #2b2b2c;
+}
+
+/* CodeMirror fullscreen */
+.main-editor-wrapper.fullscreen {
+  /* This makes the editor pane show "fullscreen" on top over the rest of the UI
+     except the toolbar (due to a position: relative on the window content div). */
+  position: absolute;
+  z-index: 300;
+  top: 0;
+
+  > .cm-editor > .cm-scroller > .cm-content {
+    margin-inline-end: auto;
+  }
+
+  > .cm-editor > .cm-scroller > .cm-gutters-before {
+    margin-inline-start: auto;
+  }
+
+  > .cm-editor > .cm-scroller {
+      @media(min-width: 1301px) {
+        > .cm-content {
+          max-width: var(--editor-margin-fullscreen-xxl);
+          min-width: 0;
+        }
+      }
+      @media(max-width: 1300px) {
+          > .cm-content {
+            max-width: var(--editor-margin-fullscreen-xl);
+            min-width: 0;
+          }
+      }
+      @media(max-width: 1100px) {
+          > .cm-content {
+            max-width: var(--editor-margin-fullscreen-lg);
+            min-width: 0;
+          }
+      }
+      @media(max-width: 1000px) {
+        > .cm-content {
+          max-width: var(--editor-margin-fullscreen-md);
+          min-width: 0;
+        }
+      }
+      @media(max-width:  800px) {
+        > .cm-content {
+          max-width: var(--editor-margin-fullscreen-sm);
+          min-width: 0;
+        }
+      }
+  }
 }
 
 body.darwin {

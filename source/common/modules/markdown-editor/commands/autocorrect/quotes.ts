@@ -1,3 +1,17 @@
+/**
+ * @ignore
+ * BEGIN HEADER
+ *
+ * Contains:        Magic Quotes Autocorrect
+ * CVM-Role:        Utility Function
+ * Maintainer:      Hendrik Erz
+ * License:         GNU GPL v3
+ *
+ * Description:     Magic quote autocorrect plugin.
+ *
+ * END HEADER
+ */
+
 import { PROTECTED_NODES, type AutocorrectPlugin } from '.'
 import { nodeAtPos } from '../../util/node-in-selection'
 

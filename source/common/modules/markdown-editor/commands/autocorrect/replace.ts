@@ -1,3 +1,17 @@
+/**
+ * @ignore
+ * BEGIN HEADER
+ *
+ * Contains:        Text Replacement Autocorrect
+ * CVM-Role:        Utility Function
+ * Maintainer:      Hendrik Erz
+ * License:         GNU GPL v3
+ *
+ * Description:     Text replacement autocorrect plugin.
+ *
+ * END HEADER
+ */
+
 import { PROTECTED_NODES, type AutocorrectPlugin } from '.'
 import { nodeAtPos } from '../../util/node-in-selection'
 

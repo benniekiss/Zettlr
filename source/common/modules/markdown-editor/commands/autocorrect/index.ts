@@ -1,3 +1,18 @@
+/**
+ * @ignore
+ * BEGIN HEADER
+ *
+ * Contains:        Autocorrect
+ * CVM-Role:        Utility Function
+ * Maintainer:      Hendrik Erz
+ * License:         GNU GPL v3
+ *
+ * Description:     This is the autocorrect plugin, but since it basically just
+ *                  consists of commands, we added it to the commands folder.
+ *
+ * END HEADER
+ */
+
 import { syntaxTree } from '@codemirror/language'
 import type { EditorState, SelectionRange } from '@codemirror/state'
 import type { ChangeSpec } from '@codemirror/state'

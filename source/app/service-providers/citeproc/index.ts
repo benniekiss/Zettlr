@@ -133,10 +133,6 @@ export default class CiteprocProvider extends ProviderContract {
       }
     })
 
-    this._watcher.on('error', err => {
-      this._logger.error('[Citeproc] Filesystem watcher error', err)
-    })
-
     this._watcher.on('all', (eventName, affectedPath) => {
       const db = this.databases.get(affectedPath)
 

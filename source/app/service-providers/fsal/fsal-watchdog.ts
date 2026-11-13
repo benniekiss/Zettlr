@@ -50,7 +50,6 @@ export default class FSALWatchdog {
       ignoreInitial: true, // Do not track the initial watch as changes
       followSymlinks: false, // Zettlr does not support symlinks
       ignorePermissionErrors: true, // In the worst case one has to reboot the software, but so it looks nicer.
-
       // Used when Chokidar's polling backend is enabled.
       pollingInterval: 5000,
       pollingBinaryInterval: 5000
@@ -60,7 +59,7 @@ export default class FSALWatchdog {
       options.backend = 'polling'
 
       let threshold: number = this._config.get('watchdog.stabilityThreshold')
-      if (!Number.isFinite(threshold) || threshold < 0) {
+      if (typeof threshold !== 'number' || threshold < 0) {
         threshold = 1000
       }
 
@@ -75,9 +74,6 @@ export default class FSALWatchdog {
     }
 
     this.process = new FSWatcher(options)
-    this.process.on('error', err => {
-      this._logger.error('[FSAL Watchdog] Filesystem watcher error', err)
-    })
   }
 
   /**

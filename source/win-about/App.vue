@@ -20,15 +20,13 @@
     >
       <GeneralTab v-if="currentTab === 0">
       </GeneralTab>
-      <ProjectsTab v-else-if="currentTab === 1">
-      </ProjectsTab>
-      <SponsorsTab v-else-if="currentTab === 2">
+      <SponsorsTab v-else-if="currentTab === 1">
       </SponsorsTab>
-      <LicenseTab v-else-if="currentTab === 3">
+      <LicenseTab v-else-if="currentTab === 2">
       </LicenseTab>
-      <FontLicenseTab v-else-if="currentTab === 4">
+      <FontLicenseTab v-else-if="currentTab === 3">
       </FontLicenseTab>
-      <DebugTab v-else-if="currentTab === 5">
+      <DebugTab v-else-if="currentTab === 4">
       </DebugTab>
     </div>
   </WindowChrome>
@@ -55,7 +53,6 @@ import { ref, computed } from 'vue'
 
 // Import the tabs
 import GeneralTab from './General-Tab.vue'
-import ProjectsTab from './Projects-Tab.vue'
 import SponsorsTab from './Sponsors-Tab.vue'
 import LicenseTab from './License-Tab.vue'
 import FontLicenseTab from './Font-License-Tab.vue'
@@ -72,12 +69,6 @@ const tabs: WindowTab[] = [
     controls: 'tab-general',
     id: 'tab-general-control',
     icon: 'info-standard'
-  },
-  {
-    label: trans('Other projects'),
-    controls: 'tab-projects',
-    id: 'tab-projects-control',
-    icon: 'applications'
   },
   {
     label: trans('Sponsors'),
